@@ -1,0 +1,109 @@
+# golangci-lint configuration for docx-go.
+# See CLAUDE.md "CI / lint rules" for rationale.
+
+run:
+  timeout: 5m
+  go: "1.23"
+
+linters:
+  enable:
+    - errcheck        # no silently ignored errors
+    - wrapcheck       # errors from external packages must be wrapped
+    - nilnil          # catches (nil, nil) return anti-patterns
+    - exhaustruct     # enforced on internal/oxml/ — flags missing fields
+    - godot           # comment style consistency
+    - forbidigo       # encoding/xml banned in docx/
+    - depguard        # three-layer import boundaries
+    - gosec           # common security smells
+    - goimports       # format / import ordering
+    - staticcheck     # general correctness
+    - unused          # unused code
+    - misspell        # spelling
+
+linters-settings:
+
+  forbidigo:
+    forbid:
+      - pattern: "^encoding/xml\\."
+        msg: "encoding/xml must not be imported in the docx/ public layer; use internal/parts instead"
+    analyze-types: true
+    # Only apply to docx/ package paths.
+    # (golangci-lint applies forbidigo globally; the path restriction is done
+    # via the 'issues.exclude-rules' section below.)
+
+  exhaustruct:
+    # Enforce on internal/oxml/ types only; option structs in docx/ are exempt.
+    include:
+      - "github\\.com/theAstiv/docx-go/internal/oxml/.*"
+
+  depguard:
+    # Three-layer architecture — see CLAUDE.md for the rationale.
+    # Failure messages include a link so contributors understand WHY.
+    rules:
+      oxml-layer:
+        # internal/oxml/** must NOT import parts, opc, or docx.
+        list-mode: lax
+        files:
+          - "**/internal/oxml/**/*.go"
+        deny:
+          - pkg: "github.com/theAstiv/docx-go/internal/parts"
+            desc: "oxml layer must not import parts — see CLAUDE.md three-layer architecture"
+          - pkg: "github.com/theAstiv/docx-go/internal/opc"
+            desc: "oxml layer must not import opc — see CLAUDE.md three-layer architecture"
+          - pkg: "github.com/theAstiv/docx-go/docx"
+            desc: "oxml layer must not import docx — see CLAUDE.md three-layer architecture"
+
+      opc-layer:
+        # internal/opc/** must use stdlib only.
+        list-mode: lax
+        files:
+          - "**/internal/opc/**/*.go"
+        deny:
+          - pkg: "github.com/theAstiv/docx-go/internal/oxml"
+            desc: "opc layer must not import oxml — see CLAUDE.md three-layer architecture"
+          - pkg: "github.com/theAstiv/docx-go/internal/parts"
+            desc: "opc layer must not import parts — see CLAUDE.md three-layer architecture"
+          - pkg: "github.com/theAstiv/docx-go/docx"
+            desc: "opc layer must not import docx — see CLAUDE.md three-layer architecture"
+
+      docx-layer:
+        # docx/ must not reach into oxml internals or opc directly.
+        list-mode: lax
+        files:
+          - "**/docx/**/*.go"
+        deny:
+          - pkg: "github.com/theAstiv/docx-go/internal/oxml/wml"
+            desc: "docx layer must not import wml directly — use parts; see CLAUDE.md"
+          - pkg: "github.com/theAstiv/docx-go/internal/oxml/dml"
+            desc: "docx layer must not import dml directly — use parts; see CLAUDE.md"
+          - pkg: "github.com/theAstiv/docx-go/internal/oxml/registry"
+            desc: "docx layer must not import registry — see CLAUDE.md"
+          - pkg: "github.com/theAstiv/docx-go/internal/oxml/raw"
+            desc: "docx layer must not import raw — see CLAUDE.md"
+          - pkg: "github.com/theAstiv/docx-go/internal/oxml/order"
+            desc: "docx layer must not import order — see CLAUDE.md"
+          - pkg: "github.com/theAstiv/docx-go/internal/oxml/roundtrip"
+            desc: "docx layer must not import roundtrip — see CLAUDE.md"
+          - pkg: "github.com/theAstiv/docx-go/internal/opc"
+            desc: "docx layer must not import opc directly — use parts; see CLAUDE.md"
+          - pkg: "encoding/xml"
+            desc: "docx layer must not import encoding/xml — enforced by forbidigo too"
+
+  wrapcheck:
+    ignorePackageGlobs:
+      - "encoding/*"
+      - "os"
+      - "io"
+      - "fmt"
+
+issues:
+  exclude-rules:
+    # forbidigo encoding/xml restriction applies only to docx/ paths.
+    - path: "^(?!docx/)"
+      linters: [forbidigo]
+    # exhaustruct is noisy in test files.
+    - path: "_test\\.go"
+      linters: [exhaustruct]
+    # wrapcheck is too strict for cmd/ entry points.
+    - path: "^cmd/"
+      linters: [wrapcheck]

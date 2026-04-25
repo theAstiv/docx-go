@@ -1,0 +1,13 @@
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "*.go"
+      run: gofmt -l {staged_files}
+      fail_text: "Run gofmt to fix formatting"
+    govet:
+      glob: "*.go"
+      run: go vet ./...
+    golangci-lint:
+      glob: "*.go"
+      run: golangci-lint run --fast {staged_files}

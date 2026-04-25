@@ -1,0 +1,29 @@
+name: validator
+
+on:
+  push:
+    paths:
+      - "testdata/golden/docx/**"
+      - "testdata/fixtures/**"
+      - "tools/validator/**"
+  pull_request:
+    paths:
+      - "testdata/golden/docx/**"
+      - "testdata/fixtures/**"
+      - "tools/validator/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Build validator container
+        run: docker build -t docx-go-validator tools/validator/
+
+      - name: Validate corpus
+        run: bash scripts/validate-corpus.sh
