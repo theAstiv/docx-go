@@ -1,2 +1,19 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Enforce LF for Go source
+*.go text eol=lf
+
+# Binary formats — no diffing, no line-ending conversion
+*.docx binary
+*.xlsx binary
+*.zip  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.bmp  binary
+*.pdf  binary
+
+# Test fixtures are vendored — exclude from language stats
+testdata/fixtures/** linguist-vendored

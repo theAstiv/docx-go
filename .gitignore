@@ -1,0 +1,33 @@
+# Compiled output
+*.test
+*.out
+coverage.out
+dist/
+tmp/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# MCP / tooling state
+.context-link.db
+
+# Claude local settings
+.claude/settings.local.json
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go workspace (if someone adds one)
+go.work
+go.work.sum
+
+#claude
+.claude/
+.mcp.json
+*.db
+CLAUDE.md
