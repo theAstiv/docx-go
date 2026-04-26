@@ -27,23 +27,23 @@ type LineSpacing240 int32
 // ---- Constructors -----------------------------------------------------------
 
 const (
-	twipsPerInch  = 1440
-	twipsPerCm    = 567    // 1440 / 2.54
-	twipsPerMm    = 57     // 1440 / 25.4 (rounded)
-	twipsPerPt    = 20
-	twipsPerPx    = 15     // at 96 dpi: 1px = 0.75pt = 15 twips
-	emuPerInch    = 914400
-	emuPerTwip    = emuPerInch / twipsPerInch // 635
+	twipsPerInch = 1440
+	twipsPerPt   = 20
+	twipsPerPx   = 15 // at 96 dpi: 1px = 0.75pt = 15 twips
+	emuPerInch   = 914400
+	emuPerTwip   = emuPerInch / twipsPerInch // 635
 )
 
 // Inches returns a Twip value for the given number of inches.
 func Inches(n float64) Twip { return Twip(n * twipsPerInch) }
 
 // Cm returns a Twip value for the given number of centimetres.
-func Cm(n float64) Twip { return Twip(n * twipsPerCm) }
+// Computed from twipsPerInch / 2.54 to stay consistent with Inches.
+func Cm(n float64) Twip { return Twip(n * twipsPerInch / 2.54) }
 
 // Mm returns a Twip value for the given number of millimetres.
-func Mm(n float64) Twip { return Twip(n * twipsPerMm) }
+// Computed from twipsPerInch / 25.4 to stay consistent with Inches.
+func Mm(n float64) Twip { return Twip(n * twipsPerInch / 25.4) }
 
 // Pt returns a Twip value for the given number of typographical points.
 func Pt(n float64) Twip { return Twip(n * twipsPerPt) }

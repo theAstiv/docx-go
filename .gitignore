@@ -31,3 +31,4 @@ go.work.sum
 .mcp.json
 *.db
 CLAUDE.md
+*.exe
