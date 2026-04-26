@@ -188,6 +188,83 @@ func (f *ParagraphFormat) HangingIndent() *Twip {
 // SetHangingIndent sets the hanging indent in twips. nil removes it.
 func (f *ParagraphFormat) SetHangingIndent(t *Twip) { f.ppr().SetIndHanging(twipPtr(t)) }
 
+// LineSpacingAuto returns the line spacing value in 240ths of a line (lineRule="auto"),
+// or nil if the rule is not "auto" or line spacing is not set.
+// Use SetLineSpacingAuto to write; use SingleLine, OneAndAHalfLine, DoubleLine,
+// or MultipleLine to construct common values.
+func (f *ParagraphFormat) LineSpacingAuto() *LineSpacing240 {
+	if f.p.PPr == nil {
+		return nil
+	}
+	if f.p.PPr.SpacingLineRule() != string(LineSpacingAuto) {
+		return nil
+	}
+	v := f.p.PPr.SpacingLine()
+	if v == nil {
+		return nil
+	}
+	lv := LineSpacing240(*v)
+	return &lv
+}
+
+// LineSpacingExact returns the exact line spacing in twips (lineRule="exact"),
+// or nil if the rule is not "exact" or line spacing is not set.
+func (f *ParagraphFormat) LineSpacingExact() *Twip {
+	if f.p.PPr == nil {
+		return nil
+	}
+	if f.p.PPr.SpacingLineRule() != string(LineSpacingExact) {
+		return nil
+	}
+	return twipFromInt64(f.p.PPr.SpacingLine())
+}
+
+// LineSpacingAtLeast returns the minimum line spacing in twips (lineRule="atLeast"),
+// or nil if the rule is not "atLeast" or line spacing is not set.
+func (f *ParagraphFormat) LineSpacingAtLeast() *Twip {
+	if f.p.PPr == nil {
+		return nil
+	}
+	if f.p.PPr.SpacingLineRule() != string(LineSpacingAtLeast) {
+		return nil
+	}
+	return twipFromInt64(f.p.PPr.SpacingLine())
+}
+
+// SetLineSpacingAuto sets line spacing as a multiple of the line height (lineRule="auto").
+// Use SingleLine, OneAndAHalfLine, DoubleLine, or MultipleLine for common values.
+func (f *ParagraphFormat) SetLineSpacingAuto(v LineSpacing240) {
+	raw := int64(v)
+	pp := f.ppr()
+	pp.SetSpacingLine(&raw)
+	pp.SetSpacingLineRule(string(LineSpacingAuto))
+}
+
+// SetLineSpacingExact sets the exact line spacing in twips (lineRule="exact").
+func (f *ParagraphFormat) SetLineSpacingExact(t Twip) {
+	raw := int64(t)
+	pp := f.ppr()
+	pp.SetSpacingLine(&raw)
+	pp.SetSpacingLineRule(string(LineSpacingExact))
+}
+
+// SetLineSpacingAtLeast sets the minimum line spacing in twips (lineRule="atLeast").
+func (f *ParagraphFormat) SetLineSpacingAtLeast(t Twip) {
+	raw := int64(t)
+	pp := f.ppr()
+	pp.SetSpacingLine(&raw)
+	pp.SetSpacingLineRule(string(LineSpacingAtLeast))
+}
+
+// ClearLineSpacing removes line spacing (w:spacing/@w:line and @w:lineRule).
+func (f *ParagraphFormat) ClearLineSpacing() {
+	if f.p.PPr == nil {
+		return
+	}
+	f.p.PPr.SetSpacingLine(nil)
+	f.p.PPr.SetSpacingLineRule("")
+}
+
 // KeepNext returns the KeepNext tri-state, or nil (inherit).
 func (f *ParagraphFormat) KeepNext() *bool {
 	if f.p.PPr == nil {
@@ -197,7 +274,12 @@ func (f *ParagraphFormat) KeepNext() *bool {
 }
 
 // SetKeepNext sets KeepNext. nil removes the element (inherit from style).
-func (f *ParagraphFormat) SetKeepNext(b *bool) { f.ppr().SetKeepNext(b) }
+func (f *ParagraphFormat) SetKeepNext(b *bool) {
+	if b == nil && f.p.PPr == nil {
+		return
+	}
+	f.ppr().SetKeepNext(b)
+}
 
 // KeepLines returns the KeepLines tri-state, or nil.
 func (f *ParagraphFormat) KeepLines() *bool {
@@ -207,8 +289,13 @@ func (f *ParagraphFormat) KeepLines() *bool {
 	return f.p.PPr.KeepLines()
 }
 
-// SetKeepLines sets KeepLines.
-func (f *ParagraphFormat) SetKeepLines(b *bool) { f.ppr().SetKeepLines(b) }
+// SetKeepLines sets KeepLines. nil removes the element (inherit from style).
+func (f *ParagraphFormat) SetKeepLines(b *bool) {
+	if b == nil && f.p.PPr == nil {
+		return
+	}
+	f.ppr().SetKeepLines(b)
+}
 
 // PageBreakBefore returns the PageBreakBefore tri-state, or nil.
 func (f *ParagraphFormat) PageBreakBefore() *bool {
@@ -218,8 +305,13 @@ func (f *ParagraphFormat) PageBreakBefore() *bool {
 	return f.p.PPr.PageBreakBefore()
 }
 
-// SetPageBreakBefore sets PageBreakBefore.
-func (f *ParagraphFormat) SetPageBreakBefore(b *bool) { f.ppr().SetPageBreakBefore(b) }
+// SetPageBreakBefore sets PageBreakBefore. nil removes the element (inherit from style).
+func (f *ParagraphFormat) SetPageBreakBefore(b *bool) {
+	if b == nil && f.p.PPr == nil {
+		return
+	}
+	f.ppr().SetPageBreakBefore(b)
+}
 
 // ContextualSpacing returns the ContextualSpacing tri-state, or nil.
 func (f *ParagraphFormat) ContextualSpacing() *bool {
@@ -229,5 +321,58 @@ func (f *ParagraphFormat) ContextualSpacing() *bool {
 	return f.p.PPr.ContextualSpacing()
 }
 
-// SetContextualSpacing sets ContextualSpacing.
-func (f *ParagraphFormat) SetContextualSpacing(b *bool) { f.ppr().SetContextualSpacing(b) }
+// SetContextualSpacing sets ContextualSpacing. nil removes the element (inherit from style).
+func (f *ParagraphFormat) SetContextualSpacing(b *bool) {
+	if b == nil && f.p.PPr == nil {
+		return
+	}
+	f.ppr().SetContextualSpacing(b)
+}
+
+// WidowControl returns the WidowControl tri-state, or nil.
+func (f *ParagraphFormat) WidowControl() *bool {
+	if f.p.PPr == nil {
+		return nil
+	}
+	return f.p.PPr.WidowControl()
+}
+
+// SetWidowControl sets WidowControl. nil removes the element (inherit from style).
+func (f *ParagraphFormat) SetWidowControl(b *bool) {
+	if b == nil && f.p.PPr == nil {
+		return
+	}
+	f.ppr().SetWidowControl(b)
+}
+
+// SuppressLineNumbers returns the SuppressLineNumbers tri-state, or nil.
+func (f *ParagraphFormat) SuppressLineNumbers() *bool {
+	if f.p.PPr == nil {
+		return nil
+	}
+	return f.p.PPr.SuppressLineNumbers()
+}
+
+// SetSuppressLineNumbers sets SuppressLineNumbers. nil removes the element (inherit from style).
+func (f *ParagraphFormat) SetSuppressLineNumbers(b *bool) {
+	if b == nil && f.p.PPr == nil {
+		return
+	}
+	f.ppr().SetSuppressLineNumbers(b)
+}
+
+// MirrorIndents returns the MirrorIndents tri-state, or nil.
+func (f *ParagraphFormat) MirrorIndents() *bool {
+	if f.p.PPr == nil {
+		return nil
+	}
+	return f.p.PPr.MirrorIndents()
+}
+
+// SetMirrorIndents sets MirrorIndents. nil removes the element (inherit from style).
+func (f *ParagraphFormat) SetMirrorIndents(b *bool) {
+	if b == nil && f.p.PPr == nil {
+		return
+	}
+	f.ppr().SetMirrorIndents(b)
+}

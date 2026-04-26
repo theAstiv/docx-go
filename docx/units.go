@@ -57,6 +57,20 @@ func Percent(pct float64) FiftiethPercent { return FiftiethPercent(pct * 50) }
 // EMUInches returns an EMU value for the given number of inches.
 func EMUInches(n float64) EMU { return EMU(n * emuPerInch) }
 
+// ---- LineSpacing240 helpers -------------------------------------------------
+
+// SingleLine returns 240 — single-line spacing for use with SetLineSpacingAuto.
+func SingleLine() LineSpacing240 { return 240 }
+
+// OneAndAHalfLine returns 360 — 1.5-line spacing for use with SetLineSpacingAuto.
+func OneAndAHalfLine() LineSpacing240 { return 360 }
+
+// DoubleLine returns 480 — double-line spacing for use with SetLineSpacingAuto.
+func DoubleLine() LineSpacing240 { return 480 }
+
+// MultipleLine converts a multiplier to LineSpacing240 (e.g. MultipleLine(1.15) → 276).
+func MultipleLine(n float64) LineSpacing240 { return LineSpacing240(n * 240) }
+
 // ---- Conversions ------------------------------------------------------------
 
 // EMU converts a Twip to EMU.

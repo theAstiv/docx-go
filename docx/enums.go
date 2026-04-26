@@ -23,6 +23,16 @@ const (
 	LineSpacingAtLeast LineSpacingRule = "atLeast"
 )
 
+// BreakType is the type of a line/page/column break (w:br/@w:type).
+type BreakType string
+
+const (
+	BreakLine         BreakType = ""             // default: text-wrapping line break (w:type omitted)
+	BreakTextWrapping BreakType = "textWrapping" // explicit form of BreakLine; exists for round-trip parity, prefer BreakLine when authoring
+	BreakPage         BreakType = "page"
+	BreakColumn       BreakType = "column"
+)
+
 // VertAlignValue is the set of vertical text alignment values (w:vertAlign/@w:val).
 type VertAlignValue string
 

@@ -17,8 +17,8 @@ func (r *Run) Text() string {
 	return r.r.Text()
 }
 
-// SetText replaces the run's text content. If the run already has a single
-// w:t element it is updated; otherwise all existing text elements are replaced.
+// SetText replaces the run's text content. Existing w:t elements are removed and
+// replaced; other run content (w:br, w:tab, w:sym, etc.) is preserved in place.
 func (r *Run) SetText(text string) {
 	// In-place filter: keep non-CT_Text children (write index always ≤ read index).
 	filtered := r.r.Children[:0]
@@ -34,6 +34,22 @@ func (r *Run) SetText(text string) {
 		t.Space = "preserve"
 		r.r.Children = append(r.r.Children, t)
 	}
+}
+
+// AddBreak appends a w:br element to this run.
+// Use BreakLine (or BreakTextWrapping for the explicit form) for a soft line break,
+// BreakPage for a page break, BreakColumn for a column break.
+func (r *Run) AddBreak(kind BreakType) {
+	br := new(wml.CT_Br)
+	br.Type = string(kind)
+	r.r.Children = append(r.r.Children, br)
+}
+
+// AddTab appends a w:tab element to this run, advancing to the next paragraph-level
+// tab stop. Without explicit tab stops (SetTabs — not yet implemented in Phase 1),
+// the visual position is determined by the renderer's default tab width.
+func (r *Run) AddTab() {
+	r.r.Children = append(r.r.Children, new(wml.CT_Tab))
 }
 
 // Font returns a RunFont proxy for reading and writing run formatting.
