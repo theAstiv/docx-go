@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 
+	"github.com/theAstiv/docx-go/internal/nsfix"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -60,5 +61,9 @@ func (sp *StylesPart) Marshal() ([]byte, error) {
 	if err := enc.Flush(); err != nil {
 		return nil, fmt.Errorf("parts: styles: flush: %w", err)
 	}
-	return buf.Bytes(), nil
+	fixed, err := nsfix.Fix(buf.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("parts: styles: nsfix: %w", err)
+	}
+	return fixed, nil
 }

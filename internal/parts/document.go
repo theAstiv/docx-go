@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 
+	"github.com/theAstiv/docx-go/internal/nsfix"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -61,8 +62,6 @@ func (dp *DocumentPart) Body() *wml.CT_Body {
 
 // Marshal serialises the DocumentPart to XML bytes suitable for storage
 // as word/document.xml in the OPC ZIP.
-// TODO(phase3): apply internal/nsfix to hoist all namespace declarations to
-// the root element once nsfix is moved to a shared internal location.
 func (dp *DocumentPart) Marshal() ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString(xml.Header)
@@ -73,5 +72,9 @@ func (dp *DocumentPart) Marshal() ([]byte, error) {
 	if err := enc.Flush(); err != nil {
 		return nil, fmt.Errorf("parts: document: flush: %w", err)
 	}
-	return buf.Bytes(), nil
+	fixed, err := nsfix.Fix(buf.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("parts: document: nsfix: %w", err)
+	}
+	return fixed, nil
 }

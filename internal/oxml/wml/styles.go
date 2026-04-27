@@ -52,7 +52,7 @@ func (s *CT_Styles) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	s.Styles = nil
 	s.rawRest = nil
 	for _, a := range start.Attr {
-		if a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns") {
+		if a.Name.Space == "" && a.Name.Local == "xmlns" {
 			continue
 		}
 		s.Attrs = append(s.Attrs, a)

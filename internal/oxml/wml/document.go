@@ -45,8 +45,13 @@ func (d *CT_Document) UnmarshalXML(dec *xml.Decoder, start xml.StartElement) err
 	d.Attrs = d.Attrs[:0]
 	d.rawRest = nil
 	d.Body = nil
+	// Preserve xmlns:prefix declarations (Space=="xmlns") so the nsfix
+	// post-processor can reconstruct them on the output root element.
+	// The default namespace (Space=="", Local=="xmlns") is intentionally
+	// dropped because encoding/xml auto-generates it from the element name,
+	// and including it in Attrs would produce a duplicate xmlns= attribute.
 	for _, a := range start.Attr {
-		if a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns") {
+		if a.Name.Space == "" && a.Name.Local == "xmlns" {
 			continue
 		}
 		d.Attrs = append(d.Attrs, a)
