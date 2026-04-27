@@ -53,10 +53,10 @@ func parseContentTypes(data []byte) (*ContentTypes, error) {
 	}
 	ct := &ContentTypes{}
 	for _, d := range xt.Defaults {
-		ct.Defaults = append(ct.Defaults, CTDefault{Extension: d.Extension, ContentType: d.ContentType})
+		ct.Defaults = append(ct.Defaults, CTDefault(d))
 	}
 	for _, o := range xt.Overrides {
-		ct.Overrides = append(ct.Overrides, CTOverride{PartName: o.PartName, ContentType: o.ContentType})
+		ct.Overrides = append(ct.Overrides, CTOverride(o))
 	}
 	return ct, nil
 }

@@ -80,7 +80,7 @@ func marshalElement(v Element, name xml.Name) ([]byte, error) {
 		return nil, fmt.Errorf("MarshalXML: %w", err)
 	}
 	if err := enc.Flush(); err != nil {
-		return nil, fmt.Errorf("Flush: %w", err)
+		return nil, fmt.Errorf("flush: %w", err)
 	}
 	return buf.Bytes(), nil
 }

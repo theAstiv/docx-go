@@ -2,7 +2,6 @@ package opc
 
 import (
 	"archive/zip"
-	"bytes"
 	"fmt"
 	"io"
 	"sort"
@@ -70,9 +69,3 @@ func writeZip(w io.Writer, entries []zipEntry) error {
 	return zw.Close()
 }
 
-// readerAtFromBytes wraps a []byte so it satisfies io.ReaderAt.
-type readerAtFromBytes struct{ b []byte }
-
-func (r readerAtFromBytes) ReadAt(p []byte, off int64) (int, error) {
-	return bytes.NewReader(r.b).ReadAt(p, off)
-}
