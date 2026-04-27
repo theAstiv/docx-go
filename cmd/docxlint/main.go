@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 func main() {
@@ -84,8 +85,12 @@ func runDocker(files []string) ([]validationResult, error) {
 	// with the same basename do not collide on the same mount point.
 	containerPaths := make([]string, len(files))
 	for i, f := range files {
+		abs, err := filepath.Abs(f)
+		if err != nil {
+			return nil, fmt.Errorf("abs path %s: %w", f, err)
+		}
 		containerPaths[i] = fmt.Sprintf("/files/input_%d.docx", i)
-		args = append(args, "-v", f+":"+containerPaths[i]+":ro")
+		args = append(args, "-v", abs+":"+containerPaths[i]+":ro")
 	}
 	args = append(args, "docx-go-validator")
 	args = append(args, containerPaths...)

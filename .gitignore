@@ -5,6 +5,11 @@ coverage.out
 dist/
 tmp/
 
+# Generated golden artifacts (regenerable via scripts/save-fixtures.sh and
+# scripts/libreoffice-smoke.sh — binary outputs are not committed)
+testdata/golden/docx/
+testdata/golden/pdf/
+
 # OS junk
 .DS_Store
 Thumbs.db
