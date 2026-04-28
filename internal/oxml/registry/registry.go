@@ -18,9 +18,9 @@ type Element interface {
 type factory func() Element
 
 var (
-	mu       sync.RWMutex
-	table    = map[xml.Name]factory{}
-	sealed   bool
+	mu     sync.RWMutex
+	table  = map[xml.Name]factory{}
+	sealed bool
 )
 
 // Register associates qname with a factory function.  It must be called from

@@ -16,7 +16,7 @@ func main() {
 		log.Fatal("usage: iterate_paragraphs <input.docx>")
 	}
 
-	f, err := os.Open(os.Args[1])
+	f, err := os.Open(os.Args[1]) // #nosec G304 — path is the explicit CLI argument
 	if err != nil {
 		log.Fatal(err)
 	}

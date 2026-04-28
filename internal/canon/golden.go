@@ -27,7 +27,7 @@ func Assert(t *testing.T, name string, got []byte) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatalf("canon.Assert: mkdir: %v", err)
 		}
-		if err := os.WriteFile(path, canonical, 0o644); err != nil {
+		if err := os.WriteFile(path, canonical, 0o644); err != nil { //nolint:gosec // G306: golden test artifacts are intentionally world-readable
 			t.Fatalf("canon.Assert: write golden: %v", err)
 		}
 		return

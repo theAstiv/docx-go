@@ -108,8 +108,9 @@ func (p *Package) Save(w io.Writer) error {
 // leading slash to match OPC's unrooted part naming convention.
 // Relative targets are resolved against the source part's directory using path.Join,
 // which correctly handles "../" traversals.
-// e.g. ("word/document.xml", "styles.xml") → "word/styles.xml"
-// e.g. ("word/document.xml", "../media/img.png") → "media/img.png"
+//
+//	("word/document.xml", "styles.xml")          → "word/styles.xml"
+//	("word/document.xml", "../media/img.png")    → "media/img.png"
 func resolveRelPath(sourcePart, target string) string {
 	if strings.HasPrefix(target, "/") {
 		return target[1:]

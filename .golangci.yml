@@ -11,7 +11,7 @@ linters:
     - wrapcheck       # errors from external packages must be wrapped
     - nilnil          # catches (nil, nil) return anti-patterns
     - exhaustruct     # enforced on internal/oxml/ — flags missing fields
-    - godot           # comment style consistency
+    - godot           # comment punctuation on exported doc comments
     - forbidigo       # encoding/xml banned in docx/
     - depguard        # three-layer import boundaries
     - gosec           # common security smells
@@ -24,12 +24,15 @@ linters-settings:
 
   forbidigo:
     forbid:
-      - pattern: "^encoding/xml\\."
-        msg: "encoding/xml must not be imported in the docx/ public layer; use internal/parts instead"
+      - "^encoding/xml\\."
     analyze-types: true
     # Only apply to docx/ package paths.
     # (golangci-lint applies forbidigo globally; the path restriction is done
     # via the 'issues.exclude-rules' section below.)
+
+  godot:
+    # Only check doc comments for exported declarations, not every inline comment.
+    scope: declarations
 
   exhaustruct:
     # Enforce on internal/oxml/ types only; option structs in docx/ are exempt.
@@ -92,14 +95,18 @@ linters-settings:
   wrapcheck:
     ignorePackageGlobs:
       - "encoding/*"
+      - "archive/*"
       - "os"
       - "io"
       - "fmt"
+      # Internal packages are first-party code; wrapcheck is for module-boundary errors.
+      - "github.com/theAstiv/docx-go/internal/*"
 
 issues:
   exclude-rules:
     # forbidigo encoding/xml restriction applies only to docx/ paths.
-    - path: "^(?!docx/)"
+    # RE2 has no negative lookahead; enumerate the non-docx directories instead.
+    - path: "^(cmd|examples|internal|scripts|tools|testdata)/"
       linters: [forbidigo]
     # exhaustruct is noisy in test files.
     - path: "_test\\.go"

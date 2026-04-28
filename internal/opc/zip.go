@@ -50,9 +50,9 @@ func writeZip(w io.Writer, entries []zipEntry) error {
 	zw := zip.NewWriter(w)
 	for _, e := range entries {
 		fh := &zip.FileHeader{
-			Name:               e.Name,
-			Method:             zip.Deflate,
-			Modified:           epoch,
+			Name:     e.Name,
+			Method:   zip.Deflate,
+			Modified: epoch,
 		}
 		// Store very small entries uncompressed.
 		if len(e.Data) < 128 {
@@ -68,4 +68,3 @@ func writeZip(w io.Writer, entries []zipEntry) error {
 	}
 	return zw.Close()
 }
-

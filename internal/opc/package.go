@@ -163,8 +163,9 @@ func isRelsFile(name string) bool {
 
 // relsPathToPartPath inverts relsPath: converts a .rels archive path back to
 // the part path it belongs to.
-// "_rels/.rels"                    → ""
-// "word/_rels/document.xml.rels"   → "word/document.xml"
+//
+//	"_rels/.rels"                  → ""
+//	"word/_rels/document.xml.rels" → "word/document.xml"
 func relsPathToPartPath(relsName string) string {
 	// Strip the trailing ".rels" extension.
 	base := relsName[:len(relsName)-5]

@@ -112,8 +112,8 @@ func parseRels(data []byte) (*Rels, error) {
 		TargetMode string `xml:"TargetMode,attr"`
 	}
 	type xmlRels struct {
-		XMLName xml.Name  `xml:"Relationships"`
-		Rels    []xmlRel  `xml:"Relationship"`
+		XMLName xml.Name `xml:"Relationships"`
+		Rels    []xmlRel `xml:"Relationship"`
 	}
 	var xr xmlRels
 	if err := xml.Unmarshal(data, &xr); err != nil {
@@ -176,7 +176,8 @@ func (r *Rels) marshal() ([]byte, error) {
 
 // relsPath returns the .rels path for a given part path.
 // e.g. "word/document.xml" → "word/_rels/document.xml.rels"
-//      ""                  → "_rels/.rels"
+//
+//	""                  → "_rels/.rels"
 func relsPath(partPath string) string {
 	if partPath == "" {
 		return "_rels/.rels"

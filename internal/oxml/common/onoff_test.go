@@ -99,7 +99,10 @@ func TestOnOff_Decode_ValOff(t *testing.T) {
 
 // ECMA-376 capital variants.
 func TestOnOff_Decode_ValCapitals(t *testing.T) {
-	cases := []struct{ val string; wantTrue bool }{
+	cases := []struct {
+		val      string
+		wantTrue bool
+	}{
 		{"True", true}, {"False", false}, {"On", true}, {"Off", false},
 	}
 	for _, tc := range cases {

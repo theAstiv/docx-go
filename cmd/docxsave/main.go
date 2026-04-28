@@ -18,7 +18,7 @@ func main() {
 		log.Fatal("usage: docxsave <input.docx> <output.docx>")
 	}
 
-	f, err := os.Open(os.Args[1])
+	f, err := os.Open(os.Args[1]) // #nosec G304 — path is the explicit CLI argument
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	out, err := os.Create(os.Args[2])
+	out, err := os.Create(os.Args[2]) // #nosec G304 G306 — path is the explicit CLI argument
 	if err != nil {
 		log.Fatal(err)
 	}

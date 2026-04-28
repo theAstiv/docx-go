@@ -8,7 +8,7 @@ import (
 
 // DecimalNumber wraps an integer stored in a w:val attribute.
 //
-// Example XML: <w:numId w:val="3"/>
+// Example XML: <w:numId w:val="3"/>.
 type DecimalNumber struct {
 	Val int64
 }
@@ -40,7 +40,7 @@ func (d DecimalNumber) MarshalXML(e *xml.Encoder, start xml.StartElement) error 
 
 // LongHexNumber wraps a hex string stored in a w:val attribute.
 //
-// Example XML: <w:rsid w:val="00AB1234"/>
+// Example XML: <w:rsid w:val="00AB1234"/>.
 type LongHexNumber struct {
 	Val uint32
 }
@@ -72,7 +72,7 @@ func (h LongHexNumber) MarshalXML(e *xml.Encoder, start xml.StartElement) error 
 
 // TwipsMeasure wraps a length stored as an integer number of twips in w:val.
 //
-// Example XML: <w:ind w:left="720"/>
+// Example XML: <w:ind w:left="720"/>.
 type TwipsMeasure struct {
 	Val int64
 }

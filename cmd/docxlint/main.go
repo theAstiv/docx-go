@@ -117,4 +117,3 @@ func parseJSONLines(data []byte) ([]validationResult, error) {
 	}
 	return results, nil
 }
-

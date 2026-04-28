@@ -19,7 +19,7 @@ func main() {
 		outputPath = os.Args[2]
 	}
 
-	f, err := os.Open(inputPath)
+	f, err := os.Open(inputPath) // #nosec G304 — path is the explicit CLI argument
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func main() {
 	lib.Font().SetItalic(docx.On())
 	lib.Font().SetColor("4472C4") // Word blue
 
-	out, err := os.Create(outputPath)
+	out, err := os.Create(outputPath) // #nosec G304 G306 — path is the explicit CLI argument
 	if err != nil {
 		log.Fatal(err)
 	}

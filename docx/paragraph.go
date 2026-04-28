@@ -2,6 +2,7 @@ package docx
 
 import (
 	"iter"
+	"math"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
@@ -201,6 +202,9 @@ func (f *ParagraphFormat) LineSpacingAuto() *LineSpacing240 {
 	}
 	v := f.p.PPr.SpacingLine()
 	if v == nil {
+		return nil
+	}
+	if *v > math.MaxInt32 || *v < math.MinInt32 {
 		return nil
 	}
 	lv := LineSpacing240(*v)
