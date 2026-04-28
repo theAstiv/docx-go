@@ -29,10 +29,13 @@ func readZip(r io.ReaderAt, size int64) (map[string][]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("opc/zip: open %s: %w", f.Name, err)
 		}
-		data, err := io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
-			return nil, fmt.Errorf("opc/zip: read %s: %w", f.Name, err)
+		data, readErr := io.ReadAll(rc)
+		closeErr := rc.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("opc/zip: read %s: %w", f.Name, readErr)
+		}
+		if closeErr != nil {
+			return nil, fmt.Errorf("opc/zip: close %s: %w", f.Name, closeErr)
 		}
 		parts[f.Name] = data
 	}
