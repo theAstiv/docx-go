@@ -25,7 +25,7 @@ linters:
 
     forbidigo:
       forbid:
-        - "^encoding/xml\\."
+        - pattern: "^encoding/xml\\."
       analyze-types: true
       # Only apply to docx/ package paths.
       # (golangci-lint applies forbidigo globally; the path restriction is done
