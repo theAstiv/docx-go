@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("<w:p xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"></w:p>")

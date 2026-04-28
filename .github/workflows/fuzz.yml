@@ -1,0 +1,35 @@
+name: fuzz
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # nightly at 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Fuzz registered oxml types
+        run: |
+          # Fuzz each function for 5 minutes.
+          # Crash inputs are saved to testdata/fuzz/ automatically by go test.
+          for pkg in ./internal/oxml/raw ./internal/oxml/common; do
+            go test -fuzz=Fuzz -fuzztime=5m "$pkg" || true
+          done
+          # wml has multiple fuzz functions — run each named explicitly.
+          go test -fuzz=FuzzCT_P -fuzztime=5m ./internal/oxml/wml || true
+          go test -fuzz=FuzzCT_R -fuzztime=5m ./internal/oxml/wml || true
+
+      - name: Upload crash inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: testdata/fuzz/
+          if-no-files-found: ignore

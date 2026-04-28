@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("<w:r xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:rPr><w:b/><w:i/><w:sz w:val=\"24\"/><w:color w:val=\"4472C4\"/><w:u w:val=\"single\"/></w:rPr><w:t xml:space=\"preserve\">styled</w:t></w:r>")

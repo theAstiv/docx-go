@@ -1,0 +1,39 @@
+# Compiled output
+*.test
+*.out
+coverage.out
+dist/
+tmp/
+
+# Generated golden artifacts (regenerable via scripts/save-fixtures.sh and
+# scripts/libreoffice-smoke.sh — binary outputs are not committed)
+testdata/golden/docx/
+testdata/golden/pdf/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# MCP / tooling state
+.context-link.db
+
+# Claude local settings
+.claude/settings.local.json
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go workspace (if someone adds one)
+go.work
+go.work.sum
+
+#claude
+.claude/
+.mcp.json
+*.db
+CLAUDE.md
+*.exe
