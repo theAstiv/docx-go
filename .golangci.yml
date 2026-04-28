@@ -1,9 +1,10 @@
 # golangci-lint configuration for docx-go.
 # See CLAUDE.md "CI / lint rules" for rationale.
 
+version: "2"
+
 run:
   timeout: 5m
-  go: "1.23"
 
 linters:
   enable:
@@ -20,87 +21,87 @@ linters:
     - unused          # unused code
     - misspell        # spelling
 
-linters-settings:
+  settings:
 
-  forbidigo:
-    forbid:
-      - "^encoding/xml\\."
-    analyze-types: true
-    # Only apply to docx/ package paths.
-    # (golangci-lint applies forbidigo globally; the path restriction is done
-    # via the 'issues.exclude-rules' section below.)
+    forbidigo:
+      forbid:
+        - "^encoding/xml\\."
+      analyze-types: true
+      # Only apply to docx/ package paths.
+      # (golangci-lint applies forbidigo globally; the path restriction is done
+      # via the 'issues.exclude-rules' section below.)
 
-  godot:
-    # Only check doc comments for exported declarations, not every inline comment.
-    scope: declarations
+    godot:
+      # Only check doc comments for exported declarations, not every inline comment.
+      scope: declarations
 
-  exhaustruct:
-    # Enforce on internal/oxml/ types only; option structs in docx/ are exempt.
-    include:
-      - "github\\.com/theAstiv/docx-go/internal/oxml/.*"
+    exhaustruct:
+      # Enforce on internal/oxml/ types only; option structs in docx/ are exempt.
+      include:
+        - "github\\.com/theAstiv/docx-go/internal/oxml/.*"
 
-  depguard:
-    # Three-layer architecture — see CLAUDE.md for the rationale.
-    # Failure messages include a link so contributors understand WHY.
-    rules:
-      oxml-layer:
-        # internal/oxml/** must NOT import parts, opc, or docx.
-        list-mode: lax
-        files:
-          - "**/internal/oxml/**/*.go"
-        deny:
-          - pkg: "github.com/theAstiv/docx-go/internal/parts"
-            desc: "oxml layer must not import parts — see CLAUDE.md three-layer architecture"
-          - pkg: "github.com/theAstiv/docx-go/internal/opc"
-            desc: "oxml layer must not import opc — see CLAUDE.md three-layer architecture"
-          - pkg: "github.com/theAstiv/docx-go/docx"
-            desc: "oxml layer must not import docx — see CLAUDE.md three-layer architecture"
+    depguard:
+      # Three-layer architecture — see CLAUDE.md for the rationale.
+      # Failure messages include a link so contributors understand WHY.
+      rules:
+        oxml-layer:
+          # internal/oxml/** must NOT import parts, opc, or docx.
+          list-mode: lax
+          files:
+            - "**/internal/oxml/**/*.go"
+          deny:
+            - pkg: "github.com/theAstiv/docx-go/internal/parts"
+              desc: "oxml layer must not import parts — see CLAUDE.md three-layer architecture"
+            - pkg: "github.com/theAstiv/docx-go/internal/opc"
+              desc: "oxml layer must not import opc — see CLAUDE.md three-layer architecture"
+            - pkg: "github.com/theAstiv/docx-go/docx"
+              desc: "oxml layer must not import docx — see CLAUDE.md three-layer architecture"
 
-      opc-layer:
-        # internal/opc/** must use stdlib only.
-        list-mode: lax
-        files:
-          - "**/internal/opc/**/*.go"
-        deny:
-          - pkg: "github.com/theAstiv/docx-go/internal/oxml"
-            desc: "opc layer must not import oxml — see CLAUDE.md three-layer architecture"
-          - pkg: "github.com/theAstiv/docx-go/internal/parts"
-            desc: "opc layer must not import parts — see CLAUDE.md three-layer architecture"
-          - pkg: "github.com/theAstiv/docx-go/docx"
-            desc: "opc layer must not import docx — see CLAUDE.md three-layer architecture"
+        opc-layer:
+          # internal/opc/** must use stdlib only.
+          list-mode: lax
+          files:
+            - "**/internal/opc/**/*.go"
+          deny:
+            - pkg: "github.com/theAstiv/docx-go/internal/oxml"
+              desc: "opc layer must not import oxml — see CLAUDE.md three-layer architecture"
+            - pkg: "github.com/theAstiv/docx-go/internal/parts"
+              desc: "opc layer must not import parts — see CLAUDE.md three-layer architecture"
+            - pkg: "github.com/theAstiv/docx-go/docx"
+              desc: "opc layer must not import docx — see CLAUDE.md three-layer architecture"
 
-      docx-layer:
-        # docx/ must not reach into oxml internals or opc directly.
-        list-mode: lax
-        files:
-          - "**/docx/**/*.go"
-        deny:
-          - pkg: "github.com/theAstiv/docx-go/internal/oxml/wml"
-            desc: "docx layer must not import wml directly — use parts; see CLAUDE.md"
-          - pkg: "github.com/theAstiv/docx-go/internal/oxml/dml"
-            desc: "docx layer must not import dml directly — use parts; see CLAUDE.md"
-          - pkg: "github.com/theAstiv/docx-go/internal/oxml/registry"
-            desc: "docx layer must not import registry — see CLAUDE.md"
-          - pkg: "github.com/theAstiv/docx-go/internal/oxml/raw"
-            desc: "docx layer must not import raw — see CLAUDE.md"
-          - pkg: "github.com/theAstiv/docx-go/internal/oxml/order"
-            desc: "docx layer must not import order — see CLAUDE.md"
-          - pkg: "github.com/theAstiv/docx-go/internal/oxml/roundtrip"
-            desc: "docx layer must not import roundtrip — see CLAUDE.md"
-          - pkg: "github.com/theAstiv/docx-go/internal/opc"
-            desc: "docx layer must not import opc directly — use parts; see CLAUDE.md"
-          - pkg: "encoding/xml"
-            desc: "docx layer must not import encoding/xml — enforced by forbidigo too"
+        docx-layer:
+          # docx/ must not reach into oxml internals or opc directly.
+          list-mode: lax
+          files:
+            - "**/docx/**/*.go"
+          deny:
+            - pkg: "github.com/theAstiv/docx-go/internal/oxml/wml"
+              desc: "docx layer must not import wml directly — use parts; see CLAUDE.md"
+            - pkg: "github.com/theAstiv/docx-go/internal/oxml/dml"
+              desc: "docx layer must not import dml directly — use parts; see CLAUDE.md"
+            - pkg: "github.com/theAstiv/docx-go/internal/oxml/registry"
+              desc: "docx layer must not import registry — see CLAUDE.md"
+            - pkg: "github.com/theAstiv/docx-go/internal/oxml/raw"
+              desc: "docx layer must not import raw — see CLAUDE.md"
+            - pkg: "github.com/theAstiv/docx-go/internal/oxml/order"
+              desc: "docx layer must not import order — see CLAUDE.md"
+            - pkg: "github.com/theAstiv/docx-go/internal/oxml/roundtrip"
+              desc: "docx layer must not import roundtrip — see CLAUDE.md"
+            - pkg: "github.com/theAstiv/docx-go/internal/opc"
+              desc: "docx layer must not import opc directly — use parts; see CLAUDE.md"
+            - pkg: "encoding/xml"
+              desc: "docx layer must not import encoding/xml — enforced by forbidigo too"
 
-  wrapcheck:
-    ignorePackageGlobs:
-      - "encoding/*"
-      - "archive/*"
-      - "os"
-      - "io"
-      - "fmt"
-      # Internal packages are first-party code; wrapcheck is for module-boundary errors.
-      - "github.com/theAstiv/docx-go/internal/*"
+    wrapcheck:
+      ignorePackageGlobs:
+        - "encoding/*"
+        - "archive/*"
+        - "os"
+        - "io"
+        - "fmt"
+        # Internal packages are first-party code; wrapcheck is for module-boundary errors.
+        - "github.com/theAstiv/docx-go/internal/*"
 
 issues:
   exclude-rules:
