@@ -34,7 +34,7 @@ jobs:
           go test -coverprofile=coverage.out ./...
           go tool cover -func=coverage.out
 
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v6
         if: matrix.os == 'ubuntu-latest' && matrix.go == '1.24'
         with:
           files: coverage.out
