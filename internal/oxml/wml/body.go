@@ -54,6 +54,12 @@ func (b *CT_Body) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
 					return err
 				}
 				b.Children = append(b.Children, p)
+			case ns.Qn("w:tbl"):
+				tbl := new(CT_Tbl)
+				if err := tbl.UnmarshalXML(d, t); err != nil {
+					return err
+				}
+				b.Children = append(b.Children, tbl)
 			case ns.Qn("w:sectPr"):
 				b.SectPr = new(CT_SectPr)
 				if err := b.SectPr.UnmarshalXML(d, t); err != nil {

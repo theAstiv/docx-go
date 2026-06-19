@@ -187,6 +187,57 @@ func rawRemoveChild(children *[]*raw.RawElement, qname xml.Name) {
 	}
 }
 
+// rawInsertOrdered inserts el into children at the position dictated by seqPos.
+// If el.QName is not in seqPos, it is appended at the end.
+// Elements whose QName is not in seqPos are treated as having position maxInt
+// so they sort to the tail — matching the behaviour callers expect when they
+// append unknown children via rawPost / rawPre.
+func rawInsertOrdered(children *[]*raw.RawElement, el *raw.RawElement, seqPos map[xml.Name]int) {
+	pos, ok := seqPos[el.QName]
+	if !ok {
+		*children = append(*children, el)
+		return
+	}
+	for i, child := range *children {
+		cp, cok := seqPos[child.QName]
+		if !cok || cp > pos {
+			// Insert before index i.
+			*children = append(*children, nil)
+			copy((*children)[i+1:], (*children)[i:])
+			(*children)[i] = el
+			return
+		}
+	}
+	*children = append(*children, el)
+}
+
+// pPrChildSeqPos maps w:pPr child element names to their xs:sequence position
+// (lower = earlier in the element).  Only elements that mutating helpers need
+// to place correctly are listed; unknown elements sort to the tail.
+var pPrChildSeqPos = map[xml.Name]int{
+	ns.Qn("w:pStyle"):              1,
+	ns.Qn("w:keepNext"):            2,
+	ns.Qn("w:keepLines"):           3,
+	ns.Qn("w:pageBreakBefore"):     4,
+	ns.Qn("w:framePr"):             5,
+	ns.Qn("w:widowControl"):        6,
+	ns.Qn("w:numPr"):               7,
+	ns.Qn("w:suppressLineNumbers"): 8,
+	ns.Qn("w:pBdr"):                9,
+	ns.Qn("w:shd"):                 10,
+	ns.Qn("w:tabs"):                11,
+	ns.Qn("w:spacing"):             22,
+	ns.Qn("w:ind"):                 23,
+	ns.Qn("w:jc"):                  27,
+	ns.Qn("w:textDirection"):       28,
+	ns.Qn("w:textAlignment"):       29,
+	ns.Qn("w:outlineLvl"):          31,
+	ns.Qn("w:cnfStyle"):            33,
+	ns.Qn("w:rPr"):                 34,
+	ns.Qn("w:sectPr"):              35,
+	ns.Qn("w:pPrChange"):           36,
+}
+
 // rawUnmarshalChildren reads StartElement tokens from d into a RawElement slice.
 // Stops and returns at the matching EndElement of the parent.
 func rawUnmarshalChildren(d *xml.Decoder) ([]*raw.RawElement, error) {
