@@ -67,12 +67,17 @@ func Fix(src []byte) ([]byte, error) {
 	// (e.g. main:asciiTheme) the encoder additionally emits xmlns:main="ROOT_NS"
 	// for the prefix — giving the same URI two bindings on one element, which
 	// .NET's XmlDocument rejects as a duplicate namespace declaration.
-	// Removing the redundant xmlns="ROOT_NS" from child content is safe because
-	// children inherit the root element's default-namespace declaration.
+	//
+	// A naive bytes.ReplaceAll is NOT safe: inside elements that declare a
+	// different default namespace (e.g. <mc:AlternateContent> uses xmlns="MC"),
+	// W-namespace children correctly emit xmlns="ROOT_NS" to restore the root
+	// default.  Stripping those would silently move the element into the MC
+	// namespace.  We therefore walk the child bytes with xml.Decoder, tracking
+	// the default-namespace stack, and strip xmlns="ROOT_NS" only when it is
+	// genuinely redundant (current default already IS ROOT_NS).
 	rest := src[rootEnd+1:]
 	if se.Name.Space != "" {
-		redundant := []byte(` xmlns="` + se.Name.Space + `"`)
-		rest = bytes.ReplaceAll(rest, redundant, nil)
+		rest = stripRedundantRootNS(rest, se.Name.Space)
 	}
 	out.Write(rest)
 	return out.Bytes(), nil
@@ -200,6 +205,69 @@ func buildTag(w *bytes.Buffer, se xml.StartElement) {
 	}
 
 	w.WriteByte('>')
+}
+
+// stripRedundantRootNS removes xmlns="rootNS" from child-element start tags,
+// but ONLY when the current XML default namespace is already rootNS.  Inside
+// elements that declare a different default namespace (e.g. mc:AlternateContent
+// uses xmlns="MC"), W-namespace descendants correctly re-declare xmlns="rootNS"
+// to restore the root default; those declarations must be preserved.
+//
+// The walk uses xml.Decoder so it correctly handles nested scopes and
+// self-closing elements.  InputOffset() gives byte offsets into src so that
+// unmodified regions are copied verbatim.
+func stripRedundantRootNS(src []byte, rootNS string) []byte {
+	target := []byte(` xmlns="` + rootNS + `"`)
+	if !bytes.Contains(src, target) {
+		return src
+	}
+
+	dec := xml.NewDecoder(bytes.NewReader(src))
+	// defaultNS tracks the active default namespace at each element depth.
+	// The root element (not in src) already declared rootNS as default.
+	defaultNS := []string{rootNS}
+
+	var out bytes.Buffer
+	out.Grow(len(src))
+	written := int64(0) // bytes of src already written to out
+
+	for {
+		startOff := dec.InputOffset() // start of the next token (after prev token)
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		endOff := dec.InputOffset() // end of tok
+
+		switch t := tok.(type) {
+		case xml.StartElement:
+			// Determine the default namespace declared BY this element (if any).
+			elementDefaultNS := defaultNS[len(defaultNS)-1]
+			for _, a := range t.Attr {
+				if a.Name.Space == "" && a.Name.Local == "xmlns" {
+					elementDefaultNS = a.Value
+				}
+			}
+			// xmlns="rootNS" is redundant only when the incoming default is
+			// already rootNS AND the element is also declaring rootNS.
+			currentDefault := defaultNS[len(defaultNS)-1]
+			if currentDefault == rootNS && elementDefaultNS == rootNS {
+				tagBytes := src[startOff:endOff]
+				modified := bytes.Replace(tagBytes, target, nil, 1)
+				out.Write(src[written:startOff])
+				out.Write(modified)
+				written = endOff
+			}
+			defaultNS = append(defaultNS, elementDefaultNS)
+
+		case xml.EndElement:
+			if len(defaultNS) > 1 {
+				defaultNS = defaultNS[:len(defaultNS)-1]
+			}
+		}
+	}
+	out.Write(src[written:])
+	return out.Bytes()
 }
 
 func writeNSDecl(w *bytes.Buffer, pfx, uri string) {

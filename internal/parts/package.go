@@ -32,8 +32,8 @@ type Package struct {
 	DocPart *DocumentPart
 	StyPart *StylesPart
 	NumPart *NumberingPart // nil until first list is created or loaded from file
-	Headers []*HeaderEntry  // all header parts keyed by relID
-	Footers []*FooterEntry  // all footer parts keyed by relID
+	Headers []*HeaderEntry // all header parts keyed by relID
+	Footers []*FooterEntry // all footer parts keyed by relID
 }
 
 // New creates an empty Package with a minimal valid OOXML structure:
