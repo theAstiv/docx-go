@@ -14,6 +14,7 @@ import (
 // CT_Numbering is the root element of numbering.xml (w:numbering).
 // Schema order: numPicBullet* → abstractNum* → num* → numIdMacAtCleanup?
 type CT_Numbering struct {
+	Attrs        []xml.Attr        // xmlns:* and mc:Ignorable preserved for nsfix round-trip
 	rawPre       []*raw.RawElement // numPicBullet + any extras before abstractNums
 	AbstractNums []*CT_AbstractNum
 	Nums         []*CT_Num
@@ -22,7 +23,7 @@ type CT_Numbering struct {
 
 // MarshalXML encodes the numbering element.
 func (n *CT_Numbering) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
-	start := xml.StartElement{Name: ns.Qn("w:numbering")}
+	start := xml.StartElement{Name: ns.Qn("w:numbering"), Attr: n.Attrs}
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
@@ -46,7 +47,17 @@ func (n *CT_Numbering) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 }
 
 // UnmarshalXML decodes a w:numbering element.
-func (n *CT_Numbering) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
+func (n *CT_Numbering) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	// Preserve xmlns:prefix declarations so nsfix can reconstruct them on the
+	// output root element. Drop {Space:"", Local:"xmlns"} (default-namespace
+	// pseudo-attr) — the encoder auto-emits it from Name.Space and a duplicate
+	// would cause a parse-time XML error.
+	for _, a := range start.Attr {
+		if a.Name.Space == "" && a.Name.Local == "xmlns" {
+			continue
+		}
+		n.Attrs = append(n.Attrs, a)
+	}
 	seenTyped := false
 	for {
 		tok, err := d.Token()

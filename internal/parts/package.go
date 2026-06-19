@@ -31,9 +31,9 @@ type Package struct {
 	pkg     *opc.Package
 	DocPart *DocumentPart
 	StyPart *StylesPart
-	NumPart *NumberingPart  // nil until first list is created or loaded from file
-	Headers []*HeaderEntry  // all header parts keyed by relID
-	Footers []*FooterEntry  // all footer parts keyed by relID
+	NumPart *NumberingPart // nil until first list is created or loaded from file
+	Headers []*HeaderEntry // all header parts keyed by relID
+	Footers []*FooterEntry // all footer parts keyed by relID
 }
 
 // New creates an empty Package with a minimal valid OOXML structure:
@@ -148,7 +148,7 @@ func (p *Package) AddHeaderPart() *HeaderEntry {
 	n := 1
 	for _, h := range p.Headers {
 		var i int
-		fmt.Sscanf(path.Base(h.path), "header%d.xml", &i)
+		_, _ = fmt.Sscanf(path.Base(h.path), "header%d.xml", &i)
 		if i >= n {
 			n = i + 1
 		}
@@ -171,7 +171,7 @@ func (p *Package) AddFooterPart() *FooterEntry {
 	n := 1
 	for _, f := range p.Footers {
 		var i int
-		fmt.Sscanf(path.Base(f.path), "footer%d.xml", &i)
+		_, _ = fmt.Sscanf(path.Base(f.path), "footer%d.xml", &i)
 		if i >= n {
 			n = i + 1
 		}
