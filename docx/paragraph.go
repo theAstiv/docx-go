@@ -55,6 +55,19 @@ func (p *Paragraph) Text() string {
 	return p.p.Text()
 }
 
+// SetList assigns this paragraph to the given List at the specified level (0-based).
+// It sets w:numPr with the list's numId and the given ilvl on the paragraph properties.
+func (p *Paragraph) SetList(list *List, level int) {
+	p.Format().ppr().SetNumPr(list.NumID(), int64(level))
+}
+
+// ClearList removes the w:numPr from this paragraph, detaching it from any list.
+func (p *Paragraph) ClearList() {
+	if p.p.PPr != nil {
+		p.p.PPr.ClearNumPr()
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ParagraphFormat
 // ---------------------------------------------------------------------------
@@ -379,4 +392,21 @@ func (f *ParagraphFormat) SetMirrorIndents(b *bool) {
 		return
 	}
 	f.ppr().SetMirrorIndents(b)
+}
+
+// NumID returns the numId value from w:numPr, or nil if this paragraph is not
+// part of a list.
+func (f *ParagraphFormat) NumID() *int64 {
+	if f.p.PPr == nil {
+		return nil
+	}
+	return f.p.PPr.NumID()
+}
+
+// NumILvl returns the ilvl (0-based level) from w:numPr, or nil.
+func (f *ParagraphFormat) NumILvl() *int64 {
+	if f.p.PPr == nil {
+		return nil
+	}
+	return f.p.PPr.NumILvl()
 }

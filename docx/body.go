@@ -46,3 +46,37 @@ func (b *Body) AddParagraph() *Paragraph {
 	body.Children = append(body.Children, p)
 	return &Paragraph{p: p}
 }
+
+// Tables returns an iterator over all top-level tables in the body.
+// Paragraphs and other block elements are skipped.
+func (b *Body) Tables() iter.Seq[*Table] {
+	return func(yield func(*Table) bool) {
+		body := b.ctBody()
+		if body == nil {
+			return
+		}
+		for _, child := range body.Children {
+			tbl, ok := child.(*wml.CT_Tbl)
+			if !ok {
+				continue
+			}
+			if !yield(&Table{tbl: tbl}) {
+				return
+			}
+		}
+	}
+}
+
+// AddTable appends a new table with the given dimensions and returns its proxy.
+// rows and cols must be ≥ 1. Each cell is pre-populated with an empty paragraph.
+func (b *Body) AddTable(rows, cols int, opts TableOptions) *Table {
+	if rows < 1 {
+		rows = 1
+	}
+	if cols < 1 {
+		cols = 1
+	}
+	tbl := buildTable(rows, cols, opts)
+	b.ctBody().Children = append(b.ctBody().Children, tbl)
+	return &Table{tbl: tbl}
+}
