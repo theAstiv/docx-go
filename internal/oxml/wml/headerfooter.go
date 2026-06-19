@@ -15,12 +15,13 @@ import (
 // It holds block-level content identical to the document body but without a
 // trailing sectPr.
 type CT_Hdr struct {
+	Attrs    []xml.Attr
 	Children []BlockElement
 }
 
 // MarshalXML encodes the header root element.
 func (h *CT_Hdr) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
-	start := xml.StartElement{Name: ns.Qn("w:hdr")}
+	start := xml.StartElement{Name: ns.Qn("w:hdr"), Attr: h.Attrs}
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
@@ -33,8 +34,15 @@ func (h *CT_Hdr) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 }
 
 // UnmarshalXML reads a w:hdr element.
-func (h *CT_Hdr) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
+func (h *CT_Hdr) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	h.Attrs = h.Attrs[:0]
 	h.Children = h.Children[:0]
+	for _, a := range start.Attr {
+		if a.Name.Space == "" && a.Name.Local == "xmlns" {
+			continue
+		}
+		h.Attrs = append(h.Attrs, a)
+	}
 	for {
 		tok, err := d.Token()
 		if err != nil {
@@ -57,12 +65,13 @@ func (h *CT_Hdr) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
 
 // CT_Ftr is the root element of a footer part (w:ftr).
 type CT_Ftr struct {
+	Attrs    []xml.Attr
 	Children []BlockElement
 }
 
 // MarshalXML encodes the footer root element.
 func (f *CT_Ftr) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
-	start := xml.StartElement{Name: ns.Qn("w:ftr")}
+	start := xml.StartElement{Name: ns.Qn("w:ftr"), Attr: f.Attrs}
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
@@ -75,8 +84,15 @@ func (f *CT_Ftr) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 }
 
 // UnmarshalXML reads a w:ftr element.
-func (f *CT_Ftr) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
+func (f *CT_Ftr) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	f.Attrs = f.Attrs[:0]
 	f.Children = f.Children[:0]
+	for _, a := range start.Attr {
+		if a.Name.Space == "" && a.Name.Local == "xmlns" {
+			continue
+		}
+		f.Attrs = append(f.Attrs, a)
+	}
 	for {
 		tok, err := d.Token()
 		if err != nil {
