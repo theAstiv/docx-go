@@ -67,12 +67,8 @@ func (d *Document) EvenAndOddHeaders() bool {
 // It creates the settings part on first call if not already present.
 func (d *Document) SetEvenAndOddHeaders(enabled bool) {
 	ct := d.pkg.EnsureSettingsPart().CT()
-	if enabled {
-		t := true
-		ct.SetEvenAndOddHeaders(&t)
-	} else {
-		ct.SetEvenAndOddHeaders(nil)
-	}
+	v := enabled
+	ct.SetEvenAndOddHeaders(&v)
 }
 
 // DefaultTabStop returns the default tab-stop width in twips, or nil if not set.

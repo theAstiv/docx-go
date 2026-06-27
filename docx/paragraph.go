@@ -68,6 +68,30 @@ func (p *Paragraph) ClearList() {
 	}
 }
 
+// SectionBreak returns the embedded w:sectPr for this paragraph as a Section
+// proxy, or nil if this paragraph does not carry a section break.
+// This is a read-only accessor; it never mutates the document.
+// Use AddSectionBreak to create a section break on a paragraph that lacks one.
+func (p *Paragraph) SectionBreak() *Section {
+	if p.p.PPr == nil || p.p.PPr.SectPr == nil {
+		return nil
+	}
+	return &Section{sectPr: p.p.PPr.SectPr, pkg: nil}
+}
+
+// AddSectionBreak ensures this paragraph carries an embedded w:sectPr and
+// returns a Section proxy backed by it.  If the paragraph already has a
+// section break the existing one is returned unchanged.
+// The returned Section supports page geometry setters but not header/footer
+// operations (no package reference); use Document.LastSection() for those.
+func (p *Paragraph) AddSectionBreak() *Section {
+	ppr := p.Format().ppr()
+	if ppr.SectPr == nil {
+		ppr.SectPr = wml.DefaultSectPr()
+	}
+	return &Section{sectPr: ppr.SectPr, pkg: nil}
+}
+
 // ---------------------------------------------------------------------------
 // ParagraphFormat
 // ---------------------------------------------------------------------------
