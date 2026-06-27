@@ -34,7 +34,6 @@ func TestMutationFixture_TableStructure(t *testing.T) {
 	}
 
 	// Count original table structure.
-	type tableShape struct{ rows, cols int }
 	origShapes := collectTableShapes(d)
 	if len(origShapes) == 0 {
 		t.Skip("fixture has no tables")
