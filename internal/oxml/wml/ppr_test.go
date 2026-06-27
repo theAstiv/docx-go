@@ -59,6 +59,28 @@ func TestCT_PPr_StyleID_Accessors(t *testing.T) {
 	}
 }
 
+func TestCT_PPr_RoundTrip_WithSectPr(t *testing.T) {
+	// A pPr with an embedded sectPr (section-break paragraph).
+	input := `<w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+		`<w:jc w:val="center"/>` +
+		`<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>` +
+		`</w:pPr>`
+	roundtrip.VerifyBytes[*wml.CT_PPr](t, []byte(input), pprName)
+}
+
+func TestCT_PPr_EmbeddedSectPr_Accessors(t *testing.T) {
+	p := &wml.CT_PPr{}
+	if p.SectPr != nil {
+		t.Fatal("SectPr should be nil on empty CT_PPr")
+	}
+	p.SectPr = wml.DefaultSectPr()
+	if p.SectPr == nil {
+		t.Fatal("SectPr should be non-nil after assignment")
+	}
+	// Round-trip: the SectPr should survive marshal → unmarshal.
+	roundtrip.Verify[*wml.CT_PPr](t, p, pprName)
+}
+
 func TestCT_PPr_Spacing_Accessors(t *testing.T) {
 	p := &wml.CT_PPr{}
 	if p.SpacingBefore() != nil {

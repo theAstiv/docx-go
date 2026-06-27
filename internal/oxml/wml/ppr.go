@@ -11,31 +11,75 @@ import (
 
 // CT_PPr is the w:pPr element: paragraph properties.
 //
-// All children are stored in raw in their original order so that
-// marshal → unmarshal → marshal produces canonically-equal output.
-// Typed accessors on CT_PPr read/write through to the raw slice.
+// Most children are stored in raw in their original order for round-trip
+// fidelity. SectPr is extracted as a typed field so callers can create and
+// inspect embedded section breaks without touching the raw bytes.
 type CT_PPr struct {
-	// raw holds all w:pPr child elements in document order.
+	// raw holds all w:pPr child elements except w:sectPr, in document order.
 	raw []*raw.RawElement
+	// SectPr is the embedded section-break element (w:p > w:pPr > w:sectPr).
+	// Present only on the last paragraph of a non-final section; nil otherwise.
+	SectPr *CT_SectPr
 }
 
-// MarshalXML emits <w:pPr> with all raw children in their original order.
+// MarshalXML emits <w:pPr> with raw children, inserting SectPr (xs:sequence
+// position 35) before any element at a higher position (e.g. w:pPrChange=36).
 func (p *CT_PPr) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	start.Name = ns.Qn("w:pPr")
 	if err := e.EncodeToken(start); err != nil {
 		return fmt.Errorf("wml: CT_PPr start: %w", err)
 	}
-	if err := rawMarshalChildren(e, p.raw); err != nil {
-		return err
+	sectPrEmitted := false
+	for _, child := range p.raw {
+		// Inject SectPr before any xs:sequence element whose position > 35.
+		if !sectPrEmitted && p.SectPr != nil {
+			if pos, ok := pPrChildSeqPos[child.QName]; ok && pos > 35 {
+				if err := p.SectPr.MarshalXML(e, xml.StartElement{}); err != nil {
+					return err
+				}
+				sectPrEmitted = true
+			}
+		}
+		if err := child.MarshalXML(e, xml.StartElement{}); err != nil {
+			return err
+		}
+	}
+	if !sectPrEmitted && p.SectPr != nil {
+		if err := p.SectPr.MarshalXML(e, xml.StartElement{}); err != nil {
+			return err
+		}
 	}
 	return e.EncodeToken(xml.EndElement{Name: start.Name})
 }
 
-// UnmarshalXML reads a w:pPr element, capturing all children.
+// UnmarshalXML reads a w:pPr element, capturing all children. w:sectPr is
+// parsed into the typed SectPr field; all other children go into raw.
 func (p *CT_PPr) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
-	var err error
-	p.raw, err = rawUnmarshalChildren(d)
-	return err
+	p.raw = p.raw[:0]
+	p.SectPr = nil
+	for {
+		tok, err := d.Token()
+		if err != nil {
+			return fmt.Errorf("wml: CT_PPr: %w", err)
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name == ns.Qn("w:sectPr") {
+				p.SectPr = new(CT_SectPr)
+				if err := p.SectPr.UnmarshalXML(d, t); err != nil {
+					return err
+				}
+			} else {
+				re := new(raw.RawElement)
+				if err := re.UnmarshalXML(d, t); err != nil {
+					return err
+				}
+				p.raw = append(p.raw, re)
+			}
+		case xml.EndElement:
+			return nil
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -109,6 +109,9 @@ func (s *Section) TitlePg() bool {
 // type is requested.  If a reference of the given type exists but its part is
 // absent (dangling relID), the stale reference is replaced with a new part.
 func (s *Section) SetHeader(typ HeaderType) *Header {
+	if s.pkg == nil {
+		return nil
+	}
 	for _, ref := range s.sectPr.HeaderRefs() {
 		if ref.Type == typ {
 			entry := s.pkg.HeaderByRelID(ref.RelID)
@@ -127,6 +130,9 @@ func (s *Section) SetHeader(typ HeaderType) *Header {
 
 // Header returns the header of the given type for this section, or nil.
 func (s *Section) Header(typ HeaderType) *Header {
+	if s.pkg == nil {
+		return nil
+	}
 	for _, ref := range s.sectPr.HeaderRefs() {
 		if ref.Type == typ {
 			entry := s.pkg.HeaderByRelID(ref.RelID)
@@ -141,6 +147,9 @@ func (s *Section) Header(typ HeaderType) *Header {
 // SetFooter creates or retrieves the footer of the given type for this section
 // and returns its proxy.  Dangling relIDs are replaced (not duplicated).
 func (s *Section) SetFooter(typ FooterType) *Footer {
+	if s.pkg == nil {
+		return nil
+	}
 	for _, ref := range s.sectPr.FooterRefs() {
 		if ref.Type == typ {
 			entry := s.pkg.FooterByRelID(ref.RelID)
@@ -158,6 +167,9 @@ func (s *Section) SetFooter(typ FooterType) *Footer {
 
 // Footer returns the footer of the given type for this section, or nil.
 func (s *Section) Footer(typ FooterType) *Footer {
+	if s.pkg == nil {
+		return nil
+	}
 	for _, ref := range s.sectPr.FooterRefs() {
 		if ref.Type == typ {
 			entry := s.pkg.FooterByRelID(ref.RelID)

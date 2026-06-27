@@ -100,8 +100,9 @@ func (s *CT_Styles) ByID(id string) *CT_Style {
 // CT_Style is the w:style element: a named style definition.
 //
 // StyleID and Type are the two discriminating attributes. PPr and RPr hold
-// the paragraph and run properties for the style. All other children are
-// preserved as raw for round-trip fidelity.
+// the paragraph and run properties for the style. Children are split into
+// rawRestPre (before w:pPr in the xs:sequence) and rawRestPost (after w:rPr)
+// so that MarshalXML can emit them in schema-correct order.
 type CT_Style struct {
 	// StyleID is the w:styleId attribute value.
 	StyleID string
@@ -117,8 +118,12 @@ type CT_Style struct {
 	PPr *CT_PPr
 	// RPr holds run properties for character/paragraph styles.
 	RPr *CT_RPr
-	// rawRest preserves unmodelled children (w:basedOn, w:next, w:link, etc.)
-	rawRest []*raw.RawElement
+	// rawRestPre preserves children that appear before w:pPr in the xs:sequence
+	// (w:aliases, w:basedOn, w:next, w:link, w:uiPriority, w:rsid, etc.).
+	rawRestPre []*raw.RawElement
+	// rawRestPost preserves children that appear after w:rPr in the xs:sequence
+	// (w:tblPr, w:trPr, w:tcPr, and unknown future elements).
+	rawRestPost []*raw.RawElement
 }
 
 // MarshalXML emits <w:style>.
@@ -149,7 +154,9 @@ func (s *CT_Style) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 			return err
 		}
 	}
-	for _, child := range s.rawRest {
+	// xs:sequence: rawRestPre (aliases, basedOn, next, link, uiPriority, rsid, …)
+	// then pPr (17), rPr (18), then rawRestPost (tblPr 19, trPr 20, tcPr 21, …).
+	for _, child := range s.rawRestPre {
 		if err := child.MarshalXML(e, xml.StartElement{}); err != nil {
 			return err
 		}
@@ -161,6 +168,11 @@ func (s *CT_Style) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	}
 	if s.RPr != nil {
 		if err := s.RPr.MarshalXML(e, xml.StartElement{}); err != nil {
+			return err
+		}
+	}
+	for _, child := range s.rawRestPost {
+		if err := child.MarshalXML(e, xml.StartElement{}); err != nil {
 			return err
 		}
 	}
@@ -176,7 +188,8 @@ func (s *CT_Style) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	s.Name = ""
 	s.PPr = nil
 	s.RPr = nil
-	s.rawRest = nil
+	s.rawRestPre = nil
+	s.rawRestPost = nil
 	for _, a := range start.Attr {
 		switch {
 		case a.Name.Local == "styleId":
@@ -189,6 +202,9 @@ func (s *CT_Style) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 			s.CustomStyle = true
 		}
 	}
+	// pprSeen tracks whether we have already consumed a w:pPr or w:rPr child.
+	// Children seen before pPr go to rawRestPre; those after rPr go to rawRestPost.
+	pprSeen := false
 	for {
 		tok, err := d.Token()
 		if err != nil {
@@ -203,11 +219,13 @@ func (s *CT_Style) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 					return err
 				}
 			case ns.Qn("w:pPr"):
+				pprSeen = true
 				s.PPr = new(CT_PPr)
 				if err := s.PPr.UnmarshalXML(d, t); err != nil {
 					return err
 				}
 			case ns.Qn("w:rPr"):
+				pprSeen = true
 				s.RPr = new(CT_RPr)
 				if err := s.RPr.UnmarshalXML(d, t); err != nil {
 					return err
@@ -217,7 +235,11 @@ func (s *CT_Style) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 				if err := re.UnmarshalXML(d, t); err != nil {
 					return err
 				}
-				s.rawRest = append(s.rawRest, re)
+				if pprSeen {
+					s.rawRestPost = append(s.rawRestPost, re)
+				} else {
+					s.rawRestPre = append(s.rawRestPre, re)
+				}
 			}
 		case xml.EndElement:
 			return nil

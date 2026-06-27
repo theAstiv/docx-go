@@ -53,6 +53,49 @@ func (d *Document) Body() *Body {
 	return &Body{docPart: d.pkg.DocPart}
 }
 
+// EvenAndOddHeaders reports whether separate even/odd page headers/footers are
+// enabled for this document. Requires the settings part to be present.
+func (d *Document) EvenAndOddHeaders() bool {
+	if d.pkg.SetPart == nil {
+		return false
+	}
+	b := d.pkg.SetPart.CT().EvenAndOddHeaders()
+	return b != nil && *b
+}
+
+// SetEvenAndOddHeaders enables or disables separate even/odd page headers/footers.
+// It creates the settings part on first call if not already present.
+func (d *Document) SetEvenAndOddHeaders(enabled bool) {
+	ct := d.pkg.EnsureSettingsPart().CT()
+	v := enabled
+	ct.SetEvenAndOddHeaders(&v)
+}
+
+// DefaultTabStop returns the default tab-stop width in twips, or nil if not set.
+func (d *Document) DefaultTabStop() *Twip {
+	if d.pkg.SetPart == nil {
+		return nil
+	}
+	v := d.pkg.SetPart.CT().DefaultTabStop()
+	if v == nil {
+		return nil
+	}
+	t := Twip(*v)
+	return &t
+}
+
+// SetDefaultTabStop sets the default tab-stop width. nil clears it.
+// It creates the settings part on first call if not already present.
+func (d *Document) SetDefaultTabStop(v *Twip) {
+	ct := d.pkg.EnsureSettingsPart().CT()
+	if v == nil {
+		ct.SetDefaultTabStop(nil)
+		return
+	}
+	n := int64(*v)
+	ct.SetDefaultTabStop(&n)
+}
+
 // Validate performs basic structural checks and returns any issues found.
 // It always returns []ValidationIssue (never error); structural problems are
 // encoded as issues, not Go errors.

@@ -65,6 +65,22 @@ fetch "$POI_RAW/bookmarks.docx"               "$POI_DEST/bookmarks.docx"
 fetch "$POI_RAW/Numbering.docx"               "$POI_DEST/Numbering.docx"
 fetch "$POI_RAW/headerFooter.docx"            "$POI_DEST/headerFooter.docx"
 
+# Phase 2 additions — tables (Apache 2.0)
+fetch "$POI_RAW/TestTableCellAlign.docx"      "$POI_DEST/TestTableCellAlign.docx"
+fetch "$POI_RAW/TestTableColumns.docx"        "$POI_DEST/TestTableColumns.docx"
+fetch "$POI_RAW/table-alignment.docx"         "$POI_DEST/table-alignment.docx"
+fetch "$POI_RAW/table-indent.docx"            "$POI_DEST/table-indent.docx"
+fetch "$POI_RAW/deep-table-cell.docx"         "$POI_DEST/deep-table-cell.docx"
+
+# Phase 2 additions — lists/numbering (Apache 2.0)
+fetch "$POI_RAW/ComplexNumberedLists.docx"    "$POI_DEST/ComplexNumberedLists.docx"
+fetch "$POI_RAW/NumberingWOverrides.docx"     "$POI_DEST/NumberingWOverrides.docx"
+fetch "$POI_RAW/NumberingWithOutOfOrderId.docx" "$POI_DEST/NumberingWithOutOfOrderId.docx"
+
+# Phase 2 additions — multi-section / headers (Apache 2.0)
+fetch "$POI_RAW/DiffFirstPageHeadFoot.docx"   "$POI_DEST/DiffFirstPageHeadFoot.docx"
+fetch "$POI_RAW/PageSpecificHeadFoot.docx"    "$POI_DEST/PageSpecificHeadFoot.docx"
+
 # ---------------------------------------------------------------------------
 echo ""
 total=$(find "$FIXTURES" -name '*.docx' ! -name '~$*' | wc -l)
