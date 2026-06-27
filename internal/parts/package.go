@@ -32,6 +32,7 @@ type Package struct {
 	DocPart *DocumentPart
 	StyPart *StylesPart
 	NumPart *NumberingPart // nil until first list is created or loaded from file
+	SetPart *SettingsPart  // nil until settings are modified or loaded from file
 	Headers []*HeaderEntry // all header parts keyed by relID
 	Footers []*FooterEntry // all footer parts keyed by relID
 }
@@ -95,6 +96,18 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 	}
 	if p.StyPart == nil {
 		p.StyPart = NewStylesPart()
+	}
+
+	// Locate the settings part (optional).
+	setRels := pkg.Rels(docPath).ByType(opc.RelTypeSettings)
+	if len(setRels) > 0 {
+		setPath := resolveRelPath(docPath, setRels[0].Target)
+		if setData := pkg.Part(setPath); setData != nil {
+			p.SetPart = new(SettingsPart)
+			if err := p.SetPart.Parse(setData); err != nil {
+				return nil, fmt.Errorf("parts: open: parse settings: %w", err)
+			}
+		}
 	}
 
 	// Locate the numbering part (optional).
@@ -208,6 +221,18 @@ func (p *Package) FooterByRelID(relID string) *FooterEntry {
 	return nil
 }
 
+// EnsureSettingsPart creates the SettingsPart if it does not exist yet and
+// wires up the OPC content-type and relationship entries.  Idempotent.
+func (p *Package) EnsureSettingsPart() *SettingsPart {
+	if p.SetPart != nil {
+		return p.SetPart
+	}
+	p.SetPart = NewSettingsPart()
+	p.pkg.ContentTypes.SetOverride("/"+PathSettings, ContentTypeSettings)
+	p.pkg.Rels(PathDocument).Add(opc.RelTypeSettings, "settings.xml", "")
+	return p.SetPart
+}
+
 // EnsureNumberingPart creates the NumberingPart if it does not exist yet and
 // wires up the OPC content-type and relationship entries.  Idempotent.
 func (p *Package) EnsureNumberingPart() *NumberingPart {
@@ -236,6 +261,13 @@ func (p *Package) Save(w io.Writer) error {
 			return fmt.Errorf("parts: save: marshal styles: %w", err)
 		}
 		p.pkg.SetPart(PathStyles, styData)
+	}
+	if p.SetPart != nil {
+		setData, err := p.SetPart.Marshal()
+		if err != nil {
+			return fmt.Errorf("parts: save: marshal settings: %w", err)
+		}
+		p.pkg.SetPart(PathSettings, setData)
 	}
 	if p.NumPart != nil {
 		numData, err := p.NumPart.Marshal()
