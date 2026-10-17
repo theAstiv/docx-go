@@ -74,7 +74,7 @@ for f in "${fixture_files[@]}"; do
 
   if ! tmp/docxsave "$f" "$out" 2>/dev/null; then
     echo "FAIL (save error)  $f"
-    ((failed++))
+    failed=$((failed + 1))
     continue
   fi
 
@@ -84,7 +84,7 @@ for f in "${fixture_files[@]}"; do
   if [[ "${rt_errors}" -gt "${orig_errors}" ]]; then
     echo "REGRESSION  $f  (${orig_errors} pre-existing → ${rt_errors} after round-trip)"
     go run "${REPO_ROOT}/cmd/docxlint" "$out" 2>&1 | grep '^ERROR' || true
-    ((failed++))
+    failed=$((failed + 1))
   else
     echo "OK  $f  (${orig_errors} pre-existing, delta=0)"
   fi

@@ -48,3 +48,6 @@ jobs:
 
       - name: Validate corpus (delta — round-trip must not introduce new errors)
         run: bash scripts/validate-corpus.sh --delta
+
+      - name: Validate generated documents (must be schema-clean)
+        run: bash scripts/validate-generated.sh

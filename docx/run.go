@@ -186,6 +186,24 @@ func (f *RunFont) VertAlign() VertAlignValue {
 // SetVertAlign sets vertical alignment.
 func (f *RunFont) SetVertAlign(v VertAlignValue) { f.rpr().SetVertAlign(string(v)) }
 
+// Name returns the font family (w:rFonts/@w:ascii), or "" if not set.
+func (f *RunFont) Name() string {
+	if f.cur() == nil {
+		return ""
+	}
+	return f.cur().FontASCII()
+}
+
+// SetName sets the font family for Latin text (the w:ascii and w:hAnsi
+// attributes of w:rFonts). An empty string clears both.
+func (f *RunFont) SetName(name string) {
+	if name == "" && f.cur() == nil {
+		return
+	}
+	f.rpr().SetFontASCII(name)
+	f.rpr().SetFontHAnsi(name)
+}
+
 // Caps returns the AllCaps tri-state, or nil.
 func (f *RunFont) Caps() *bool {
 	if f.cur() == nil {
