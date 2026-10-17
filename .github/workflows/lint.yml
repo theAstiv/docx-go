@@ -14,17 +14,19 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           # setup-go v6+ sets GOTOOLCHAIN=local, so the runner's Go must be new
-          # enough to build staticcheck@latest (requires Go >= 1.26).
+          # enough to build the pinned staticcheck (requires Go >= 1.26).
           go-version: stable
 
+      # Linter versions are pinned so new lint rules cannot fail CI unannounced.
+      # Bump deliberately, and keep the local install in sync (see CLAUDE.md).
       - name: staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
-          version: latest
+          version: "2026.2.2"
           install-go: false
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.15.0
           args: --timeout=5m
