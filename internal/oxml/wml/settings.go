@@ -43,6 +43,64 @@ func (s *CT_Settings) SetDefaultTabStop(v *int64) {
 	rawSetInt64Attr(&s.raw, ns.Qn("w:defaultTabStop"), ns.Qn("w:val"), v)
 }
 
+// settingsAfterUpdateFields lists the w:settings children that follow
+// w:updateFields in the CT_Settings xs:sequence. Everything else precedes it.
+var settingsAfterUpdateFields = map[xml.Name]bool{
+	ns.Qn("w:hdrShapeDefaults"):           true,
+	ns.Qn("w:footnotePr"):                 true,
+	ns.Qn("w:endnotePr"):                  true,
+	ns.Qn("w:compat"):                     true,
+	ns.Qn("w:docVars"):                    true,
+	ns.Qn("w:rsids"):                      true,
+	ns.Qn("w:mathPr"):                     true,
+	ns.Qn("w:attachedSchema"):             true,
+	ns.Qn("w:themeFontLang"):              true,
+	ns.Qn("w:clrSchemeMapping"):           true,
+	ns.Qn("w:doNotIncludeSubdocsInStats"): true,
+	ns.Qn("w:doNotAutoCompressPictures"):  true,
+	ns.Qn("w:forceUpgrade"):               true,
+	ns.Qn("w:captions"):                   true,
+	ns.Qn("w:readModeInkLockDown"):        true,
+	ns.Qn("w:smartTagType"):               true,
+	ns.Qn("w:schemaLibrary"):              true,
+	ns.Qn("w:shapeDefaults"):              true,
+	ns.Qn("w:doNotEmbedSmartTags"):        true,
+	ns.Qn("w:decimalSymbol"):              true,
+	ns.Qn("w:listSeparator"):              true,
+}
+
+// UpdateFields returns the w:updateFields tri-state. nil → not set.
+func (s *CT_Settings) UpdateFields() *bool {
+	return rawGetOnOff(s.raw, ns.Qn("w:updateFields"))
+}
+
+// SetUpdateFields sets w:updateFields, which asks Word to refresh all fields
+// (TOC, page numbers, ...) when the document opens. nil removes the element.
+//
+// A new element is inserted at its xs:sequence position, before w:compat,
+// w:rsids and the other children that follow it.
+func (s *CT_Settings) SetUpdateFields(b *bool) {
+	name := ns.Qn("w:updateFields")
+	rawRemoveChild(&s.raw, name)
+	if b == nil {
+		return
+	}
+	re := new(raw.RawElement)
+	re.QName = name
+	if !*b {
+		re.Attrs = []xml.Attr{{Name: ns.Qn("w:val"), Value: "false"}}
+	}
+	for i, child := range s.raw {
+		if settingsAfterUpdateFields[child.QName] {
+			s.raw = append(s.raw, nil)
+			copy(s.raw[i+1:], s.raw[i:])
+			s.raw[i] = re
+			return
+		}
+	}
+	s.raw = append(s.raw, re)
+}
+
 // MarshalXML encodes w:settings.
 func (s *CT_Settings) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 	start := xml.StartElement{Name: ns.Qn("w:settings"), Attr: s.Attrs}
