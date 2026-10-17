@@ -230,12 +230,27 @@ func (s *CT_SectPr) FooterRefs() []CT_HdrFtrRef {
 
 // AddHeaderRef appends a w:headerReference element.
 func (s *CT_SectPr) AddHeaderRef(typ HdrFtrType, relID string) {
-	s.raw = append(s.raw, buildHdrFtrRef(ns.Qn("w:headerReference"), typ, relID))
+	s.insertHdrFtrRef(buildHdrFtrRef(ns.Qn("w:headerReference"), typ, relID))
 }
 
 // AddFooterRef appends a w:footerReference element.
 func (s *CT_SectPr) AddFooterRef(typ HdrFtrType, relID string) {
-	s.raw = append(s.raw, buildHdrFtrRef(ns.Qn("w:footerReference"), typ, relID))
+	s.insertHdrFtrRef(buildHdrFtrRef(ns.Qn("w:footerReference"), typ, relID))
+}
+
+// insertHdrFtrRef places ref after the section's existing header/footer
+// references, or first when there are none. The schema requires the
+// references to lead w:sectPr, ahead of w:pgSz, w:pgMar and everything else.
+func (s *CT_SectPr) insertHdrFtrRef(ref *raw.RawElement) {
+	at := 0
+	for i, c := range s.raw {
+		if c.QName == ns.Qn("w:headerReference") || c.QName == ns.Qn("w:footerReference") {
+			at = i + 1
+		}
+	}
+	s.raw = append(s.raw, nil)
+	copy(s.raw[at+1:], s.raw[at:])
+	s.raw[at] = ref
 }
 
 // RemoveHeaderRef removes any existing w:headerReference with the given type.

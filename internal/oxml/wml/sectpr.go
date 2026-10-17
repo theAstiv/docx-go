@@ -28,7 +28,7 @@ func (s *CT_SectPr) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if err := e.EncodeToken(start); err != nil {
 		return fmt.Errorf("wml: CT_SectPr start: %w", err)
 	}
-	if err := rawMarshalChildren(e, s.raw); err != nil {
+	if err := rawMarshalChildren(e, orderBySeq(s.raw, sectPrChildSeqPos)); err != nil {
 		return err
 	}
 	return e.EncodeToken(xml.EndElement{Name: start.Name})

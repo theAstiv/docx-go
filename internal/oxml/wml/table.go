@@ -291,6 +291,9 @@ type CT_Tr struct {
 	// Attrs holds non-xmlns attributes declared on the w:tr element itself
 	// (e.g. w:rsidR, w:rsidTr) for round-trip fidelity.
 	Attrs []xml.Attr
+	// rawPre preserves the children that precede w:trPr in the xs:sequence
+	// (w:tblPrEx), so they are emitted before it.
+	rawPre []*raw.RawElement
 }
 
 func (*CT_Tr) isTableRow() {}
@@ -301,6 +304,9 @@ func (r *CT_Tr) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	start.Attr = append(start.Attr, r.Attrs...)
 	if err := e.EncodeToken(start); err != nil {
 		return fmt.Errorf("wml: CT_Tr start: %w", err)
+	}
+	if err := rawMarshalChildren(e, r.rawPre); err != nil {
+		return err
 	}
 	if r.TrPr != nil {
 		if err := r.TrPr.MarshalXML(e, xml.StartElement{}); err != nil {
@@ -318,6 +324,7 @@ func (r *CT_Tr) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 // UnmarshalXML reads a w:tr element.
 func (r *CT_Tr) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	r.TrPr = nil
+	r.rawPre = nil
 	r.Children = r.Children[:0]
 	r.Attrs = r.Attrs[:0]
 	for _, a := range start.Attr {
@@ -345,6 +352,12 @@ func (r *CT_Tr) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 					return err
 				}
 				r.Children = append(r.Children, cell)
+			case ns.Qn("w:tblPrEx"):
+				re := new(raw.RawElement)
+				if err := re.UnmarshalXML(d, te); err != nil {
+					return err
+				}
+				r.rawPre = append(r.rawPre, re)
 			default:
 				rc := new(RawTableCell)
 				if err := rc.UnmarshalXML(d, te); err != nil {
