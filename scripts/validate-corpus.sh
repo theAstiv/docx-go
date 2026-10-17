@@ -54,10 +54,20 @@ if [[ ${#fixture_files[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# count_errors runs docxlint and returns the number of ERROR lines.
-# The docxlint exit code is ignored; only the count matters.
+# count_errors runs docxlint and prints the number of ERROR lines.
+# The docxlint exit code is ignored; only the count matters. If docxlint
+# printed neither a verdict (OK) nor any ERROR line, the validator itself
+# failed (Docker down, toolchain crash); abort rather than report a bogus
+# count, which would look like a round-trip regression.
 count_errors() {
-  go run "${REPO_ROOT}/cmd/docxlint" "$@" 2>&1 | grep -c '^ERROR' || true
+  local out
+  out=$(go run "${REPO_ROOT}/cmd/docxlint" "$@" 2>&1 || true)
+  if ! grep -qE '^(OK|ERROR)' <<<"${out}"; then
+    echo "validator produced no verdict for: $*" >&2
+    echo "${out}" | tail -5 >&2
+    return 99
+  fi
+  grep -c '^ERROR' <<<"${out}" || true
 }
 
 # Build docxsave once so we don't recompile per fixture.
