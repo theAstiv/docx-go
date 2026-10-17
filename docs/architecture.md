@@ -112,14 +112,37 @@ CI enforces this with `go test -tags=roundtripaudit`.
 
 `depguard` in `.golangci.yml` machine-enforces:
 
-- `internal/opc/**` imports stdlib only
-- `internal/oxml/**` imports stdlib + `internal/oxml/**` only
-- `internal/parts/**` imports stdlib + `internal/oxml/**` + `internal/opc/**`
-- `docx/**` imports stdlib + `internal/parts/**` + `internal/oxml/common` + `internal/oxml/ns`
+- `internal/opc/**` must not import `internal/oxml`, `internal/parts` or `docx`
+- `internal/oxml/**` must not import `internal/parts`, `internal/opc` or `docx`
+- `docx/**` may import `internal/parts` and `internal/oxml/wml` (element
+  construction only); it must not import any other `internal/oxml`
+  sub-package, `internal/opc` or `encoding/xml`
+- `internal/template/**` must not import `internal/parts`, `internal/opc` or
+  `docx` (see [Templating](#templating))
 
 `forbidigo` additionally bans `encoding/xml` from `docx/**`.
 
-Without these guards the architecture is social, not mechanical.
+Without these guards the architecture is social, not mechanical.  Each rule
+is checked by planting a violation: a glob that matches no files fails
+silently (the `docx/` rule once never fired because `**/docx/**/*.go` needs a
+directory below `docx/`).
+
+---
+
+## Templating
+
+```
+docx/template/          public API: Execute, Options, Issue, Error
+   │
+   ├── docx/internal/bridge/   function variables set by docx in init():
+   │                           the document's stories, image creation
+   └── internal/template/      engine over []wml.BlockElement
+```
+
+The engine works on WordprocessingML block trees only, so it cannot reach the
+package graph.  `docx/template` gets the document's stories (body, headers,
+footers) through `docx/internal/bridge`, which `docx` fills in at init time.
+Being internal to `docx/`, the bridge adds nothing to the public API.
 
 ---
 
