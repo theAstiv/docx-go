@@ -2,6 +2,7 @@ package wml
 
 import (
 	"encoding/xml"
+	"math"
 	"strconv"
 	"strings"
 
@@ -261,7 +262,7 @@ func widthFromRaw(re *raw.RawElement) *TblWidth {
 	if num, ok := strings.CutSuffix(s, "%"); ok {
 		// ST_MeasurementOrPercent allows "50%"; normalise to fiftieths.
 		if f, err := strconv.ParseFloat(num, 64); err == nil {
-			w.W = int64(f * 50)
+			w.W = int64(math.Round(f * 50))
 			w.Type = WidthPct
 		}
 		return w

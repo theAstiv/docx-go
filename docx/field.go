@@ -61,8 +61,14 @@ func (p *Paragraph) AddPageNumber() *Field { return p.AddField("PAGE", "1") }
 func (p *Paragraph) AddPageCount() *Field { return p.AddField("NUMPAGES", "1") }
 
 // Fields iterates over the outermost complex fields of the paragraph, in
-// order. Runs inside hyperlinks are included; simple fields (w:fldSimple) are
-// not.
+// order. Runs inside hyperlinks are included.
+//
+// Limits: only fields whose begin and end markers are both in this paragraph
+// are reported, and simple fields (w:fldSimple) are not. A field that spans
+// paragraphs is not found; the common case is a table of contents written by
+// Word, which begins in one paragraph and ends many paragraphs later. Fields
+// created by AddField, AddPageNumber, AddPageCount and Document.AddTOC always
+// sit in a single paragraph and are found.
 func (p *Paragraph) Fields() iter.Seq[*Field] {
 	return func(yield func(*Field) bool) {
 		var (

@@ -101,11 +101,19 @@ func (p *Package) AddImage(source string, data []byte, ext string) (relID, fileN
 // relativeTarget returns the relationship target that reaches partPath from
 // the directory of source.
 func relativeTarget(source, partPath string) (string, error) {
+	// Climb out of the source directory until it is a prefix of partPath, so a
+	// part outside word/ (a glossary part, a document at the package root)
+	// still gets a valid "../" target.
 	dir := path.Dir(source)
-	if !strings.HasPrefix(partPath, dir+"/") {
-		return "", fmt.Errorf("parts: image %q is not below %q", partPath, dir)
+	up := ""
+	for dir != "." && dir != "/" && !strings.HasPrefix(partPath, dir+"/") {
+		dir = path.Dir(dir)
+		up += "../"
 	}
-	return strings.TrimPrefix(partPath, dir+"/"), nil
+	if dir == "." || dir == "/" {
+		return up + partPath, nil
+	}
+	return up + strings.TrimPrefix(partPath, dir+"/"), nil
 }
 
 // ImageData returns the bytes of the image that the relationship relID of the

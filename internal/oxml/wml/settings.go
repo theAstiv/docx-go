@@ -52,7 +52,7 @@ var settingsAfterUpdateFields = map[xml.Name]bool{
 	ns.Qn("w:compat"):                     true,
 	ns.Qn("w:docVars"):                    true,
 	ns.Qn("w:rsids"):                      true,
-	ns.Qn("w:mathPr"):                     true,
+	ns.Qn("m:mathPr"):                     true,
 	ns.Qn("w:attachedSchema"):             true,
 	ns.Qn("w:themeFontLang"):              true,
 	ns.Qn("w:clrSchemeMapping"):           true,
@@ -62,11 +62,11 @@ var settingsAfterUpdateFields = map[xml.Name]bool{
 	ns.Qn("w:captions"):                   true,
 	ns.Qn("w:readModeInkLockDown"):        true,
 	ns.Qn("w:smartTagType"):               true,
-	ns.Qn("w:schemaLibrary"):              true,
-	ns.Qn("w:shapeDefaults"):              true,
-	ns.Qn("w:doNotEmbedSmartTags"):        true,
-	ns.Qn("w:decimalSymbol"):              true,
-	ns.Qn("w:listSeparator"):              true,
+	{Space: "http://schemas.openxmlformats.org/schemaLibrary/2006/main", Local: "schemaLibrary"}: true,
+	ns.Qn("w:shapeDefaults"):       true,
+	ns.Qn("w:doNotEmbedSmartTags"): true,
+	ns.Qn("w:decimalSymbol"):       true,
+	ns.Qn("w:listSeparator"):       true,
 }
 
 // UpdateFields returns the w:updateFields tri-state. nil → not set.
