@@ -1,6 +1,7 @@
 package wml_test
 
 import (
+	"encoding/xml"
 	"testing"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
@@ -54,6 +55,42 @@ func TestCT_P_RoundTrip_WithHyperlink(t *testing.T) {
 	hl.Children = append(hl.Children, r)
 	p.Children = append(p.Children, hl)
 	roundtrip.Verify[*wml.CT_P](t, p, pName)
+}
+
+// Word writes rsid and w14 id attributes on nearly every paragraph and run;
+// they must survive a round-trip, and namespace declarations must not be
+// captured as attributes (they would re-emit as xmlns:_xmlns junk).
+func TestCT_P_RoundTrip_Attrs(t *testing.T) {
+	src := `<w:p xmlns:w="` + ns.W + `" xmlns:w14="` + ns.W14 + `"` +
+		` w14:paraId="42F7A786" w14:textId="77777777" w:rsidR="00467858" w:rsidRDefault="00467858">` +
+		`<w:r w:rsidRPr="00467858"><w:t>text</w:t></w:r></w:p>`
+	roundtrip.VerifyBytes[*wml.CT_P](t, []byte(src), pName)
+
+	var p wml.CT_P
+	if err := xml.Unmarshal([]byte(src), &p); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"paraId": "42F7A786", "textId": "77777777", "rsidR": "00467858", "rsidRDefault": "00467858",
+	}
+	if len(p.Attrs) != len(want) {
+		t.Fatalf("CT_P.Attrs = %v, want %d attributes", p.Attrs, len(want))
+	}
+	for _, a := range p.Attrs {
+		if a.Name.Space == "xmlns" || a.Name.Local == "xmlns" {
+			t.Errorf("namespace declaration kept as attribute: %v", a)
+		}
+		if want[a.Name.Local] != a.Value {
+			t.Errorf("attr %v = %q, want %q", a.Name, a.Value, want[a.Name.Local])
+		}
+	}
+	r, ok := p.Children[0].(*wml.CT_R)
+	if !ok {
+		t.Fatalf("child 0 is %T, want *wml.CT_R", p.Children[0])
+	}
+	if len(r.Attrs) != 1 || r.Attrs[0].Name != ns.Qn("w:rsidRPr") || r.Attrs[0].Value != "00467858" {
+		t.Errorf("CT_R.Attrs = %v, want [w:rsidRPr=00467858]", r.Attrs)
+	}
 }
 
 func TestCT_P_Text_Simple(t *testing.T) {

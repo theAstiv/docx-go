@@ -18,6 +18,9 @@ import (
 type CT_P struct {
 	PPr      *CT_PPr
 	Children []InlineElement
+	// Attrs holds non-xmlns attributes declared on the w:p element itself
+	// (e.g. w:rsidR, w14:paraId) for round-trip fidelity.
+	Attrs []xml.Attr
 }
 
 func (*CT_P) isBlock() {}
@@ -25,6 +28,7 @@ func (*CT_P) isBlock() {}
 // MarshalXML emits <w:p>.
 func (p *CT_P) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	start.Name = ns.Qn("w:p")
+	start.Attr = append(start.Attr, p.Attrs...)
 	if err := e.EncodeToken(start); err != nil {
 		return fmt.Errorf("wml: CT_P start: %w", err)
 	}
@@ -42,9 +46,10 @@ func (p *CT_P) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 }
 
 // UnmarshalXML reads a w:p element.
-func (p *CT_P) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
+func (p *CT_P) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	p.PPr = nil
 	p.Children = p.Children[:0]
+	p.Attrs = elementAttrs(start)
 	for {
 		tok, err := d.Token()
 		if err != nil {

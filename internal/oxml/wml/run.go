@@ -17,6 +17,9 @@ import (
 type CT_R struct {
 	RPr      *CT_RPr
 	Children []RunContentElement
+	// Attrs holds non-xmlns attributes declared on the w:r element itself
+	// (e.g. w:rsidR, w:rsidRPr) for round-trip fidelity.
+	Attrs []xml.Attr
 }
 
 func (*CT_R) isInline() {}
@@ -32,6 +35,7 @@ func (r *CT_R) Text() string {
 // MarshalXML emits <w:r>.
 func (r *CT_R) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	start.Name = ns.Qn("w:r")
+	start.Attr = append(start.Attr, r.Attrs...)
 	if err := e.EncodeToken(start); err != nil {
 		return fmt.Errorf("wml: CT_R start: %w", err)
 	}
@@ -49,9 +53,10 @@ func (r *CT_R) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 }
 
 // UnmarshalXML reads a w:r element.
-func (r *CT_R) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
+func (r *CT_R) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	r.RPr = nil
 	r.Children = r.Children[:0]
+	r.Attrs = elementAttrs(start)
 	for {
 		tok, err := d.Token()
 		if err != nil {
