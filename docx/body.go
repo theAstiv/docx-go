@@ -11,6 +11,7 @@ import (
 // block-level content.
 type Body struct {
 	docPart *parts.DocumentPart
+	st      *story
 }
 
 func (b *Body) ctBody() *wml.CT_Body {
@@ -30,7 +31,7 @@ func (b *Body) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p}) {
+			if !yield(&Paragraph{p: p, st: b.st}) {
 				return
 			}
 		}
@@ -44,7 +45,7 @@ func (b *Body) AddParagraph() *Paragraph {
 	// Insert before the trailing sectPr (which is not a child but a field),
 	// so we simply append to Children.
 	body.Children = append(body.Children, p)
-	return &Paragraph{p: p}
+	return &Paragraph{p: p, st: b.st}
 }
 
 // Tables returns an iterator over all top-level tables in the body.
@@ -60,7 +61,7 @@ func (b *Body) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl}) {
+			if !yield(&Table{tbl: tbl, st: b.st}) {
 				return
 			}
 		}
@@ -78,5 +79,5 @@ func (b *Body) AddTable(rows, cols int, opts TableOptions) *Table {
 	}
 	tbl := buildTable(rows, cols, opts)
 	b.ctBody().Children = append(b.ctBody().Children, tbl)
-	return &Table{tbl: tbl}
+	return &Table{tbl: tbl, st: b.st}
 }

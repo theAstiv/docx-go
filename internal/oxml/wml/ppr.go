@@ -30,7 +30,7 @@ func (p *CT_PPr) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 		return fmt.Errorf("wml: CT_PPr start: %w", err)
 	}
 	sectPrEmitted := false
-	for _, child := range p.raw {
+	for _, child := range orderBySeq(p.raw, pPrChildSeqPos) {
 		// Inject SectPr before any xs:sequence element whose position > 35.
 		if !sectPrEmitted && p.SectPr != nil {
 			if pos, ok := pPrChildSeqPos[child.QName]; ok && pos > 35 {
@@ -297,9 +297,14 @@ func (p *CT_PPr) IndStart() *int64 {
 	return rawGetInt64Attr(p.raw, ns.Qn("w:ind"), "left")
 }
 
-// SetIndStart sets w:ind/@w:start.
+// SetIndStart sets the leading-edge indent. It writes w:ind/@w:left, the name
+// every Word version and validator setting accepts. w:start is the ISO 29500
+// name for the same attribute; older Word versions and the Open XML SDK
+// validator at its default file-format version reject it. Any w:start alias
+// already present is removed so the element never carries both.
 func (p *CT_PPr) SetIndStart(twips *int64) {
-	rawSetInt64Attr(&p.raw, ns.Qn("w:ind"), ns.Qn("w:start"), twips)
+	rawRemoveAttrFromElement(&p.raw, ns.Qn("w:ind"), "start")
+	rawSetInt64Attr(&p.raw, ns.Qn("w:ind"), ns.Qn("w:left"), twips)
 }
 
 // IndEnd returns w:ind/@w:end (or @w:right for legacy), or nil.
@@ -311,9 +316,11 @@ func (p *CT_PPr) IndEnd() *int64 {
 	return rawGetInt64Attr(p.raw, ns.Qn("w:ind"), "right")
 }
 
-// SetIndEnd sets w:ind/@w:end.
+// SetIndEnd sets the trailing-edge indent. It writes w:ind/@w:right (see
+// SetIndStart for why not w:end) and removes any w:end alias.
 func (p *CT_PPr) SetIndEnd(twips *int64) {
-	rawSetInt64Attr(&p.raw, ns.Qn("w:ind"), ns.Qn("w:end"), twips)
+	rawRemoveAttrFromElement(&p.raw, ns.Qn("w:ind"), "end")
+	rawSetInt64Attr(&p.raw, ns.Qn("w:ind"), ns.Qn("w:right"), twips)
 }
 
 // IndFirstLine returns w:ind/@w:firstLine, or nil.

@@ -174,7 +174,8 @@ func textFromRunContent(children []RunContentElement, sb *strings.Builder, inFie
 // ---------------------------------------------------------------------------
 
 // CT_Hyperlink is the w:hyperlink element: a hyperlink container.
-// Phase 1 preserves the structural slot; full relationship wiring is Phase 3.
+// RID names a hyperlink relationship of the part that holds the element;
+// resolving it is the parts layer's job.
 type CT_Hyperlink struct {
 	// RID is the r:id relationship target for external links.
 	RID string
@@ -265,6 +266,50 @@ func (h *CT_Hyperlink) UnmarshalXML(d *xml.Decoder, start xml.StartElement) erro
 	}
 }
 
+// Tooltip returns the w:tooltip attribute, or "".
+func (h *CT_Hyperlink) Tooltip() string { return wAttr(h.ExtraAttrs, "tooltip") }
+
+// SetTooltip sets w:tooltip. An empty string removes it.
+func (h *CT_Hyperlink) SetTooltip(s string) {
+	if s == "" {
+		removeAttrFromSlice(&h.ExtraAttrs, "tooltip")
+		return
+	}
+	setAttrInSlice(&h.ExtraAttrs, ns.Qn("w:tooltip"), s)
+}
+
+// History returns the w:history tri-state: nil when absent.
+func (h *CT_Hyperlink) History() *bool {
+	for _, a := range h.ExtraAttrs {
+		if a.Name.Local == "history" {
+			v := parseOnOffVal(a.Value)
+			return &v
+		}
+	}
+	return nil
+}
+
+// SetHistory sets w:history (written as "1" or "0"). nil removes it.
+func (h *CT_Hyperlink) SetHistory(b *bool) {
+	if b == nil {
+		removeAttrFromSlice(&h.ExtraAttrs, "history")
+		return
+	}
+	v := "0"
+	if *b {
+		v = "1"
+	}
+	setAttrInSlice(&h.ExtraAttrs, ns.Qn("w:history"), v)
+}
+
+// Text returns the visible text inside the hyperlink, using the same rules
+// as CT_P.Text.
+func (h *CT_Hyperlink) Text() string {
+	var sb strings.Builder
+	textFromInlines(h.Children, &sb, false)
+	return sb.String()
+}
+
 // ---------------------------------------------------------------------------
 // CT_BookmarkStart — w:bookmarkStart
 // ---------------------------------------------------------------------------
@@ -296,6 +341,11 @@ func (b *CT_BookmarkStart) MarshalXML(e *xml.Encoder, start xml.StartElement) er
 func (b *CT_BookmarkStart) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	b.ExtraAttrs = nil
 	for _, a := range start.Attr {
+		// Namespace declarations are re-emitted by the encoder; keeping them
+		// here would double-declare on the next marshal.
+		if a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns") {
+			continue
+		}
 		switch a.Name.Local {
 		case "name":
 			b.Name = a.Value
@@ -340,6 +390,9 @@ func (b *CT_BookmarkEnd) MarshalXML(e *xml.Encoder, start xml.StartElement) erro
 func (b *CT_BookmarkEnd) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	b.ExtraAttrs = nil
 	for _, a := range start.Attr {
+		if a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns") {
+			continue
+		}
 		if a.Name.Local == "id" {
 			n, err := strconv.ParseInt(a.Value, 10, 64)
 			if err != nil {

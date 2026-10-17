@@ -13,6 +13,16 @@ type Footer struct {
 	ct  *wml.CT_Ftr
 }
 
+// story returns the story of this footer's part.
+func (f *Footer) story() *story {
+	for _, e := range f.pkg.Footers {
+		if e.Part.CT() == f.ct {
+			return &story{pkg: f.pkg, src: e.Path()}
+		}
+	}
+	return nil
+}
+
 // Paragraphs returns an iterator over all paragraph children of the footer.
 func (f *Footer) Paragraphs() iter.Seq[*Paragraph] {
 	return func(yield func(*Paragraph) bool) {
@@ -21,7 +31,7 @@ func (f *Footer) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p}) {
+			if !yield(&Paragraph{p: p, st: f.story()}) {
 				return
 			}
 		}
@@ -36,7 +46,7 @@ func (f *Footer) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl}) {
+			if !yield(&Table{tbl: tbl, st: f.story()}) {
 				return
 			}
 		}
@@ -52,11 +62,11 @@ func (f *Footer) AddParagraph() *Paragraph {
 			f.ct.Children = append(f.ct.Children, nil)
 			copy(f.ct.Children[n:], f.ct.Children[n-1:])
 			f.ct.Children[n-1] = p
-			return &Paragraph{p: p}
+			return &Paragraph{p: p, st: f.story()}
 		}
 	}
 	f.ct.Children = append(f.ct.Children, p)
-	return &Paragraph{p: p}
+	return &Paragraph{p: p, st: f.story()}
 }
 
 // AddTable appends a new table to the footer and returns its proxy.
@@ -76,9 +86,9 @@ func (f *Footer) AddTable(rows, cols int, opts TableOptions) *Table {
 			f.ct.Children = append(f.ct.Children, nil)
 			copy(f.ct.Children[n:], f.ct.Children[n-1:])
 			f.ct.Children[n-1] = tbl
-			return &Table{tbl: tbl}
+			return &Table{tbl: tbl, st: f.story()}
 		}
 	}
 	f.ct.Children = append(f.ct.Children, tbl)
-	return &Table{tbl: tbl}
+	return &Table{tbl: tbl, st: f.story()}
 }

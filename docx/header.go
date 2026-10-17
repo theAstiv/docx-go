@@ -13,6 +13,16 @@ type Header struct {
 	ct  *wml.CT_Hdr
 }
 
+// story returns the story of this header's part.
+func (h *Header) story() *story {
+	for _, e := range h.pkg.Headers {
+		if e.Part.CT() == h.ct {
+			return &story{pkg: h.pkg, src: e.Path()}
+		}
+	}
+	return nil
+}
+
 // Paragraphs returns an iterator over all paragraph children of the header.
 func (h *Header) Paragraphs() iter.Seq[*Paragraph] {
 	return func(yield func(*Paragraph) bool) {
@@ -21,7 +31,7 @@ func (h *Header) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p}) {
+			if !yield(&Paragraph{p: p, st: h.story()}) {
 				return
 			}
 		}
@@ -36,7 +46,7 @@ func (h *Header) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl}) {
+			if !yield(&Table{tbl: tbl, st: h.story()}) {
 				return
 			}
 		}
@@ -55,11 +65,11 @@ func (h *Header) AddParagraph() *Paragraph {
 			h.ct.Children = append(h.ct.Children, nil)
 			copy(h.ct.Children[n:], h.ct.Children[n-1:])
 			h.ct.Children[n-1] = p
-			return &Paragraph{p: p}
+			return &Paragraph{p: p, st: h.story()}
 		}
 	}
 	h.ct.Children = append(h.ct.Children, p)
-	return &Paragraph{p: p}
+	return &Paragraph{p: p, st: h.story()}
 }
 
 // AddTable appends a new table to the header and returns its proxy.
@@ -79,9 +89,9 @@ func (h *Header) AddTable(rows, cols int, opts TableOptions) *Table {
 			h.ct.Children = append(h.ct.Children, nil)
 			copy(h.ct.Children[n:], h.ct.Children[n-1:])
 			h.ct.Children[n-1] = tbl
-			return &Table{tbl: tbl}
+			return &Table{tbl: tbl, st: h.story()}
 		}
 	}
 	h.ct.Children = append(h.ct.Children, tbl)
-	return &Table{tbl: tbl}
+	return &Table{tbl: tbl, st: h.story()}
 }

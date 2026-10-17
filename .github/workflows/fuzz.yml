@@ -25,6 +25,9 @@ jobs:
           # wml has multiple fuzz functions — run each named explicitly.
           go test -fuzz=FuzzCT_P -fuzztime=5m ./internal/oxml/wml || true
           go test -fuzz=FuzzCT_R -fuzztime=5m ./internal/oxml/wml || true
+          # dml: inline pictures (Phase 3a).
+          go test -fuzz=FuzzCT_Inline -fuzztime=5m ./internal/oxml/dml || true
+          go test -fuzz=FuzzCT_Picture -fuzztime=5m ./internal/oxml/dml || true
 
       - name: Upload crash inputs
         if: always()

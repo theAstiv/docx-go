@@ -3,6 +3,7 @@ package wml
 import (
 	"encoding/xml"
 	"fmt"
+	"strconv"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/raw"
@@ -12,17 +13,19 @@ import (
 // CT_Styles is the w:styles element: the root of styles.xml.
 //
 // Attrs captures element attributes for round-trip fidelity.
-// DocDefaults and latentStyles are preserved as raw children in rawRest;
-// named styles are decoded into Styles for typed access.
+// w:docDefaults is decoded into DocDefaults and named styles into Styles;
+// latentStyles and unknown children are preserved as raw children in rawRest.
 //
 // Ordering note: MarshalXML always emits rawRest before Styles. This matches
 // the canonical Word ordering (docDefaults → latentStyles → style…). Documents
 // with interleaved ordering will have their order normalised on round-trip.
 // Phase 2 can improve this by recording each child's insertion index.
 type CT_Styles struct {
-	Attrs   []xml.Attr
-	Styles  []*CT_Style
-	rawRest []*raw.RawElement // docDefaults, latentStyles, and unknown children
+	Attrs []xml.Attr
+	// DocDefaults is the typed w:docDefaults child; nil when absent.
+	DocDefaults *CT_DocDefaults
+	Styles      []*CT_Style
+	rawRest     []*raw.RawElement // latentStyles and unknown children
 }
 
 // MarshalXML emits <w:styles>.
@@ -32,7 +35,12 @@ func (s *CT_Styles) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if err := e.EncodeToken(start); err != nil {
 		return fmt.Errorf("wml: CT_Styles start: %w", err)
 	}
-	// Emit raw non-style children first (docDefaults, latentStyles, etc.)
+	if s.DocDefaults != nil {
+		if err := s.DocDefaults.MarshalXML(e, xml.StartElement{}); err != nil {
+			return err
+		}
+	}
+	// Emit raw non-style children next (latentStyles, etc.)
 	for _, child := range s.rawRest {
 		if err := child.MarshalXML(e, xml.StartElement{}); err != nil {
 			return err
@@ -50,6 +58,7 @@ func (s *CT_Styles) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 func (s *CT_Styles) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	s.Attrs = s.Attrs[:0]
 	s.Styles = nil
+	s.DocDefaults = nil
 	s.rawRest = nil
 	for _, a := range start.Attr {
 		if a.Name.Space == "" && a.Name.Local == "xmlns" {
@@ -70,6 +79,12 @@ func (s *CT_Styles) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 					return err
 				}
 				s.Styles = append(s.Styles, st)
+			} else if t.Name == ns.Qn("w:docDefaults") && s.DocDefaults == nil {
+				dd := new(CT_DocDefaults)
+				if err := dd.UnmarshalXML(d, t); err != nil {
+					return err
+				}
+				s.DocDefaults = dd
 			} else {
 				re := new(raw.RawElement)
 				if err := re.UnmarshalXML(d, t); err != nil {
@@ -246,6 +261,105 @@ func (s *CT_Style) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Typed accessors for the children that precede w:pPr
+// ---------------------------------------------------------------------------
+
+// styleChildSeqPos maps w:style child names that precede w:pPr to their
+// xs:sequence position. Unknown names sort to the tail of rawRestPre.
+var styleChildSeqPos = map[xml.Name]int{
+	ns.Qn("w:aliases"):        1,
+	ns.Qn("w:basedOn"):        2,
+	ns.Qn("w:next"):           3,
+	ns.Qn("w:link"):           4,
+	ns.Qn("w:autoRedefine"):   5,
+	ns.Qn("w:hidden"):         6,
+	ns.Qn("w:uiPriority"):     7,
+	ns.Qn("w:semiHidden"):     8,
+	ns.Qn("w:unhideWhenUsed"): 9,
+	ns.Qn("w:qFormat"):        10,
+	ns.Qn("w:locked"):         11,
+}
+
+// setPreStr sets (or, for "", removes) a single-w:val child of rawRestPre,
+// inserting new elements at their schema position.
+func (s *CT_Style) setPreStr(qname xml.Name, value string) {
+	rawRemoveChild(&s.rawRestPre, qname)
+	if value == "" {
+		return
+	}
+	re := new(raw.RawElement)
+	re.QName = qname
+	re.Attrs = []xml.Attr{{Name: ns.Qn("w:val"), Value: value}}
+	rawInsertOrdered(&s.rawRestPre, re, styleChildSeqPos)
+}
+
+// setPreOnOff sets (or, for nil, removes) an OnOff child of rawRestPre.
+func (s *CT_Style) setPreOnOff(qname xml.Name, b *bool) {
+	rawRemoveChild(&s.rawRestPre, qname)
+	if b == nil {
+		return
+	}
+	re := new(raw.RawElement)
+	re.QName = qname
+	if !*b {
+		re.Attrs = []xml.Attr{{Name: ns.Qn("w:val"), Value: "false"}}
+	}
+	rawInsertOrdered(&s.rawRestPre, re, styleChildSeqPos)
+}
+
+// BasedOn returns w:basedOn/@w:val, or "".
+func (s *CT_Style) BasedOn() string { return rawGetStr(s.rawRestPre, ns.Qn("w:basedOn")) }
+
+// SetBasedOn sets w:basedOn. An empty string removes it.
+func (s *CT_Style) SetBasedOn(id string) { s.setPreStr(ns.Qn("w:basedOn"), id) }
+
+// Next returns w:next/@w:val, or "".
+func (s *CT_Style) Next() string { return rawGetStr(s.rawRestPre, ns.Qn("w:next")) }
+
+// SetNext sets w:next. An empty string removes it.
+func (s *CT_Style) SetNext(id string) { s.setPreStr(ns.Qn("w:next"), id) }
+
+// Link returns w:link/@w:val, or "".
+func (s *CT_Style) Link() string { return rawGetStr(s.rawRestPre, ns.Qn("w:link")) }
+
+// SetLink sets w:link. An empty string removes it.
+func (s *CT_Style) SetLink(id string) { s.setPreStr(ns.Qn("w:link"), id) }
+
+// UIPriority returns w:uiPriority/@w:val, or nil when absent.
+func (s *CT_Style) UIPriority() *int64 {
+	return rawGetInt64Attr(s.rawRestPre, ns.Qn("w:uiPriority"), "val")
+}
+
+// SetUIPriority sets w:uiPriority. nil removes it.
+func (s *CT_Style) SetUIPriority(v *int64) {
+	rawRemoveChild(&s.rawRestPre, ns.Qn("w:uiPriority"))
+	if v == nil {
+		return
+	}
+	s.setPreStr(ns.Qn("w:uiPriority"), strconv.FormatInt(*v, 10))
+}
+
+// SemiHidden returns the w:semiHidden tri-state.
+func (s *CT_Style) SemiHidden() *bool { return rawGetOnOff(s.rawRestPre, ns.Qn("w:semiHidden")) }
+
+// SetSemiHidden sets w:semiHidden. nil removes it.
+func (s *CT_Style) SetSemiHidden(b *bool) { s.setPreOnOff(ns.Qn("w:semiHidden"), b) }
+
+// UnhideWhenUsed returns the w:unhideWhenUsed tri-state.
+func (s *CT_Style) UnhideWhenUsed() *bool {
+	return rawGetOnOff(s.rawRestPre, ns.Qn("w:unhideWhenUsed"))
+}
+
+// SetUnhideWhenUsed sets w:unhideWhenUsed. nil removes it.
+func (s *CT_Style) SetUnhideWhenUsed(b *bool) { s.setPreOnOff(ns.Qn("w:unhideWhenUsed"), b) }
+
+// QFormat returns the w:qFormat tri-state.
+func (s *CT_Style) QFormat() *bool { return rawGetOnOff(s.rawRestPre, ns.Qn("w:qFormat")) }
+
+// SetQFormat sets w:qFormat. nil removes it.
+func (s *CT_Style) SetQFormat(b *bool) { s.setPreOnOff(ns.Qn("w:qFormat"), b) }
 
 // ---------------------------------------------------------------------------
 // Registry

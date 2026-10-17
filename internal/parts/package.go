@@ -1,6 +1,7 @@
 package parts
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"path"
@@ -35,6 +36,10 @@ type Package struct {
 	SetPart *SettingsPart  // nil until settings are modified or loaded from file
 	Headers []*HeaderEntry // all header parts keyed by relID
 	Footers []*FooterEntry // all footer parts keyed by relID
+
+	// imgByHash maps the SHA-256 of each media part to its path, so identical
+	// bytes are stored once. Built lazily by AddImage.
+	imgByHash map[[sha256.Size]byte]string
 }
 
 // New creates an empty Package with a minimal valid OOXML structure:

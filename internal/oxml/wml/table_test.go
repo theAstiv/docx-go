@@ -1,6 +1,8 @@
 package wml_test
 
 import (
+	"encoding/xml"
+	"strings"
 	"testing"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
@@ -252,4 +254,22 @@ func TestCT_Tbl_RoundTrip_NestedTable(t *testing.T) {
 	outerRow := &wml.CT_Tr{Children: []wml.TableCellElement{outerCell}}
 	tbl := &wml.CT_Tbl{Children: []wml.TableRowElement{outerRow}}
 	roundtrip.Verify[*wml.CT_Tbl](t, tbl, tblName)
+}
+
+func TestCT_Tr_TblPrExStaysBeforeTrPr(t *testing.T) {
+	src := `<w:tr xmlns:w="` + ns.W + `"><w:tblPrEx><w:tblCellMar><w:top w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPrEx>` +
+		`<w:trPr><w:jc w:val="center"/></w:trPr><w:tc><w:p/></w:tc></w:tr>`
+	roundtrip.VerifyBytes[*wml.CT_Tr](t, []byte(src), ns.Qn("w:tr"))
+
+	var tr wml.CT_Tr
+	if err := xml.Unmarshal([]byte(src), &tr); err != nil {
+		t.Fatal(err)
+	}
+	out, err := xml.Marshal(&tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ex, pr := strings.Index(string(out), "tblPrEx"), strings.Index(string(out), "trPr"); ex < 0 || pr < 0 || ex > pr {
+		t.Errorf("tblPrEx must precede trPr (xs:sequence): %s", out)
+	}
 }

@@ -9,14 +9,15 @@ import (
 
 // Paragraph is a proxy for the w:p element.
 type Paragraph struct {
-	p *wml.CT_P
+	p  *wml.CT_P
+	st *story
 }
 
 // Format returns a ParagraphFormat proxy for reading and writing paragraph
 // properties. Each call returns a new proxy backed by the same CT_P.
 // Property elements (CT_PPr) are created lazily only when a setter is called.
 func (p *Paragraph) Format() *ParagraphFormat {
-	return &ParagraphFormat{p: p.p}
+	return &ParagraphFormat{slot: &p.p.PPr}
 }
 
 // Runs returns an iterator over the runs (w:r elements) in this paragraph.
@@ -28,7 +29,7 @@ func (p *Paragraph) Runs() iter.Seq[*Run] {
 			if !ok {
 				continue
 			}
-			if !yield(&Run{r: r}) {
+			if !yield(&Run{r: r, st: p.st}) {
 				return
 			}
 		}
@@ -46,7 +47,7 @@ func (p *Paragraph) AddRun(text string) *Run {
 		r.Children = append(r.Children, t)
 	}
 	p.p.Children = append(p.p.Children, r)
-	return &Run{r: r}
+	return &Run{r: r, st: p.st}
 }
 
 // Text returns the visible text of the paragraph by walking all w:t descendants
@@ -98,15 +99,21 @@ func (p *Paragraph) AddSectionBreak() *Section {
 
 // ParagraphFormat is a proxy for w:pPr, providing typed access to paragraph
 // formatting properties. Mutations write through to the underlying CT_PPr.
+//
+// The proxy binds to a *CT_PPr slot rather than a paragraph, so the same
+// type serves paragraphs (CT_P.PPr) and styles (CT_Style.PPr).
 type ParagraphFormat struct {
-	p *wml.CT_P
+	slot **wml.CT_PPr
 }
 
+// cur returns the current CT_PPr, or nil when none has been created.
+func (f *ParagraphFormat) cur() *wml.CT_PPr { return *f.slot }
+
 func (f *ParagraphFormat) ppr() *wml.CT_PPr {
-	if f.p.PPr == nil {
-		f.p.PPr = new(wml.CT_PPr)
+	if *f.slot == nil {
+		*f.slot = new(wml.CT_PPr)
 	}
-	return f.p.PPr
+	return *f.slot
 }
 
 // twipPtr converts *Twip to *int64 for the oxml layer. nil in → nil out.
@@ -129,10 +136,10 @@ func twipFromInt64(v *int64) *Twip {
 
 // Style returns the paragraph style ID, or "".
 func (f *ParagraphFormat) Style() string {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return ""
 	}
-	return f.p.PPr.StyleID()
+	return f.cur().StyleID()
 }
 
 // SetStyle sets the paragraph style ID. An empty string removes it.
@@ -140,10 +147,10 @@ func (f *ParagraphFormat) SetStyle(s string) { f.ppr().SetStyleID(s) }
 
 // Alignment returns the paragraph alignment, or "".
 func (f *ParagraphFormat) Alignment() AlignmentValue {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return ""
 	}
-	return AlignmentValue(f.p.PPr.Alignment())
+	return AlignmentValue(f.cur().Alignment())
 }
 
 // SetAlignment sets the paragraph alignment.
@@ -151,10 +158,10 @@ func (f *ParagraphFormat) SetAlignment(a AlignmentValue) { f.ppr().SetAlignment(
 
 // OutlineLevel returns the outline level (0-8), or nil if not set.
 func (f *ParagraphFormat) OutlineLevel() *int64 {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.OutlineLevel()
+	return f.cur().OutlineLevel()
 }
 
 // SetOutlineLevel sets the outline level. nil removes it.
@@ -162,10 +169,10 @@ func (f *ParagraphFormat) SetOutlineLevel(lvl *int64) { f.ppr().SetOutlineLevel(
 
 // SpaceBefore returns spacing before in twips, or nil.
 func (f *ParagraphFormat) SpaceBefore() *Twip {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return twipFromInt64(f.p.PPr.SpacingBefore())
+	return twipFromInt64(f.cur().SpacingBefore())
 }
 
 // SetSpaceBefore sets spacing before in twips. nil removes it.
@@ -173,10 +180,10 @@ func (f *ParagraphFormat) SetSpaceBefore(t *Twip) { f.ppr().SetSpacingBefore(twi
 
 // SpaceAfter returns spacing after in twips, or nil.
 func (f *ParagraphFormat) SpaceAfter() *Twip {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return twipFromInt64(f.p.PPr.SpacingAfter())
+	return twipFromInt64(f.cur().SpacingAfter())
 }
 
 // SetSpaceAfter sets spacing after in twips. nil removes it.
@@ -184,10 +191,10 @@ func (f *ParagraphFormat) SetSpaceAfter(t *Twip) { f.ppr().SetSpacingAfter(twipP
 
 // LeftIndent returns the left (start) indent in twips, or nil.
 func (f *ParagraphFormat) LeftIndent() *Twip {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return twipFromInt64(f.p.PPr.IndStart())
+	return twipFromInt64(f.cur().IndStart())
 }
 
 // SetLeftIndent sets the left (start) indent in twips. nil removes it.
@@ -195,10 +202,10 @@ func (f *ParagraphFormat) SetLeftIndent(t *Twip) { f.ppr().SetIndStart(twipPtr(t
 
 // RightIndent returns the right (end) indent in twips, or nil.
 func (f *ParagraphFormat) RightIndent() *Twip {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return twipFromInt64(f.p.PPr.IndEnd())
+	return twipFromInt64(f.cur().IndEnd())
 }
 
 // SetRightIndent sets the right (end) indent in twips. nil removes it.
@@ -206,10 +213,10 @@ func (f *ParagraphFormat) SetRightIndent(t *Twip) { f.ppr().SetIndEnd(twipPtr(t)
 
 // FirstLineIndent returns the first-line indent in twips, or nil.
 func (f *ParagraphFormat) FirstLineIndent() *Twip {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return twipFromInt64(f.p.PPr.IndFirstLine())
+	return twipFromInt64(f.cur().IndFirstLine())
 }
 
 // SetFirstLineIndent sets the first-line indent in twips. nil removes it.
@@ -217,10 +224,10 @@ func (f *ParagraphFormat) SetFirstLineIndent(t *Twip) { f.ppr().SetIndFirstLine(
 
 // HangingIndent returns the hanging indent in twips, or nil.
 func (f *ParagraphFormat) HangingIndent() *Twip {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return twipFromInt64(f.p.PPr.IndHanging())
+	return twipFromInt64(f.cur().IndHanging())
 }
 
 // SetHangingIndent sets the hanging indent in twips. nil removes it.
@@ -231,13 +238,13 @@ func (f *ParagraphFormat) SetHangingIndent(t *Twip) { f.ppr().SetIndHanging(twip
 // Use SetLineSpacingAuto to write; use SingleLine, OneAndAHalfLine, DoubleLine,
 // or MultipleLine to construct common values.
 func (f *ParagraphFormat) LineSpacingAuto() *LineSpacing240 {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	if f.p.PPr.SpacingLineRule() != string(LineSpacingAuto) {
+	if f.cur().SpacingLineRule() != string(LineSpacingAuto) {
 		return nil
 	}
-	v := f.p.PPr.SpacingLine()
+	v := f.cur().SpacingLine()
 	if v == nil {
 		return nil
 	}
@@ -251,25 +258,25 @@ func (f *ParagraphFormat) LineSpacingAuto() *LineSpacing240 {
 // LineSpacingExact returns the exact line spacing in twips (lineRule="exact"),
 // or nil if the rule is not "exact" or line spacing is not set.
 func (f *ParagraphFormat) LineSpacingExact() *Twip {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	if f.p.PPr.SpacingLineRule() != string(LineSpacingExact) {
+	if f.cur().SpacingLineRule() != string(LineSpacingExact) {
 		return nil
 	}
-	return twipFromInt64(f.p.PPr.SpacingLine())
+	return twipFromInt64(f.cur().SpacingLine())
 }
 
 // LineSpacingAtLeast returns the minimum line spacing in twips (lineRule="atLeast"),
 // or nil if the rule is not "atLeast" or line spacing is not set.
 func (f *ParagraphFormat) LineSpacingAtLeast() *Twip {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	if f.p.PPr.SpacingLineRule() != string(LineSpacingAtLeast) {
+	if f.cur().SpacingLineRule() != string(LineSpacingAtLeast) {
 		return nil
 	}
-	return twipFromInt64(f.p.PPr.SpacingLine())
+	return twipFromInt64(f.cur().SpacingLine())
 }
 
 // SetLineSpacingAuto sets line spacing as a multiple of the line height (lineRule="auto").
@@ -299,24 +306,24 @@ func (f *ParagraphFormat) SetLineSpacingAtLeast(t Twip) {
 
 // ClearLineSpacing removes line spacing (w:spacing/@w:line and @w:lineRule).
 func (f *ParagraphFormat) ClearLineSpacing() {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return
 	}
-	f.p.PPr.SetSpacingLine(nil)
-	f.p.PPr.SetSpacingLineRule("")
+	f.cur().SetSpacingLine(nil)
+	f.cur().SetSpacingLineRule("")
 }
 
 // KeepNext returns the KeepNext tri-state, or nil (inherit).
 func (f *ParagraphFormat) KeepNext() *bool {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.KeepNext()
+	return f.cur().KeepNext()
 }
 
 // SetKeepNext sets KeepNext. nil removes the element (inherit from style).
 func (f *ParagraphFormat) SetKeepNext(b *bool) {
-	if b == nil && f.p.PPr == nil {
+	if b == nil && f.cur() == nil {
 		return
 	}
 	f.ppr().SetKeepNext(b)
@@ -324,15 +331,15 @@ func (f *ParagraphFormat) SetKeepNext(b *bool) {
 
 // KeepLines returns the KeepLines tri-state, or nil.
 func (f *ParagraphFormat) KeepLines() *bool {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.KeepLines()
+	return f.cur().KeepLines()
 }
 
 // SetKeepLines sets KeepLines. nil removes the element (inherit from style).
 func (f *ParagraphFormat) SetKeepLines(b *bool) {
-	if b == nil && f.p.PPr == nil {
+	if b == nil && f.cur() == nil {
 		return
 	}
 	f.ppr().SetKeepLines(b)
@@ -340,15 +347,15 @@ func (f *ParagraphFormat) SetKeepLines(b *bool) {
 
 // PageBreakBefore returns the PageBreakBefore tri-state, or nil.
 func (f *ParagraphFormat) PageBreakBefore() *bool {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.PageBreakBefore()
+	return f.cur().PageBreakBefore()
 }
 
 // SetPageBreakBefore sets PageBreakBefore. nil removes the element (inherit from style).
 func (f *ParagraphFormat) SetPageBreakBefore(b *bool) {
-	if b == nil && f.p.PPr == nil {
+	if b == nil && f.cur() == nil {
 		return
 	}
 	f.ppr().SetPageBreakBefore(b)
@@ -356,15 +363,15 @@ func (f *ParagraphFormat) SetPageBreakBefore(b *bool) {
 
 // ContextualSpacing returns the ContextualSpacing tri-state, or nil.
 func (f *ParagraphFormat) ContextualSpacing() *bool {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.ContextualSpacing()
+	return f.cur().ContextualSpacing()
 }
 
 // SetContextualSpacing sets ContextualSpacing. nil removes the element (inherit from style).
 func (f *ParagraphFormat) SetContextualSpacing(b *bool) {
-	if b == nil && f.p.PPr == nil {
+	if b == nil && f.cur() == nil {
 		return
 	}
 	f.ppr().SetContextualSpacing(b)
@@ -372,15 +379,15 @@ func (f *ParagraphFormat) SetContextualSpacing(b *bool) {
 
 // WidowControl returns the WidowControl tri-state, or nil.
 func (f *ParagraphFormat) WidowControl() *bool {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.WidowControl()
+	return f.cur().WidowControl()
 }
 
 // SetWidowControl sets WidowControl. nil removes the element (inherit from style).
 func (f *ParagraphFormat) SetWidowControl(b *bool) {
-	if b == nil && f.p.PPr == nil {
+	if b == nil && f.cur() == nil {
 		return
 	}
 	f.ppr().SetWidowControl(b)
@@ -388,15 +395,15 @@ func (f *ParagraphFormat) SetWidowControl(b *bool) {
 
 // SuppressLineNumbers returns the SuppressLineNumbers tri-state, or nil.
 func (f *ParagraphFormat) SuppressLineNumbers() *bool {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.SuppressLineNumbers()
+	return f.cur().SuppressLineNumbers()
 }
 
 // SetSuppressLineNumbers sets SuppressLineNumbers. nil removes the element (inherit from style).
 func (f *ParagraphFormat) SetSuppressLineNumbers(b *bool) {
-	if b == nil && f.p.PPr == nil {
+	if b == nil && f.cur() == nil {
 		return
 	}
 	f.ppr().SetSuppressLineNumbers(b)
@@ -404,15 +411,15 @@ func (f *ParagraphFormat) SetSuppressLineNumbers(b *bool) {
 
 // MirrorIndents returns the MirrorIndents tri-state, or nil.
 func (f *ParagraphFormat) MirrorIndents() *bool {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.MirrorIndents()
+	return f.cur().MirrorIndents()
 }
 
 // SetMirrorIndents sets MirrorIndents. nil removes the element (inherit from style).
 func (f *ParagraphFormat) SetMirrorIndents(b *bool) {
-	if b == nil && f.p.PPr == nil {
+	if b == nil && f.cur() == nil {
 		return
 	}
 	f.ppr().SetMirrorIndents(b)
@@ -421,16 +428,16 @@ func (f *ParagraphFormat) SetMirrorIndents(b *bool) {
 // NumID returns the numId value from w:numPr, or nil if this paragraph is not
 // part of a list.
 func (f *ParagraphFormat) NumID() *int64 {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.NumID()
+	return f.cur().NumID()
 }
 
 // NumILvl returns the ilvl (0-based level) from w:numPr, or nil.
 func (f *ParagraphFormat) NumILvl() *int64 {
-	if f.p.PPr == nil {
+	if f.cur() == nil {
 		return nil
 	}
-	return f.p.PPr.NumILvl()
+	return f.cur().NumILvl()
 }
