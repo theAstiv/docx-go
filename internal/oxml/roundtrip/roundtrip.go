@@ -92,7 +92,7 @@ func unmarshalElement[T Element](xmlBytes []byte, _ xml.Name) (T, error) {
 	var zero T
 	// Allocate a non-nil instance via reflection so pointer receivers work.
 	typ := reflect.TypeOf(zero)
-	if typ != nil && typ.Kind() == reflect.Ptr {
+	if typ != nil && typ.Kind() == reflect.Pointer {
 		v := reflect.New(typ.Elem())
 		zero = v.Interface().(T)
 	}
