@@ -132,8 +132,8 @@ word/document.xml       ← root document part
 word/_rels/document.xml.rels
   → word/styles.xml     (styles)
   → word/settings.xml   (settings)
-  → word/numbering.xml  (numbering)   [Phase 2]
-  → word/header1.xml    (header)      [Phase 2]
-  → word/footer1.xml    (footer)      [Phase 2]
+  → word/numbering.xml  (numbering)
+  → word/header1.xml    (header)
+  → word/footer1.xml    (footer)
   → word/media/image1.* (image)       [Phase 3]
 ```

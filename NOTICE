@@ -1,0 +1,16 @@
+docx-go
+Copyright 2026 theAstiv
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Test fixtures under testdata/fixtures/ include third-party material:
+
+  * testdata/fixtures/poi/ — from Apache POI (https://github.com/apache/poi),
+    Copyright The Apache Software Foundation, licensed under the Apache
+    License, Version 2.0.
+
+  * testdata/fixtures/python-docx/ — from python-docx
+    (https://github.com/python-openxml/python-docx), Copyright python-docx
+    contributors, licensed under the MIT License.
+
+See testdata/fixtures/SOURCES.md for details.
