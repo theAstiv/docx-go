@@ -9,7 +9,8 @@ import (
 
 // Paragraph is a proxy for the w:p element.
 type Paragraph struct {
-	p *wml.CT_P
+	p  *wml.CT_P
+	st *story
 }
 
 // Format returns a ParagraphFormat proxy for reading and writing paragraph

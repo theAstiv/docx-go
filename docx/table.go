@@ -53,6 +53,7 @@ const (
 // Table is a proxy for a w:tbl element.
 type Table struct {
 	tbl *wml.CT_Tbl
+	st  *story
 }
 
 // Rows returns an iterator over all CT_Tr rows in the table (skipping raw passthrough elements).
@@ -63,7 +64,7 @@ func (t *Table) Rows() iter.Seq[*Row] {
 			if !ok {
 				continue
 			}
-			if !yield(&Row{tr: tr}) {
+			if !yield(&Row{tr: tr, st: t.st}) {
 				return
 			}
 		}
@@ -85,7 +86,7 @@ func (t *Table) AddRowWithOptions(opts RowOptions) *Row {
 		tr.TrPr = trpr
 	}
 	t.tbl.Children = append(t.tbl.Children, tr)
-	return &Row{tr: tr}
+	return &Row{tr: tr, st: t.st}
 }
 
 // Style returns the table style ID, or "" if none.
@@ -109,6 +110,7 @@ func (t *Table) SetStyle(id string) {
 // Row is a proxy for a w:tr element.
 type Row struct {
 	tr *wml.CT_Tr
+	st *story
 }
 
 // Cells returns an iterator over all CT_Tc cells in the row.
@@ -119,7 +121,7 @@ func (r *Row) Cells() iter.Seq[*Cell] {
 			if !ok {
 				continue
 			}
-			if !yield(&Cell{tc: tc}) {
+			if !yield(&Cell{tc: tc, st: r.st}) {
 				return
 			}
 		}
@@ -148,7 +150,7 @@ func (r *Row) AddCellWithOptions(opts CellOptions) *Cell {
 		tc.TcPr = tcpr
 	}
 	r.tr.Children = append(r.tr.Children, tc)
-	return &Cell{tc: tc}
+	return &Cell{tc: tc, st: r.st}
 }
 
 // IsHeader returns whether this row is marked as a repeating table header.
@@ -165,6 +167,7 @@ func (r *Row) IsHeader() bool {
 // Cell is a proxy for a w:tc element.
 type Cell struct {
 	tc *wml.CT_Tc
+	st *story
 }
 
 // Paragraphs returns an iterator over paragraph children of the cell.
@@ -175,7 +178,7 @@ func (c *Cell) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p}) {
+			if !yield(&Paragraph{p: p, st: c.st}) {
 				return
 			}
 		}
@@ -190,7 +193,7 @@ func (c *Cell) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl}) {
+			if !yield(&Table{tbl: tbl, st: c.st}) {
 				return
 			}
 		}
@@ -210,11 +213,11 @@ func (c *Cell) AddParagraph() *Paragraph {
 			c.tc.Children = append(c.tc.Children, nil)
 			copy(c.tc.Children[n:], c.tc.Children[n-1:])
 			c.tc.Children[n-1] = p
-			return &Paragraph{p: p}
+			return &Paragraph{p: p, st: c.st}
 		}
 	}
 	c.tc.Children = append(c.tc.Children, p)
-	return &Paragraph{p: p}
+	return &Paragraph{p: p, st: c.st}
 }
 
 // SetSpan sets the column span (gridSpan) and optionally marks the cell as the

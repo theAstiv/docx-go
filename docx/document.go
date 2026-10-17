@@ -50,7 +50,7 @@ func (d *Document) Save(w io.Writer) error {
 
 // Body returns the document body proxy.
 func (d *Document) Body() *Body {
-	return &Body{docPart: d.pkg.DocPart}
+	return &Body{docPart: d.pkg.DocPart, st: docStory(d.pkg)}
 }
 
 // EvenAndOddHeaders reports whether separate even/odd page headers/footers are
