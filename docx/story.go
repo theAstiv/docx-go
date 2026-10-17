@@ -36,6 +36,35 @@ func (s *story) walkParagraphs(fn func(*wml.CT_P)) {
 	}
 }
 
+// nextDocPrID returns an id one above the largest wp:docPr id in any story, or
+// 1 for a document without drawings. Drawing ids must be unique document-wide.
+func (s *story) nextDocPrID() int64 {
+	next := int64(1)
+	s.walkParagraphs(func(p *wml.CT_P) {
+		forEachRun(p.Children, func(r *wml.CT_R) {
+			for _, id := range r.DocPrIDs() {
+				if id >= next {
+					next = id + 1
+				}
+			}
+		})
+	})
+	return next
+}
+
+// forEachRun calls fn for every run among children, including runs inside
+// hyperlinks.
+func forEachRun(children []wml.InlineElement, fn func(*wml.CT_R)) {
+	for _, c := range children {
+		switch el := c.(type) {
+		case *wml.CT_R:
+			fn(el)
+		case *wml.CT_Hyperlink:
+			forEachRun(el.Children, fn)
+		}
+	}
+}
+
 // walkBlocks calls fn for every paragraph in blocks, descending into tables
 // and their cells.
 func walkBlocks(blocks []wml.BlockElement, fn func(*wml.CT_P)) {

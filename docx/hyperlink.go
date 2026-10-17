@@ -113,7 +113,7 @@ func (h *Hyperlink) AddRun(text string) *Run {
 		r.Children = append(r.Children, t)
 	}
 	h.h.Children = append(h.h.Children, r)
-	run := &Run{r: r}
+	run := &Run{r: r, st: h.st}
 	run.Font().SetStyle(string(StyleHyperlink))
 	return run
 }
@@ -123,7 +123,7 @@ func (h *Hyperlink) Runs() iter.Seq[*Run] {
 	return func(yield func(*Run) bool) {
 		for _, c := range h.h.Children {
 			if r, ok := c.(*wml.CT_R); ok {
-				if !yield(&Run{r: r}) {
+				if !yield(&Run{r: r, st: h.st}) {
 					return
 				}
 			}

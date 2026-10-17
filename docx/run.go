@@ -8,7 +8,8 @@ import (
 
 // Run is a proxy for the w:r element: a styled run of text.
 type Run struct {
-	r *wml.CT_R
+	r  *wml.CT_R
+	st *story
 }
 
 // Text returns the visible text of this run, using the same rendering rules as

@@ -29,7 +29,7 @@ func (p *Paragraph) Runs() iter.Seq[*Run] {
 			if !ok {
 				continue
 			}
-			if !yield(&Run{r: r}) {
+			if !yield(&Run{r: r, st: p.st}) {
 				return
 			}
 		}
@@ -47,7 +47,7 @@ func (p *Paragraph) AddRun(text string) *Run {
 		r.Children = append(r.Children, t)
 	}
 	p.p.Children = append(p.p.Children, r)
-	return &Run{r: r}
+	return &Run{r: r, st: p.st}
 }
 
 // Text returns the visible text of the paragraph by walking all w:t descendants

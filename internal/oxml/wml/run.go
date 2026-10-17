@@ -119,6 +119,12 @@ func (r *CT_R) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
 					return err
 				}
 				r.Children = append(r.Children, rc)
+			case ns.Qn("w:drawing"):
+				rc := new(CT_Drawing)
+				if err := rc.UnmarshalXML(d, t); err != nil {
+					return err
+				}
+				r.Children = append(r.Children, rc)
 			default:
 				rc := new(RawRunContent)
 				if err := rc.UnmarshalXML(d, t); err != nil {
