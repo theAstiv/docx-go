@@ -162,7 +162,13 @@ type CT_TblPr struct {
 func (p *CT_TblPr) StyleID() string { return rawGetStr(p.raw, ns.Qn("w:tblStyle")) }
 
 // SetStyleID sets or clears the table style.
-func (p *CT_TblPr) SetStyleID(s string) { rawSetStr(&p.raw, ns.Qn("w:tblStyle"), s) }
+func (p *CT_TblPr) SetStyleID(s string) {
+	if s == "" {
+		rawRemoveChild(&p.raw, ns.Qn("w:tblStyle"))
+		return
+	}
+	rawPutOrdered(&p.raw, rawEl("tblStyle", "val", s), tblPrChildSeqPos)
+}
 
 // MarshalXML emits <w:tblPr>.
 func (p *CT_TblPr) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
@@ -480,7 +486,11 @@ func (p *CT_TcPr) GridSpan() *int64 {
 
 // SetGridSpan sets or clears the column span (w:gridSpan).
 func (p *CT_TcPr) SetGridSpan(n *int64) {
-	rawSetInt64Attr(&p.raw, ns.Qn("w:gridSpan"), ns.Qn("w:val"), n)
+	if n == nil {
+		rawRemoveChild(&p.raw, ns.Qn("w:gridSpan"))
+		return
+	}
+	rawPutOrdered(&p.raw, rawEl("gridSpan", "val", strconv.FormatInt(*n, 10)), tcPrChildSeqPos)
 }
 
 // VMergeRestart is the w:val for the first cell of a vertical merge group.
@@ -515,7 +525,7 @@ func (p *CT_TcPr) SetVMerge(val string) {
 	if val == VMergeRestart {
 		re.Attrs = []xml.Attr{{Name: ns.Qn("w:val"), Value: val}}
 	}
-	p.raw = append(p.raw, re)
+	rawInsertOrdered(&p.raw, re, tcPrChildSeqPos)
 }
 
 // ClearVMerge removes the w:vMerge element.
@@ -523,21 +533,16 @@ func (p *CT_TcPr) ClearVMerge() { rawRemoveChild(&p.raw, ns.Qn("w:vMerge")) }
 
 // SetWidth sets the cell width as a dxa (twips) measurement via w:tcW.
 func (p *CT_TcPr) SetWidth(twips int64) {
-	rawSetAttrOnElement(&p.raw, ns.Qn("w:tcW"), ns.Qn("w:w"), strconv.FormatInt(twips, 10))
-	rawSetAttrOnElement(&p.raw, ns.Qn("w:tcW"), ns.Qn("w:type"), "dxa")
+	p.SetWidthSpec(&TblWidth{Type: WidthDxa, W: twips})
 }
 
-// Width returns the cell width in twips from w:tcW w:type="dxa", or 0 if absent.
+// Width returns the w:tcW magnitude (twips for dxa), or 0 if absent. Use
+// WidthSpec when the unit matters.
 func (p *CT_TcPr) Width() int64 {
-	s := rawGetAttrOnElement(p.raw, ns.Qn("w:tcW"), "w")
-	if s == "" {
-		return 0
+	if w := p.WidthSpec(); w != nil {
+		return w.W
 	}
-	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0
-	}
-	return n
+	return 0
 }
 
 // MarshalXML emits <w:tcPr>.
