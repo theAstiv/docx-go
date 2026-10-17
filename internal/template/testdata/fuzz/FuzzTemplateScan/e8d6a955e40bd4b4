@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<w:r><A:00/></w:r>")
