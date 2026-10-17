@@ -58,24 +58,26 @@ func validateBookmarkName(name string) error {
 	return nil
 }
 
-// bookmarkStarts collects every bookmarkStart in the package, in story order.
+// bookmarkStarts collects every bookmark in the package, in story order.
+//
+// Bookmarks inside raw content (content controls, tracked changes, smart
+// tags, block-level bookmarks) have no typed element; they are returned as
+// detached read-only copies carrying the id and name, which is all that
+// duplicate checks, id allocation and Document.Bookmarks need.
 func (s *story) bookmarkStarts() []*wml.CT_BookmarkStart {
-	var out []*wml.CT_BookmarkStart
-	s.walkParagraphs(func(p *wml.CT_P) {
-		collectBookmarkStarts(p.Children, &out)
-	})
-	return out
-}
-
-func collectBookmarkStarts(children []wml.InlineElement, out *[]*wml.CT_BookmarkStart) {
-	for _, c := range children {
-		switch el := c.(type) {
-		case *wml.CT_BookmarkStart:
-			*out = append(*out, el)
-		case *wml.CT_Hyperlink:
-			collectBookmarkStarts(el.Children, out)
+	refs := s.scan().Bookmarks
+	out := make([]*wml.CT_BookmarkStart, 0, len(refs))
+	for _, ref := range refs {
+		if ref.Start != nil {
+			out = append(out, ref.Start)
+			continue
 		}
+		bs := new(wml.CT_BookmarkStart)
+		bs.ID = ref.ID
+		bs.Name = ref.Name
+		out = append(out, bs)
 	}
+	return out
 }
 
 // nextBookmarkID returns an id one above the largest in use, or 0 when the

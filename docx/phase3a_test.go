@@ -3,11 +3,13 @@ package docx_test
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -156,6 +158,56 @@ func TestExitGate_ImageRoundTripKeepsBytesAndAspectRatio(t *testing.T) {
 	}
 }
 
+// TestIDs_RespectTextBoxContentInsideDrawings covers ids that sit inside a
+// drawing's own content: a text box (wps:txbx) in an anchored drawing and one
+// in the graphic data of a typed inline drawing, each holding a bookmark and a
+// nested picture. Scanning only a drawing's own docPr would miss all of them.
+func TestIDs_RespectTextBoxContentInsideDrawings(t *testing.T) {
+	const decls = ` xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"` +
+		` xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"` +
+		` xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"` +
+		` xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"`
+	box := func(bookmark string, bmID int, picID int) string {
+		return `<wps:wsp><wps:txbx><w:txbxContent><w:p><w:bookmarkStart w:id="` + itoa(bmID) + `" w:name="` + bookmark + `"/>` +
+			`<w:r><w:drawing><wp:inline><wp:extent cx="1" cy="1"/><wp:docPr id="` + itoa(picID) + `" name="Nested"/></wp:inline></w:drawing></w:r>` +
+			`</w:p></w:txbxContent></wps:txbx></wps:wsp>`
+	}
+	anchored := `<w:p` + decls + `><w:r><w:drawing><wp:anchor><wp:docPr id="20" name="Box"/>` +
+		`<a:graphic><a:graphicData uri="x">` + box("InAnchorBox", 3, 21) + `</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>`
+	inline := `<w:p` + decls + `><w:r><w:drawing><wp:inline><wp:extent cx="1" cy="1"/><wp:docPr id="30" name="Box2"/>` +
+		`<a:graphic><a:graphicData uri="x">` + box("InInlineBox", 4, 31) + `</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
+
+	d := injectIntoBody(t, docx.New(), anchored+inline)
+
+	for _, name := range []string{"InAnchorBox", "InInlineBox"} {
+		if d.Bookmark(name) == nil {
+			t.Errorf("bookmark %s inside a drawing text box is not visible", name)
+		}
+	}
+	p := d.Body().AddParagraph()
+	for _, name := range []string{"InAnchorBox", "InInlineBox"} {
+		if _, err := p.AddBookmark(name); !errors.Is(err, docx.ErrDuplicateBookmark) {
+			t.Errorf("duplicate of %s: err = %v, want ErrDuplicateBookmark", name, err)
+		}
+	}
+	if _, err := p.AddRun("").AddImage(bytes.NewReader(pngBytes(t, 4, 4, 1)), docx.ImageOptions{AltText: "n"}); err != nil {
+		t.Fatal(err)
+	}
+	ids := extractDocPrIDs(string(partXML(t, d, "word/document.xml")))
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if seen[id] {
+			t.Errorf("docPr id %s used twice: %v", id, ids)
+		}
+		seen[id] = true
+	}
+	if len(ids) != 5 {
+		t.Errorf("docPr ids = %v, want 5 distinct (20, 21, 30, 31 and a new one)", ids)
+	}
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }
+
 // TestPhase3a_Fixtures_CoverTheFeatures guards the structural test against
 // passing vacuously: the corpus must really contain inline and anchored
 // drawings, a header image, hyperlinks, bookmarks, shading and media files.
@@ -255,5 +307,116 @@ func TestPhase3a_Fixtures_StructuralRoundTrip(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// injectIntoBody saves d, inserts xmlFragment before the body-level sectPr of
+// word/document.xml, and reopens the result. It lets tests plant content the
+// package keeps raw (content controls, tracked changes, smart tags).
+func injectIntoBody(t *testing.T, d *docx.Document, xmlFragment string) *docx.Document {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := d.Save(&buf); err != nil {
+		t.Fatal(err)
+	}
+	entries := readZip(t, buf.Bytes())
+	doc := string(entries["word/document.xml"])
+	i := strings.LastIndex(doc, "<sectPr")
+	if i < 0 {
+		t.Fatalf("no body sectPr in %s", doc)
+	}
+	entries["word/document.xml"] = []byte(doc[:i] + xmlFragment + doc[i:])
+
+	var out bytes.Buffer
+	zw := zip.NewWriter(&out)
+	for name, data := range entries {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r, err := docx.OpenBytes(out.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+const (
+	nsDecl = ` xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"` +
+		` xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"`
+	// A cover page in a content control: a drawing with docPr id 1 and a
+	// bookmark "Cover" with id 0 that live only inside raw w:sdt content.
+	coverSDT = `<w:sdt` + nsDecl + `><w:sdtPr><w:alias w:val="Cover"/></w:sdtPr><w:sdtContent>` +
+		`<w:p><w:bookmarkStart w:id="0" w:name="Cover"/><w:r><w:drawing><wp:inline>` +
+		`<wp:extent cx="1" cy="1"/><wp:docPr id="1" name="Logo"/></wp:inline></w:drawing></w:r>` +
+		`<w:bookmarkEnd w:id="0"/></w:p></w:sdtContent></w:sdt>`
+	// Raw inline content in an ordinary paragraph: a smart tag, and a tracked
+	// insertion, each hiding a bookmark and a drawing id.
+	inlineRaw = `<w:p` + nsDecl + `><w:smartTag w:uri="urn:x" w:element="x"><w:bookmarkStart w:id="5" w:name="InSmartTag"/>` +
+		`<w:r><w:t>x</w:t></w:r></w:smartTag>` +
+		`<w:ins w:id="9" w:author="a"><w:r><w:drawing><wp:inline><wp:extent cx="1" cy="1"/>` +
+		`<wp:docPr id="7" name="Tracked"/></wp:inline></w:drawing></w:r></w:ins></w:p>`
+)
+
+// TestIDs_RespectContentInsideRawContainers is the regression test for ids and
+// names that live inside content controls, smart tags and tracked changes.
+// Allocating over them produced duplicate drawing ids (a known cause of Word's
+// "unreadable content" warning) and let a duplicate bookmark name through.
+func TestIDs_RespectContentInsideRawContainers(t *testing.T) {
+	d := injectIntoBody(t, docx.New(), coverSDT+inlineRaw)
+
+	// Existing raw bookmarks are visible.
+	if d.Bookmark("Cover") == nil || d.Bookmark("InSmartTag") == nil {
+		t.Fatal("bookmarks inside raw content are not visible through the Document API")
+	}
+
+	p := d.Body().AddParagraph()
+	if _, err := p.AddBookmark("Cover"); !errors.Is(err, docx.ErrDuplicateBookmark) {
+		t.Errorf("duplicate of a bookmark inside an sdt: err = %v, want ErrDuplicateBookmark", err)
+	}
+	if _, err := p.AddBookmark("InSmartTag"); !errors.Is(err, docx.ErrDuplicateBookmark) {
+		t.Errorf("duplicate of a bookmark inside a smartTag: err = %v", err)
+	}
+	if _, err := p.AddBookmark("Fresh"); err != nil {
+		t.Fatal(err)
+	}
+
+	img, err := p.AddRun("").AddImage(bytes.NewReader(pngBytes(t, 4, 4, 1)), docx.ImageOptions{AltText: "new"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = img
+
+	xml := string(partXML(t, d, "word/document.xml"))
+	ids := extractDocPrIDs(xml)
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if seen[id] {
+			t.Errorf("docPr id %s is used twice: %v", id, ids)
+		}
+		seen[id] = true
+	}
+	if len(ids) != 3 {
+		t.Errorf("docPr ids = %v, want 3 distinct (1, 7 and a new one)", ids)
+	}
+
+	// The new bookmark must not reuse id 0 or 5 either.
+	marks := regexp.MustCompile(`<(?:\w+:)?bookmarkStart\s[^>]*?\bid="(\d+)"`)
+	bm := map[string]bool{}
+	for _, m := range marks.FindAllStringSubmatch(xml, -1) {
+		if bm[m[1]] {
+			t.Errorf("bookmark id %s used twice in %s", m[1], xml)
+		}
+		bm[m[1]] = true
+	}
+	if len(bm) != 3 {
+		t.Errorf("bookmark ids = %v, want 3 distinct", bm)
 	}
 }

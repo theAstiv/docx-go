@@ -121,35 +121,9 @@ func attrLocal(attrs []xml.Attr, local string) string {
 // ones inside raw content such as mc:AlternateContent, so id allocation never
 // collides with a drawing this package does not model.
 func (r *CT_R) DocPrIDs() []int64 {
-	var ids []int64
-	for _, c := range r.Children {
-		switch el := c.(type) {
-		case *CT_Drawing:
-			if id, ok := el.DocPrID(); ok {
-				ids = append(ids, id)
-			}
-			for _, re := range el.Rest {
-				collectDocPrIDs(re, &ids)
-			}
-		case *RawRunContent:
-			if el.E != nil {
-				collectDocPrIDs(el.E, &ids)
-			}
-		}
-	}
-	return ids
-}
-
-// collectDocPrIDs appends the id of every wp:docPr in the raw tree.
-func collectDocPrIDs(re *raw.RawElement, ids *[]int64) {
-	if re.QName == ns.Qn("wp:docPr") {
-		if n := parseInt64Ptr(attrLocal(re.Attrs, "id")); n != nil {
-			*ids = append(*ids, *n)
-		}
-	}
-	for _, k := range rawKids(re) {
-		collectDocPrIDs(k, ids)
-	}
+	s := new(IDScan)
+	scanRun(r, s)
+	return s.DocPr
 }
 
 // Name returns the wp:docPr name of an inline drawing, or "".
@@ -255,12 +229,15 @@ func NewInlinePicture(spec InlinePictureSpec) *CT_Drawing {
 	pic.BlipFill.Rest = []*raw.RawElement{
 		dmlParent("a:stretch", dmlEl("a:fillRect")),
 	}
+	// a:prstGeom/@prst is required by the schema.
+	geom := dmlEl("a:prstGeom", "prst", "rect")
+	geom.Children = append(geom.Children, dmlEl("a:avLst"))
 	pic.SpPr = new(dml.CT_ShapeProperties)
 	pic.SpPr.Children = []*raw.RawElement{
 		dmlParent("a:xfrm",
 			dmlEl("a:off", "x", "0", "y", "0"),
 			dmlEl("a:ext", "cx", cx, "cy", cy)),
-		dmlParent("a:prstGeom", dmlEl("a:avLst")),
+		geom,
 	}
 	// The pic prefix is declared on pic:pic in Word's output; the encoder adds
 	// the declaration itself.

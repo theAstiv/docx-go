@@ -20,70 +20,36 @@ func docStory(pkg *parts.Package) *story {
 	return &story{pkg: pkg, src: parts.PathDocument}
 }
 
-// walkParagraphs calls fn for every paragraph in every story of the package
-// (body, headers, footers), descending into tables.
-func (s *story) walkParagraphs(fn func(*wml.CT_P)) {
+// scan collects the document-wide identifiers (drawing ids, bookmarks) from
+// every story: body, headers and footers. It reaches into tables, hyperlinks
+// and all raw content such as content controls (w:sdt), tracked changes,
+// smart tags and mc:AlternateContent, so allocation never collides with
+// content this package does not model. It rescans on every call; callers that
+// add many items should keep that cost in mind.
+func (s *story) scan() *wml.IDScan {
+	scan := new(wml.IDScan)
 	if s.pkg.DocPart != nil {
 		if body := s.pkg.DocPart.Body(); body != nil {
-			walkBlocks(body.Children, fn)
+			wml.ScanBlocks(body.Children, scan)
 		}
 	}
 	for _, h := range s.pkg.Headers {
-		walkBlocks(h.Part.CT().Children, fn)
+		wml.ScanBlocks(h.Part.CT().Children, scan)
 	}
 	for _, f := range s.pkg.Footers {
-		walkBlocks(f.Part.CT().Children, fn)
+		wml.ScanBlocks(f.Part.CT().Children, scan)
 	}
+	return scan
 }
 
 // nextDocPrID returns an id one above the largest wp:docPr id in any story, or
 // 1 for a document without drawings. Drawing ids must be unique document-wide.
 func (s *story) nextDocPrID() int64 {
 	next := int64(1)
-	s.walkParagraphs(func(p *wml.CT_P) {
-		forEachRun(p.Children, func(r *wml.CT_R) {
-			for _, id := range r.DocPrIDs() {
-				if id >= next {
-					next = id + 1
-				}
-			}
-		})
-	})
+	for _, id := range s.scan().DocPr {
+		if id >= next {
+			next = id + 1
+		}
+	}
 	return next
-}
-
-// forEachRun calls fn for every run among children, including runs inside
-// hyperlinks.
-func forEachRun(children []wml.InlineElement, fn func(*wml.CT_R)) {
-	for _, c := range children {
-		switch el := c.(type) {
-		case *wml.CT_R:
-			fn(el)
-		case *wml.CT_Hyperlink:
-			forEachRun(el.Children, fn)
-		}
-	}
-}
-
-// walkBlocks calls fn for every paragraph in blocks, descending into tables
-// and their cells.
-func walkBlocks(blocks []wml.BlockElement, fn func(*wml.CT_P)) {
-	for _, b := range blocks {
-		switch el := b.(type) {
-		case *wml.CT_P:
-			fn(el)
-		case *wml.CT_Tbl:
-			for _, r := range el.Children {
-				tr, ok := r.(*wml.CT_Tr)
-				if !ok {
-					continue
-				}
-				for _, c := range tr.Children {
-					if tc, ok := c.(*wml.CT_Tc); ok {
-						walkBlocks(tc.Children, fn)
-					}
-				}
-			}
-		}
-	}
 }

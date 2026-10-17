@@ -44,6 +44,34 @@ func TestNewInlinePicture_RoundTripAndAccessors(t *testing.T) {
 	}
 }
 
+// TestNewInlinePicture_SchemaRequiredAttributes pins the attributes that the
+// schema requires and that a hand-built tree can silently omit. A missing
+// a:prstGeom/@prst was a real defect: Word may repair such a file.
+func TestNewInlinePicture_SchemaRequiredAttributes(t *testing.T) {
+	out, err := xml.Marshal(wml.NewInlinePicture(newSpec()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	for _, want := range []string{
+		`prst="rect"`,                // a:prstGeom
+		`cx="952500"`, `cy="476250"`, // wp:extent and a:ext
+		`name="Picture 3"`, // wp:docPr
+		`id="3"`,           // wp:docPr
+		`noChangeAspect="1"`,
+		`uri="http://schemas.openxmlformats.org/drawingml/2006/picture"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in %s", want, got)
+		}
+	}
+	// The geometry element must carry prst on the element itself.
+	i := strings.Index(got, "<prstGeom")
+	if i < 0 || !strings.Contains(got[i:strings.Index(got[i:], ">")+i], `prst="rect"`) {
+		t.Errorf("a:prstGeom lacks prst: %s", got)
+	}
+}
+
 func TestCT_Drawing_AnchorStaysRawAndDocPrIDFound(t *testing.T) {
 	src := `<w:drawing xmlns:w="` + ns.W + `" xmlns:wp="` + ns.WP + `">` +
 		`<wp:anchor distT="0" simplePos="0"><wp:simplePos x="0" y="0"/>` +
