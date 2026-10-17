@@ -81,6 +81,18 @@ fetch "$POI_RAW/NumberingWithOutOfOrderId.docx" "$POI_DEST/NumberingWithOutOfOrd
 fetch "$POI_RAW/DiffFirstPageHeadFoot.docx"   "$POI_DEST/DiffFirstPageHeadFoot.docx"
 fetch "$POI_RAW/PageSpecificHeadFoot.docx"    "$POI_DEST/PageSpecificHeadFoot.docx"
 
+# Phase 3a additions — images, hyperlinks, shaded/bordered tables (Apache 2.0)
+fetch "$POI_RAW/VariousPictures.docx"         "$POI_DEST/VariousPictures.docx"
+fetch "$POI_RAW/61745.docx"                   "$POI_DEST/61745.docx"
+fetch "$POI_RAW/56392.docx"                   "$POI_DEST/56392.docx"
+fetch "$POI_RAW/headerPic.docx"               "$POI_DEST/headerPic.docx"
+fetch "$POI_RAW/WithGIF.docx"                 "$POI_DEST/WithGIF.docx"
+fetch "$POI_RAW/61991.docx"                   "$POI_DEST/61991.docx"
+fetch "$POI_RAW/TestDocument.docx"            "$POI_DEST/TestDocument.docx"
+fetch "$POI_RAW/bug57031.docx"                "$POI_DEST/bug57031.docx"
+fetch "$POI_RAW/drawing.docx"                 "$POI_DEST/drawing.docx"
+fetch "$POI_RAW/IllustrativeCases.docx"       "$POI_DEST/IllustrativeCases.docx"
+
 # ---------------------------------------------------------------------------
 echo ""
 total=$(find "$FIXTURES" -name '*.docx' ! -name '~$*' | wc -l)

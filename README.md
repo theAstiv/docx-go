@@ -3,9 +3,22 @@
 A permissively-licensed Go library for creating, reading, and modifying `.docx`
 (OOXML WordprocessingML) files — without losing unknown content.
 
-**Status**: Phase 2 complete — paragraphs, runs, tables, lists, headers/footers, and multi-section documents are fully supported. Not yet stable for production use (API may change before v1.0).
+**Status**: Phase 3a (report essentials) is implemented: inline images, hyperlinks, bookmarks, table formatting, editable styles, and page-number/TOC fields join the Phase 2 feature set. The new features are covered by round-trip, real-fixture and fuzz tests; validating the output with the OOXML validator and opening it in Word, LibreOffice and Google Docs is still pending (Phase 3 exit gate). Not yet stable for production use (API may change before v1.0).
 
 ---
+
+## What works (Phase 3a)
+
+| Feature | API surface |
+|---|---|
+| Inline images | `Run.AddImage(r, ImageOptions)` (PNG/JPEG/GIF), `Run.Images()`, `Image.Size/SetSize/AltText/Bytes`; identical images are stored once |
+| Hyperlinks | `Paragraph.AddHyperlink(url, opts)`, `AddInternalLink(bookmark, opts)`, `Hyperlinks()`, `Hyperlink.AddRun/URL/Anchor/Text` |
+| Bookmarks | `Paragraph.AddBookmark(name)`, `Document.Bookmark(name)`, `Document.Bookmarks()` |
+| Styles | `Document.Styles()`, `Styles.ByID/All/AddParagraphStyle/AddCharacterStyle/AddTableStyle/EnsureBuiltin/DocDefaultsFont`, `Style.Format()/Font()/SetBasedOn/SetNext` |
+| Table formatting | `Table/Cell.SetBorders(BorderOptions)`, `SetWidth(TableWidth)`, `Table.SetCellMargins/SetLayout`, `Cell.SetShading`, `Row.SetHeader/SetCantSplit` |
+| Fields | `Paragraph.AddField/AddPageNumber/AddPageCount/Fields()`, `Document.AddTOC(opts)`, `Document.SetUpdateFieldsOnOpen(bool)` |
+
+See [`examples/report`](examples/report) for a report that uses all of them. SVG and floating (anchored) images are not supported yet; anchored images in existing documents are preserved unchanged.
 
 ## What works (Phase 2)
 
@@ -21,7 +34,7 @@ A permissively-licensed Go library for creating, reading, and modifying `.docx`
 | Document settings | `EvenAndOddHeaders`, `DefaultTabStop` |
 | Unknown-content preservation | All unmodelled elements pass through byte-for-byte |
 
-**Not yet supported**: images (Phase 3), hyperlinks, bookmarks, comments, fields, full style editing.
+**Not yet supported**: templating (Phase 3b), comments, tracked changes, SVG and anchored images, multi-paragraph bookmarks, resolving the full style inheritance chain.
 
 ---
 
