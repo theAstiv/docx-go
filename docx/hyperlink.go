@@ -114,7 +114,15 @@ func (h *Hyperlink) AddRun(text string) *Run {
 	}
 	h.h.Children = append(h.h.Children, r)
 	run := &Run{r: r, st: h.st}
-	run.Font().SetStyle(string(StyleHyperlink))
+	// Use the document's own hyperlink style id, which a localized or custom
+	// template may have under a different name than "Hyperlink".
+	styleID := string(StyleHyperlink)
+	if h.st != nil && h.st.pkg.StyPart != nil {
+		if s := (&Styles{st: h.st.pkg.StyPart.Styles()}).EnsureBuiltin(StyleHyperlink); s != nil {
+			styleID = s.ID()
+		}
+	}
+	run.Font().SetStyle(styleID)
 	return run
 }
 

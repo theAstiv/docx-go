@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/theAstiv/docx-go/docx"
@@ -226,5 +227,79 @@ func TestExitGate_StyleEdit(t *testing.T) {
 	}
 	if n == 0 {
 		t.Fatal("fixture has no Heading1 paragraphs")
+	}
+}
+
+// TestEnsureBuiltin_ReusesTemplateDefaultStyle models a German template: its
+// default paragraph style has the id "Standard" but the built-in name "Normal".
+// EnsureBuiltin must reuse it rather than add a second default style.
+func TestEnsureBuiltin_ReusesTemplateDefaultStyle(t *testing.T) {
+	loc := docx.New()
+	loc.Styles().AddParagraphStyle("Standard", "Normal", docx.StyleOptions{})
+	defaultCount := func(dd *docx.Document) int {
+		n := 0
+		for s := range dd.Styles().All() {
+			if s.Type() == docx.StyleTypeParagraph && s.Name() == "Normal" {
+				n++
+			}
+		}
+		return n
+	}
+
+	got := loc.Styles().EnsureBuiltin(docx.StyleNormal)
+	if got == nil || got.ID() != "Standard" {
+		t.Fatalf("Normal resolved to %v, want the template's Standard", got)
+	}
+	// Dependents point at the template's style, not a new Normal.
+	h := loc.Styles().EnsureBuiltin(docx.StyleHeading1)
+	if h.BasedOn() != "Standard" || h.Next() != "Standard" {
+		t.Errorf("Heading1 basedOn/next = %q/%q, want Standard", h.BasedOn(), h.Next())
+	}
+	if loc.Styles().ByID("Normal") != nil {
+		t.Error("a second Normal style was created")
+	}
+	if n := defaultCount(loc); n != 1 {
+		t.Errorf("%d paragraph styles named Normal, want 1", n)
+	}
+	if _, err := loc.AddTOC(docx.TOCOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if loc.Styles().ByID("Normal") != nil {
+		t.Error("AddTOC created a second Normal style")
+	}
+}
+
+func TestEnsureBuiltin_MatchesByNameAndDefault(t *testing.T) {
+	d := docx.New()
+	// A localized heading: another id, the built-in name.
+	d.Styles().AddParagraphStyle("berschrift1", "Heading 1", docx.StyleOptions{}) // case-insensitive match
+	h := d.Styles().EnsureBuiltin(docx.StyleHeading1)
+	if h.ID() != "berschrift1" {
+		t.Errorf("Heading1 matched %q, want the existing localized style", h.ID())
+	}
+	n := 0
+	for s := range d.Styles().All() {
+		if strings.EqualFold(s.Name(), "heading 1") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d styles named heading 1, want 1 (no duplicate display names)", n)
+	}
+}
+
+func TestHyperlink_UsesTemplateHyperlinkStyleID(t *testing.T) {
+	d := docx.New()
+	d.Styles().AddCharacterStyle("Link", "Hyperlink", docx.StyleOptions{})
+	hl, err := d.Body().AddParagraph().AddHyperlink("https://example.com", docx.HyperlinkOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := hl.AddRun("x")
+	if r.Font().Style() != "Link" {
+		t.Errorf("run style = %q, want the template's Link", r.Font().Style())
+	}
+	if d.Styles().ByID("Hyperlink") != nil {
+		t.Error("a duplicate Hyperlink style was created")
 	}
 }

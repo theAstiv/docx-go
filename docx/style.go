@@ -2,6 +2,7 @@ package docx
 
 import (
 	"iter"
+	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
@@ -119,20 +120,62 @@ func (s *Styles) add(id, name string, typ StyleType, opts StyleOptions) *Style {
 // definition (and the styles it is based on) when the document lacks it.
 // An existing definition is returned untouched, so user edits are kept.
 // It returns nil for a name that is not a known built-in.
+//
+// An existing style is found by styleId, then by display name (so a template
+// that calls heading 1 "Überschrift 1" under another id is still matched when
+// its w:name is the English built-in name), and for Normal, Default Paragraph
+// Font and Normal Table by being the default style of that type. A German
+// template whose default paragraph style is "Standard" therefore never gets a
+// second default. Because the returned style's ID can differ from the
+// BuiltinStyle constant, use Style.ID() when referencing it from paragraphs
+// or runs.
 func (s *Styles) EnsureBuiltin(name BuiltinStyle) *Style {
 	id := string(name)
-	if existing := s.ByID(id); existing != nil {
-		return existing
-	}
 	def := wml.NewBuiltinStyle(id)
 	if def == nil {
 		return nil
 	}
+	if existing := s.findBuiltin(def); existing != nil {
+		return existing
+	}
+	// Create the style this one is based on first, then point at whatever id
+	// it ended up with (it may be a template's existing style).
 	for _, dep := range wml.BuiltinStyleDeps(id) {
-		s.EnsureBuiltin(BuiltinStyle(dep))
+		resolved := s.EnsureBuiltin(BuiltinStyle(dep))
+		if resolved == nil || resolved.ID() == dep {
+			continue
+		}
+		if def.BasedOn() == dep {
+			def.SetBasedOn(resolved.ID())
+		}
+		if def.Next() == dep {
+			def.SetNext(resolved.ID())
+		}
 	}
 	s.st.Styles = append(s.st.Styles, def)
 	return &Style{s: def}
+}
+
+// findBuiltin locates the document's existing equivalent of def: same id, or
+// same type and display name, or (for the three default styles) the default
+// style of def's type.
+func (s *Styles) findBuiltin(def *wml.CT_Style) *Style {
+	if existing := s.ByID(def.StyleID); existing != nil {
+		return existing
+	}
+	for _, st := range s.st.Styles {
+		if st.Type == def.Type && strings.EqualFold(st.Name, def.Name) {
+			return &Style{s: st}
+		}
+	}
+	if def.Default {
+		for _, st := range s.st.Styles {
+			if st.Type == def.Type && st.Default {
+				return &Style{s: st}
+			}
+		}
+	}
+	return nil
 }
 
 // DocDefaultsFont returns a RunFont proxy for the document-wide default run
