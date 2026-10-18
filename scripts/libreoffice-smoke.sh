@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# Convert every round-tripped .docx in testdata/golden/docx/ to PDF using
-# LibreOffice headless in Docker.  A successful conversion is the smoke
-# signal that LibreOffice can open the file without producing repair errors.
+# Convert .docx files to PDF with LibreOffice headless in Docker. A file that
+# converts is the smoke signal that LibreOffice can open it; a file that
+# produces no PDF (or hangs) fails.
+#
+# This is a weak check: LibreOffice opens much that Word would repair. It
+# complements, not replaces, the OOXML validator and opening files in Word.
 #
 # Builds the image on first run; subsequent runs reuse the cached image.
 #
-# Usage: scripts/libreoffice-smoke.sh
+# Usage: scripts/libreoffice-smoke.sh [dir ...]
+#   Each dir holds .docx files. Default: testdata/golden/docx (fixtures
+#   re-saved by scripts/save-fixtures.sh). CI also passes tmp/generated
+#   (scripts/generate-docs.sh).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,45 +35,53 @@ if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
   docker build -t "${IMAGE}" tools/libreoffice
 fi
 
-if [[ ! -d testdata/golden/docx ]] || [[ -z $(ls testdata/golden/docx/*.docx 2>/dev/null) ]]; then
-  echo "No round-tripped .docx files in testdata/golden/docx/."
-  echo "Run scripts/save-fixtures.sh first."
-  exit 1
+dirs=("$@")
+if [[ ${#dirs[@]} -eq 0 ]]; then
+  dirs=(testdata/golden/docx)
 fi
 
-OUTDIR="testdata/golden/pdf"
-mkdir -p "${OUTDIR}"
-
-# Mount the whole testdata/golden tree so soffice can read all .docx files
-# in a single container invocation; this is much faster than spawning one
-# container per file (LibreOffice startup dominates).
-# The glob /files/*.docx must expand inside the container, so override the
-# entrypoint with bash -c.
-DOCX_HOST=$(to_docker_path "$(pwd)/testdata/golden/docx")
-PDF_HOST=$(to_docker_path "$(pwd)/${OUTDIR}")
-
-docker run --rm \
-  -v "${DOCX_HOST}:/files:ro" \
-  -v "${PDF_HOST}:/out" \
-  --entrypoint bash \
-  "${IMAGE}" \
-  -c 'soffice --headless --nologo --norestore --nofirststartwizard --convert-to pdf --outdir /out /files/*.docx'
-
+shopt -s nullglob
 failed=0
-for f in testdata/golden/docx/*.docx; do
-  base=$(basename "$f" .docx)
-  pdf="${OUTDIR}/${base}.pdf"
-  if [[ -f "${pdf}" ]]; then
-    echo "OK  ${base}"
-  else
-    echo "FAIL ${base} (no PDF produced)"
-    ((failed++))
+total=0
+for dir in "${dirs[@]}"; do
+  files=("${dir}"/*.docx)
+  if [[ ${#files[@]} -eq 0 ]]; then
+    echo "No .docx files in ${dir} (run scripts/save-fixtures.sh or scripts/generate-docs.sh first)." >&2
+    exit 1
   fi
+  outdir="tmp/pdf/$(basename "${dir}")"
+  rm -rf "${outdir}"
+  mkdir -p "${outdir}"
+
+  # One container per directory: LibreOffice start-up dominates, so convert
+  # every file in one soffice call. The glob must expand inside the
+  # container, hence bash -c. timeout guards against a file that hangs it.
+  # --infilter forces the Word 2007+ import filter: without it LibreOffice
+  # falls back to plain-text import and "converts" a file that is not a
+  # .docx at all, so a broken file would pass.
+  docker run --rm \
+    -v "$(to_docker_path "$(pwd)/${dir}"):/files:ro" \
+    -v "$(to_docker_path "$(pwd)/${outdir}"):/out" \
+    --entrypoint bash \
+    "${IMAGE}" \
+    -c 'timeout 900 soffice --headless --nologo --norestore --nofirststartwizard --infilter="MS Word 2007 XML" --convert-to pdf --outdir /out /files/*.docx' \
+    || echo "soffice exited non-zero for ${dir}; checking which files converted" >&2
+
+  for f in "${files[@]}"; do
+    base=$(basename "$f" .docx)
+    total=$((total + 1))
+    if [[ -s "${outdir}/${base}.pdf" ]]; then
+      echo "OK   ${dir}/${base}"
+    else
+      echo "FAIL ${dir}/${base} (no PDF produced)"
+      failed=$((failed + 1))
+    fi
+  done
 done
 
 echo ""
-if [[ $failed -gt 0 ]]; then
-  echo "libreoffice-smoke: $failed file(s) failed to convert"
+if [[ ${failed} -gt 0 ]]; then
+  echo "libreoffice-smoke: ${failed} of ${total} file(s) failed to convert"
   exit 1
 fi
-echo "libreoffice-smoke: all $(ls testdata/golden/docx/*.docx | wc -l) file(s) converted successfully"
+echo "libreoffice-smoke: all ${total} file(s) converted"
