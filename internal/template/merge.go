@@ -48,7 +48,9 @@ type piece struct {
 }
 
 // flatten turns an inline sequence into text plus the pieces it came from.
-func flatten(children []wml.InlineElement) (string, []piece) {
+// Text in skip (a table of contents) becomes a boundary: it is not template
+// text, and a tag cannot reach across it.
+func flatten(children []wml.InlineElement, skip skipSet) (string, []piece) {
 	goBack := map[int64]bool{}
 	for _, c := range children {
 		if bs, ok := c.(*wml.CT_BookmarkStart); ok && bs.Name == "_GoBack" {
@@ -69,7 +71,11 @@ func flatten(children []wml.InlineElement) (string, []piece) {
 			for k, rc := range el.Children {
 				switch r := rc.(type) {
 				case *wml.CT_Text:
-					add(pieceText, i, k, r.Content)
+					if skip[r] {
+						add(pieceBarrier, i, k, boundary)
+					} else {
+						add(pieceText, i, k, r.Content)
+					}
 				case *wml.CT_Tab, *wml.CT_Br, *wml.CT_Cr, *wml.CT_NoBreakHyphen, *wml.CT_SoftHyphen, *wml.CT_Sym:
 					add(pieceBarrier, i, k, string(barrierBreak))
 				case *wml.RawRunContent:
@@ -109,23 +115,23 @@ func flatten(children []wml.InlineElement) (string, []piece) {
 
 // normalizeInlines merges split tags in children (recursing into
 // hyperlinks) and returns the new sequence and the malformed tags found.
-func normalizeInlines(children []wml.InlineElement) ([]wml.InlineElement, []badTag) {
+func normalizeInlines(children []wml.InlineElement, skip skipSet) ([]wml.InlineElement, []badTag) {
 	var bad []badTag
 	for _, c := range children {
 		if h, ok := c.(*wml.CT_Hyperlink); ok {
 			var hb []badTag
-			h.Children, hb = normalizeInlines(h.Children)
+			h.Children, hb = normalizeInlines(h.Children, skip)
 			bad = append(bad, hb...)
 		}
 	}
-	text, _ := flatten(children)
+	text, _ := flatten(children, skip)
 	if !strings.Contains(text, "{{") {
 		return children, bad
 	}
 	tags, lexBad := lexTags(text)
 	bad = append(bad, lexBad...)
 	for _, t := range tags {
-		_, pieces := flatten(children)
+		_, pieces := flatten(children, skip)
 		children = mergeTag(children, pieces, t)
 	}
 	return children, bad
@@ -225,31 +231,38 @@ func preserveSpace(t *wml.CT_Text) {
 	}
 }
 
+// normalizeStory normalizes a story's blocks. It returns the text to leave
+// alone (tables of contents, see tocskip.go) and an issue per malformed tag.
+func normalizeStory(blocks []wml.BlockElement, loc Location) (skipSet, []Issue) {
+	skip := tocSkips(blocks)
+	return skip, normalizeBlocks(blocks, loc, skip)
+}
+
 // normalizeBlocks normalizes every paragraph in blocks, recursing into
 // tables, and returns an issue per malformed tag. Raw blocks (content
 // controls and the like) are left to the raw pass.
-func normalizeBlocks(blocks []wml.BlockElement, loc Location) []Issue {
+func normalizeBlocks(blocks []wml.BlockElement, loc Location, skip skipSet) []Issue {
 	var issues []Issue
 	var np, nt int
 	for _, b := range blocks {
 		switch el := b.(type) {
 		case *wml.CT_P:
 			var bad []badTag
-			el.Children, bad = normalizeInlines(el.Children)
+			el.Children, bad = normalizeInlines(el.Children, skip)
 			ploc := loc.child("p", np)
 			for _, bt := range bad {
 				issues = append(issues, issueErr(ploc, bt.text, bt.err, bt.detail))
 			}
 			np++
 		case *wml.CT_Tbl:
-			issues = append(issues, normalizeTable(el, loc.child("tbl", nt))...)
+			issues = append(issues, normalizeTable(el, loc.child("tbl", nt), skip)...)
 			nt++
 		}
 	}
 	return issues
 }
 
-func normalizeTable(t *wml.CT_Tbl, loc Location) []Issue {
+func normalizeTable(t *wml.CT_Tbl, loc Location, skip skipSet) []Issue {
 	var issues []Issue
 	nr := 0
 	for _, r := range t.Children {
@@ -261,7 +274,7 @@ func normalizeTable(t *wml.CT_Tbl, loc Location) []Issue {
 		nc := 0
 		for _, c := range row.Children {
 			if cell, ok := c.(*wml.CT_Tc); ok {
-				issues = append(issues, normalizeBlocks(cell.Children, rloc.child("tc", nc))...)
+				issues = append(issues, normalizeBlocks(cell.Children, rloc.child("tc", nc), skip)...)
 				nc++
 			}
 		}

@@ -4,6 +4,9 @@
 # Enforce LF for Go source
 *.go text eol=lf
 
+# Shell scripts must keep LF endings: bash rejects a CRLF script line.
+*.sh text eol=lf
+
 # Golden snapshots are compared byte for byte; a CRLF checkout (Windows
 # with core.autocrlf) would fail every comparison.
 testdata/golden/** text eol=lf

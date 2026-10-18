@@ -38,7 +38,7 @@ func TestNormalize_CorpusKeepsText(t *testing.T) {
 			blocks := parseStory(t, name, data)
 			var before []string
 			eachParagraph(blocks, func(p *wml.CT_P) { before = append(before, p.Text()) })
-			normalizeBlocks(blocks, Location{Part: name})
+			normalizeStory(blocks, Location{Part: name})
 			i := 0
 			eachParagraph(blocks, func(p *wml.CT_P) {
 				if after := p.Text(); after != before[i] {

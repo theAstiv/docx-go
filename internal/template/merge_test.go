@@ -100,7 +100,7 @@ func TestNormalize_Merges(t *testing.T) {
 			p := parseP(t, c.in)
 			before := p.Text()
 			var bad []badTag
-			p.Children, bad = normalizeInlines(p.Children)
+			p.Children, bad = normalizeInlines(p.Children, nil)
 			if len(bad) != 0 {
 				t.Fatalf("unexpected bad tags: %+v", bad)
 			}
@@ -140,7 +140,7 @@ func TestNormalize_Boundaries(t *testing.T) {
 			p := parseP(t, c.in)
 			want := describe(p.Children)
 			var bad []badTag
-			p.Children, bad = normalizeInlines(p.Children)
+			p.Children, bad = normalizeInlines(p.Children, nil)
 			if len(bad) != 1 || !errors.Is(bad[0].err, c.want) {
 				t.Fatalf("bad tags = %+v, want one %v", bad, c.want)
 			}
@@ -154,7 +154,7 @@ func TestNormalize_Boundaries(t *testing.T) {
 // Whitespace at the edge of a merged w:t must be preserved.
 func TestNormalize_PreservesSpace(t *testing.T) {
 	p := parseP(t, `<w:r><w:t>x</w:t><w:t>{{a</w:t></w:r><w:r><w:t xml:space="preserve">}} y</w:t></w:r>`)
-	p.Children, _ = normalizeInlines(p.Children)
+	p.Children, _ = normalizeInlines(p.Children, nil)
 	r, _ := p.Children[1].(*wml.CT_R)
 	tx, _ := r.Children[0].(*wml.CT_Text)
 	if tx.Content != " y" || tx.Space != "preserve" {
@@ -170,7 +170,7 @@ func TestNormalizeBlocks_Locations(t *testing.T) {
 	if err := xml.Unmarshal([]byte(src), &body); err != nil {
 		t.Fatal(err)
 	}
-	issues := normalizeBlocks(body.Children, Location{Part: "word/document.xml"})
+	issues := normalizeBlocks(body.Children, Location{Part: "word/document.xml"}, nil)
 	if len(issues) != 2 {
 		t.Fatalf("got %d issues, want 2: %v", len(issues), issues)
 	}

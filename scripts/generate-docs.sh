@@ -8,6 +8,8 @@
 #   - examples/report
 #   - examples/template_report: the template itself and the filled report
 #     (templating must not turn a valid template into an invalid document)
+#   - the Word-authored templates (testdata/fixtures/word/template_*.docx),
+#     filled from testdata/template/word-templates.json
 #
 # Usage: scripts/generate-docs.sh
 # Prints nothing on stdout but the output directory, so callers can capture it.
@@ -27,12 +29,18 @@ mkdir -p "${OUT}"
   go run ./examples/report "${OUT}/example-report.docx"
   cp examples/template_report/template.docx "${OUT}/example-template.docx"
   go run ./examples/template_report "${OUT}/example-template-report.docx"
+  go build -o "${REPO_ROOT}/tmp/template_report" ./examples/template_report
+  for tpl in testdata/fixtures/word/template_*.docx; do
+    "${REPO_ROOT}/tmp/template_report" -template "${tpl}" \
+      -data testdata/template/word-templates.json \
+      "${OUT}/filled-$(basename "${tpl}")"
+  done
 } >&2
 
 shopt -s nullglob
 files=("${OUT}"/*.docx)
 # Guard against a generator that silently wrote nothing (a vacuous pass).
-expected=6
+expected=11
 if [[ ${#files[@]} -ne ${expected} ]]; then
   echo "expected ${expected} generated documents, found ${#files[@]}: ${files[*]:-none}" >&2
   exit 1

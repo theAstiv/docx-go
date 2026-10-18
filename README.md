@@ -27,7 +27,10 @@ warnings, err := template.Execute(doc, data, template.Options{Mode: template.Str
 
 Block tags go **alone in their own paragraph** (the paragraphs and tables between the two tags repeat or disappear) or **at the edges of table rows**: `{{#each rows}}` at the start of a row's first cell and `{{/each}}` at the end of the last cell of the same or a later row repeats those rows.
 
-- Placeholders work in the body, tables, headers and footers, and (values only) in content controls and text boxes. Tags Word split across runs (spell-check marks, formatting changes) are rejoined; the formatting of the run holding `{{` is used.
+- Placeholders work in the body, tables, headers and footers, and (values only) in content controls and text boxes, such as Word's built-in cover pages. Tags Word split across runs (spell-check marks, formatting changes) are rejoined; the formatting of the run holding `{{` is used.
+- Data-bound content controls (a cover page's Title, Subtitle, Date) show values stored in the document properties or custom XML; those are filled too, so Word shows the filled value when it opens the file.
+- A table of contents repeats the headings' tags; it is left for Word to rebuild. Call `doc.SetUpdateFieldsOnOpen(true)` so Word refreshes the TOC and page numbers when the document opens (`Execute` warns if a TOC holds tags and you haven't).
+- Tested against templates made in Word itself (`testdata/fixtures/word/template_*.docx`).
 - `Strict` (the default) returns a `*template.Error` listing every missing key and every malformed tag, and leaves the document unchanged. `Lenient` writes missing values as empty text and returns warnings. A missing key in `{{#if}}` is simply false.
 - `template.Placeholders(doc)` lists a template's tags, so data can be checked against a template before rendering.
 - Repeated content gets fresh drawing ids, keeps bookmarks on the first copy only, and keeps list numbering continuous.

@@ -107,7 +107,7 @@ func FuzzTemplateScan(f *testing.F) {
 			return
 		}
 		before := p.Text()
-		p.Children, _ = normalizeInlines(p.Children)
+		p.Children, _ = normalizeInlines(p.Children, nil)
 		if after := p.Text(); after != before {
 			t.Fatalf("text changed: %q -> %q", before, after)
 		}

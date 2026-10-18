@@ -32,6 +32,9 @@ func TestExecute_PreservesFixtures(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if hasTags(t, f, data) {
+			continue // a template fixture; TestWordTemplates covers it
+		}
 		plain := openSave(t, f, data, nil)
 		filled := openSave(t, f, data, func(doc *docx.Document) {
 			if _, err := template.Execute(doc, nil, template.Options{Mode: template.Lenient}); err != nil {
@@ -44,6 +47,17 @@ func TestExecute_PreservesFixtures(t *testing.T) {
 		checked++
 	}
 	t.Logf("checked %d fixtures", checked)
+}
+
+// hasTags reports whether a fixture holds template tags.
+func hasTags(t *testing.T, name string, data []byte) bool {
+	t.Helper()
+	doc, err := docx.OpenBytes(data)
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	ps, _ := template.Placeholders(doc)
+	return len(ps) > 0
 }
 
 func openSave(t *testing.T, name string, data []byte, mutate func(*docx.Document)) []byte {
