@@ -1,0 +1,62 @@
+{
+  "_comment": "Data for the Word-authored template fixtures (testdata/fixtures/word/template_*.docx). Misspelled keys (clnt, asessment, reprot, staus, asessor) match tags typed misspelled on purpose, so Word's spell-check splits them.",
+  "client": {
+    "name": "Acme Health & Co",
+    "city": "Pune",
+    "postcode": "411001"
+  },
+  "clnt": { "adress": "12 MG Road" },
+  "assessment": {
+    "date": "18 October 2026",
+    "rating": "Partially ready",
+    "score": 58,
+    "max_score": 100
+  },
+  "asessment": { "reviwer": "R. Reviewer" },
+  "report": {
+    "title": "DPDPA Gap Assessment",
+    "reference": "GA-2026-017",
+    "link_text": "the full findings",
+    "version": "1.2"
+  },
+  "reprot": { "ownr": "Data Protection Office" },
+  "author": {
+    "name": "A. Author",
+    "email": "author@example.com"
+  },
+  "summary": {
+    "text": "Consent and breach response need work.\nRetention is largely in place."
+  },
+  "assessor": {
+    "name": "S. Assessor",
+    "note": "Reviewed on site"
+  },
+  "asessor": { "name": "S. Assessor" },
+  "threats": [
+    { "id": "T1", "title": "Spoofing", "severity": "High" },
+    { "id": "T2", "title": "Tampering", "severity": "Medium" },
+    { "id": "T3", "title": "Repudiation", "severity": "Low" }
+  ],
+  "show_totals": true,
+  "total": 3,
+  "mitigations": [
+    { "control": "MFA for admins", "owner": "IT", "staus": "Open", "due_date": "Dec 2026" },
+    { "control": "Audit logging", "owner": "Security", "staus": "Done", "due_date": "Oct 2026" }
+  ],
+  "gaps": [
+    {
+      "id": "G-01",
+      "title": "Consent bundled with terms",
+      "finding": "One acceptance covers the terms and all purposes.",
+      "critical": true,
+      "actions": ["Separate consent from the terms.", "Ask per purpose."]
+    },
+    {
+      "id": "G-02",
+      "title": "Erasure requests untracked",
+      "finding": "Requests arrive by email and are not tracked.",
+      "critical": false,
+      "actions": ["Track requests in a queue."]
+    }
+  ]
+}
