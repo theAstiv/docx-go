@@ -82,7 +82,9 @@ type Issue struct {
 	// Tag is the tag text as written, e.g. "{{client.name}}"; empty when the
 	// issue is not about one tag.
 	Tag string
-	// Err wraps one of the sentinel errors.
+	// Err wraps one of the sentinel errors, except in warnings that report
+	// a change Execute made (a table left without rows was removed), not a
+	// problem.
 	Err error
 }
 

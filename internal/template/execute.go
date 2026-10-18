@@ -50,9 +50,20 @@ func Execute(stories []Story, data map[string]any, opts Options) ([]Issue, error
 		en.issues = append(en.issues, normalizeBlocks(blocks, Location{Part: s.Part})...)
 		work[i] = blocks
 	}
+	// Drawings copied by {{#each}} need wp:docPr ids unique across every
+	// story; scan once, allocate many.
+	scan := new(wml.IDScan)
+	for _, blocks := range work {
+		wml.ScanBlocks(blocks, scan)
+	}
+	en.nextDocPr = scan.DocPrAllocator()
+
 	root := &scope{root: data}
 	for i, s := range stories {
 		work[i] = en.expandBlocks(work[i], root, Location{Part: s.Part})
+	}
+	if en.err != nil {
+		return nil, fmt.Errorf("template: %w", en.err)
 	}
 
 	warnings, errs := split(en.issues)

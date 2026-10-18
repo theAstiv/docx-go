@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
@@ -10,6 +11,11 @@ import (
 type engine struct {
 	opts   Options
 	issues []Issue
+	// nextDocPr hands out wp:docPr ids for drawings in {{#each}} copies.
+	nextDocPr func() int64
+	// err is an internal failure (an element that could not be copied);
+	// it aborts Execute.
+	err error
 }
 
 // missing reports a value tag whose key is absent: an error in Strict mode,
@@ -26,39 +32,10 @@ func (en *engine) fail(loc Location, t tag, sentinel error, detail string) {
 	en.issues = append(en.issues, issueErr(loc, t.text, sentinel, detail))
 }
 
-// expandBlocks fills every paragraph in blocks, recursing into tables.
-func (en *engine) expandBlocks(blocks []wml.BlockElement, sc *scope, loc Location) []wml.BlockElement {
-	var np, nt int
-	for _, b := range blocks {
-		switch el := b.(type) {
-		case *wml.CT_P:
-			en.fillParagraph(el, sc, loc.child("p", np))
-			np++
-		case *wml.CT_Tbl:
-			en.expandTable(el, sc, loc.child("tbl", nt))
-			nt++
-		}
-	}
-	return blocks
-}
-
-func (en *engine) expandTable(t *wml.CT_Tbl, sc *scope, loc Location) {
-	nr := 0
-	for _, r := range t.Children {
-		row, ok := r.(*wml.CT_Tr)
-		if !ok {
-			continue
-		}
-		rloc := loc.child("tr", nr)
-		nc := 0
-		for _, c := range row.Children {
-			if cell, ok := c.(*wml.CT_Tc); ok {
-				cell.Children = en.expandBlocks(cell.Children, sc, rloc.child("tc", nc))
-				nc++
-			}
-		}
-		nr++
-	}
+// warn records a warning about a change Execute made rather than a problem
+// (a table left without rows was removed, say), so it wraps no sentinel.
+func (en *engine) warn(loc Location, t tag, msg string) {
+	en.issues = append(en.issues, Issue{Severity: SeverityWarning, Location: loc, Tag: t.text, Err: errors.New(msg)})
 }
 
 // fillParagraph replaces the value tags of a normalized paragraph, where
@@ -117,7 +94,7 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 			en.fail(loc, t, ErrUnsupportedLocation, "image placeholders are not supported yet")
 			w.text(t.text)
 		case tagOpen, tagClose:
-			en.fail(loc, t, ErrMisplacedBlock, "a block tag must be alone in its paragraph, or at the start of a row's first cell or the end of its last cell")
+			en.fail(loc, t, ErrMisplacedBlock, misplacedDetail)
 			w.text(t.text)
 		}
 	}
