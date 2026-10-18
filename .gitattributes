@@ -4,6 +4,10 @@
 # Enforce LF for Go source
 *.go text eol=lf
 
+# Golden snapshots are compared byte for byte; a CRLF checkout (Windows
+# with core.autocrlf) would fail every comparison.
+testdata/golden/** text eol=lf
+
 # Binary formats — no diffing, no line-ending conversion
 *.docx binary
 *.xlsx binary
