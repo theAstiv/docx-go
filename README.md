@@ -3,9 +3,37 @@
 A permissively-licensed Go library for creating, reading, and modifying `.docx`
 (OOXML WordprocessingML) files — without losing unknown content.
 
-**Status**: Phase 3a (report essentials) is implemented: inline images, hyperlinks, bookmarks, table formatting, editable styles, and page-number/TOC fields join the Phase 2 feature set. The new features are covered by round-trip, real-fixture and fuzz tests; validating the output with the OOXML validator and opening it in Word, LibreOffice and Google Docs is still pending (Phase 3 exit gate). Not yet stable for production use (API may change before v1.0).
+**Status**: Phase 3a (report essentials) is implemented: inline images, hyperlinks, bookmarks, table formatting, editable styles, and page-number/TOC fields join the Phase 2 feature set. Phase 3b adds templating: fill a Word template from JSON data. The new features are covered by round-trip, real-fixture and fuzz tests; opening the output in Word, LibreOffice and Google Docs is still pending (Phase 3 exit gate). Not yet stable for production use (API may change before v1.0).
 
 ---
+
+## Templating (Phase 3b)
+
+Write placeholders in an ordinary Word document, then fill it from JSON-shaped data with package [`docx/template`](docx/template):
+
+```go
+doc, _ := docx.OpenBytes(templateBytes)
+var data map[string]any
+_ = json.Unmarshal(jsonBytes, &data)
+warnings, err := template.Execute(doc, data, template.Options{Mode: template.Strict})
+```
+
+| Tag | Meaning |
+|---|---|
+| `{{client.name}}` | A value; dotted paths reach into nested objects. Numbers print as written (`3`, `4.5`); line breaks and tabs in values become breaks and tabs |
+| `{{#each items}}` … `{{/each}}` | Repeat once per item. Inside, `{{.field}}` is a field of the item and `{{.}}` the item itself |
+| `{{#if flag}}` … `{{/if}}` | Keep the block when `flag` is truthy (not missing, `false`, `""`, `0`, empty or `null`) |
+| `{{#unless flag}}` … `{{/unless}}` | Keep the block when `flag` is falsy |
+
+Block tags go **alone in their own paragraph** (the paragraphs and tables between the two tags repeat or disappear) or **at the edges of table rows**: `{{#each rows}}` at the start of a row's first cell and `{{/each}}` at the end of the last cell of the same or a later row repeats those rows.
+
+- Placeholders work in the body, tables, headers and footers, and (values only) in content controls and text boxes. Tags Word split across runs (spell-check marks, formatting changes) are rejoined; the formatting of the run holding `{{` is used.
+- `Strict` (the default) returns a `*template.Error` listing every missing key and every malformed tag, and leaves the document unchanged. `Lenient` writes missing values as empty text and returns warnings. A missing key in `{{#if}}` is simply false.
+- `template.Placeholders(doc)` lists a template's tags, so data can be checked against a template before rendering.
+- Repeated content gets fresh drawing ids, keeps bookmarks on the first copy only, and keeps list numbering continuous.
+- Not supported: `{{else}}`, helpers, conditions inside a paragraph, rich-text values, and tags in footnotes, endnotes and comments (`Execute` warns about those).
+
+See [`examples/template_report`](examples/template_report) for a gap-assessment report built from a template and [`data.json`](examples/template_report/data.json).
 
 ## What works (Phase 3a)
 
