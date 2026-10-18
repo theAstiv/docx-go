@@ -323,15 +323,24 @@ func (en *engine) fillRow(row *wml.CT_Tr, sc *scope, rloc Location) {
 		if !ok {
 			continue
 		}
+		endedWithP := endsWithParagraph(cell.Children)
 		cell.Children = en.expandBlocks(cell.Children, sc, rloc.child("tc", nc))
-		// A cell must end with a paragraph; a removed range may have taken it.
-		if n := len(cell.Children); n == 0 {
-			cell.Children = append(cell.Children, emptyParagraph())
-		} else if _, isP := cell.Children[n-1].(*wml.CT_P); !isP {
+		// A cell needs a block, and Word wants it to end with a paragraph. If
+		// a removed range took the cell's closing paragraph, add one back;
+		// a cell that already ended with a table is left as it was.
+		if len(cell.Children) == 0 || (endedWithP && !endsWithParagraph(cell.Children)) {
 			cell.Children = append(cell.Children, emptyParagraph())
 		}
 		nc++
 	}
+}
+
+func endsWithParagraph(blocks []wml.BlockElement) bool {
+	if len(blocks) == 0 {
+		return false
+	}
+	_, ok := blocks[len(blocks)-1].(*wml.CT_P)
+	return ok
 }
 
 func emptyParagraph() *wml.CT_P {

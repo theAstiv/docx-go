@@ -28,8 +28,9 @@ jobs:
           # dml: inline pictures (Phase 3a).
           fuzz FuzzCT_Inline ./internal/oxml/dml
           fuzz FuzzCT_Picture ./internal/oxml/dml
-          # template: placeholder normalizer (Phase 3b).
+          # template: placeholder normalizer and the whole engine (Phase 3b).
           fuzz FuzzTemplateScan ./internal/template
+          fuzz FuzzTemplateExecute ./internal/template
           exit "$failed"
 
       - name: Upload crash inputs
