@@ -200,24 +200,22 @@ func (c *Cell) Tables() iter.Seq[*Table] {
 	}
 }
 
-// AddParagraph appends a paragraph before the terminal paragraph and returns its proxy.
-// OOXML requires a terminal w:p as the last cell child; this method inserts
-// the new paragraph before any existing terminal paragraph.
+// AddParagraph appends a paragraph to the cell and returns its proxy, like
+// Body.AddParagraph. A new cell already holds one empty paragraph: fill it
+// with SetText or the first element of Paragraphs, or this adds a second.
 func (c *Cell) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
-	// Insert before the last child if it is the terminal paragraph; otherwise append.
-	n := len(c.tc.Children)
-	if n > 0 {
-		if _, ok := c.tc.Children[n-1].(*wml.CT_P); ok {
-			// Splice before the terminal paragraph.
-			c.tc.Children = append(c.tc.Children, nil)
-			copy(c.tc.Children[n:], c.tc.Children[n-1:])
-			c.tc.Children[n-1] = p
-			return &Paragraph{p: p, st: c.st}
-		}
-	}
 	c.tc.Children = append(c.tc.Children, p)
 	return &Paragraph{p: p, st: c.st}
+}
+
+// SetText replaces the cell's content with one paragraph holding text and
+// returns that paragraph, to add runs or fields to. The first paragraph's
+// formatting is kept. A new cell already holds one empty paragraph; SetText
+// fills it, where AddParagraph would add a second. SetText("") gives the
+// cell's own paragraph, empty, to build on.
+func (c *Cell) SetText(text string) *Paragraph {
+	return setBlocksText(&c.tc.Children, text, c.st)
 }
 
 // SetSpan sets the column span (gridSpan) and optionally marks the cell as the

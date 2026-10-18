@@ -133,14 +133,53 @@ func TestCell_AddParagraph(t *testing.T) {
 			cell = c
 		}
 	}
+	// A new cell holds one empty paragraph; AddParagraph appends after it,
+	// as Body.AddParagraph does.
 	p1 := cell.AddParagraph()
 	p1.AddRun("first")
 	p2 := cell.AddParagraph()
 	p2.AddRun("second")
 
-	if got := cell.Text(); got != "first\nsecond" {
-		t.Errorf("cell.Text() = %q, want %q", got, "first\nsecond")
+	if got := cell.Text(); got != "\nfirst\nsecond" {
+		t.Errorf("cell.Text() = %q, want %q", got, "\nfirst\nsecond")
 	}
+}
+
+func TestCell_SetText(t *testing.T) {
+	d := docx.New()
+	tbl := d.Body().AddTable(1, 1, docx.TableOptions{})
+	var cell *docx.Cell
+	for row := range tbl.Rows() {
+		for c := range row.Cells() {
+			cell = c
+		}
+	}
+	for p := range cell.Paragraphs() {
+		p.Format().SetAlignment(docx.AlignCenter)
+	}
+	cell.AddParagraph().AddRun("old")
+
+	cell.SetText("new")
+	ps := collectParagraphs(cell)
+	if len(ps) != 1 || ps[0].Text() != "new" {
+		t.Fatalf("paragraphs = %d, text %q; want one paragraph %q", len(ps), cell.Text(), "new")
+	}
+	if ps[0].Format().Alignment() != docx.AlignCenter {
+		t.Error("SetText dropped the first paragraph's formatting")
+	}
+
+	cell.SetText("")
+	if ps := collectParagraphs(cell); len(ps) != 1 || ps[0].Text() != "" {
+		t.Errorf("SetText(\"\") left %d paragraphs, text %q; want one empty paragraph", len(ps), cell.Text())
+	}
+}
+
+func collectParagraphs(c *docx.Cell) []*docx.Paragraph {
+	var out []*docx.Paragraph
+	for p := range c.Paragraphs() {
+		out = append(out, p)
+	}
+	return out
 }
 
 func TestCell_ColSpan(t *testing.T) {

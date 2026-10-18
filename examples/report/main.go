@@ -155,7 +155,7 @@ func build() (*docx.Document, error) {
 	rows[0].SetCantSplit(docx.On())
 	for i, c := range cellsOf(rows[0]) {
 		c.SetShading("1F3864")
-		run := cellPara(c).AddRun(header[i])
+		run := c.SetText("").AddRun(header[i])
 		run.Font().SetBold(docx.On())
 		run.Font().SetColor("FFFFFF")
 	}
@@ -163,9 +163,9 @@ func build() (*docx.Document, error) {
 		row := rows[i+1]
 		row.SetCantSplit(docx.On())
 		cells := cellsOf(row)
-		cellPara(cells[0]).AddRun(f.id)
-		cellPara(cells[1]).AddRun(f.title)
-		cellPara(cells[2]).AddRun(f.severity)
+		cells[0].SetText(f.id)
+		cells[1].SetText(f.title)
+		cells[2].SetText(f.severity)
 		cells[2].SetShading(severityFill[f.severity])
 	}
 
@@ -193,7 +193,7 @@ func build() (*docx.Document, error) {
 
 	// Footer: Page X of Y.
 	footer := d.LastSection().SetFooter(docx.FooterDefault)
-	fp := footer.AddParagraph()
+	fp := footer.SetText("")
 	fp.Format().SetAlignment(docx.AlignCenter)
 	fp.AddRun("Page ")
 	fp.AddPageNumber()
@@ -203,14 +203,6 @@ func build() (*docx.Document, error) {
 	// Ask Word to refresh the TOC and page numbers on open.
 	d.SetUpdateFieldsOnOpen(true)
 	return d, nil
-}
-
-// cellPara returns the first paragraph of a cell. New cells always have one.
-func cellPara(c *docx.Cell) *docx.Paragraph {
-	for p := range c.Paragraphs() {
-		return p
-	}
-	return c.AddParagraph()
 }
 
 // cellsOf returns the cells of a row in order.

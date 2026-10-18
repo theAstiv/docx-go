@@ -36,7 +36,7 @@ func buildTemplate() (*docx.Document, error) {
 
 	// Header: static logo and the client's name.
 	header := d.LastSection().SetHeader(docx.HeaderDefault)
-	hp := header.AddParagraph()
+	hp := header.SetText("")
 	logo, err := logoPNG()
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func buildTemplate() (*docx.Document, error) {
 	hp.AddRun("  {{client.name}} · DPDPA gap assessment")
 
 	footer := d.LastSection().SetFooter(docx.FooterDefault)
-	fp := footer.AddParagraph()
+	fp := footer.SetText("")
 	fp.Format().SetAlignment(docx.AlignCenter)
 	fp.AddRun("Confidential · page ")
 	fp.AddPageNumber()
@@ -88,14 +88,14 @@ func buildTemplate() (*docx.Document, error) {
 	rows[0].SetHeader(true)
 	for i, c := range collect(rows[0].Cells()) {
 		c.SetShading("1F3864")
-		run := firstPara(c).AddRun([]string{"Area", "Status", "Score"}[i])
+		run := c.SetText("").AddRun([]string{"Area", "Status", "Score"}[i])
 		run.Font().SetBold(docx.On())
 		run.Font().SetColor("FFFFFF")
 	}
 	cells := collect(rows[1].Cells())
-	firstPara(cells[0]).AddRun("{{#each areas}}{{.name}}")
-	firstPara(cells[1]).AddRun("{{.status}}")
-	firstPara(cells[2]).AddRun("{{.score}}{{/each}}")
+	cells[0].SetText("{{#each areas}}{{.name}}")
+	cells[1].SetText("{{.status}}")
+	cells[2].SetText("{{.score}}{{/each}}")
 
 	// Gaps: one section per gap, each with its own bulleted actions.
 	para("Heading1", "Gaps")
@@ -122,13 +122,6 @@ func buildTemplate() (*docx.Document, error) {
 	para("Heading1", "Next steps")
 	para("", "{{next_steps}}")
 	return d, nil
-}
-
-func firstPara(c *docx.Cell) *docx.Paragraph {
-	for p := range c.Paragraphs() {
-		return p
-	}
-	return c.AddParagraph()
 }
 
 func collect[T any](seq func(func(T) bool)) []T {

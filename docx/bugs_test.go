@@ -4,6 +4,7 @@ package docx_test
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/theAstiv/docx-go/docx"
@@ -76,6 +77,45 @@ func TestHeader_AddTable_TerminalParagraphKept(t *testing.T) {
 	if len(texts) < 2 {
 		t.Errorf("header paragraph texts = %v, want at least 2 non-empty paragraphs", texts)
 	}
+}
+
+// AddParagraph appends, AddTable appends the table and a closing empty
+// paragraph, and SetText collapses the header to one paragraph.
+func TestHeader_AppendOrderAndSetText(t *testing.T) {
+	d := docx.New()
+	hdr := d.LastSection().SetHeader(docx.HeaderDefault)
+	hdr.AddParagraph().AddRun("one")
+	hdr.AddTable(1, 1, docx.TableOptions{})
+	hdr.AddParagraph().AddRun("two")
+
+	var texts []string
+	for p := range hdr.Paragraphs() {
+		texts = append(texts, p.Text())
+	}
+	// The header's own empty paragraph, "one", the table's closing paragraph, "two".
+	if got, want := strings.Join(texts, "|"), "|one||two"; got != want {
+		t.Errorf("header paragraphs = %q, want %q", got, want)
+	}
+	if n := len(collect(hdr.Tables())); n != 1 {
+		t.Errorf("%d tables, want 1", n)
+	}
+
+	hdr.SetText("only")
+	texts = texts[:0]
+	for p := range hdr.Paragraphs() {
+		texts = append(texts, p.Text())
+	}
+	if len(texts) != 1 || texts[0] != "only" || len(collect(hdr.Tables())) != 0 {
+		t.Errorf("after SetText: paragraphs %q, tables %d", texts, len(collect(hdr.Tables())))
+	}
+}
+
+func collect[T any](seq func(func(T) bool)) []T {
+	var out []T
+	for v := range seq {
+		out = append(out, v)
+	}
+	return out
 }
 
 // Bug 3: Footer.AddTable — same terminal-paragraph requirement.
