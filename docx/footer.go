@@ -53,25 +53,26 @@ func (f *Footer) Tables() iter.Seq[*Table] {
 	}
 }
 
-// AddParagraph appends a new paragraph to the footer and returns its proxy.
+// AddParagraph appends a paragraph to the footer and returns its proxy, like
+// Body.AddParagraph. A new footer already holds one empty paragraph: fill it
+// with SetText or the first element of Paragraphs, or this adds a second.
 func (f *Footer) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
-	n := len(f.ct.Children)
-	if n > 0 {
-		if _, ok := f.ct.Children[n-1].(*wml.CT_P); ok {
-			f.ct.Children = append(f.ct.Children, nil)
-			copy(f.ct.Children[n:], f.ct.Children[n-1:])
-			f.ct.Children[n-1] = p
-			return &Paragraph{p: p, st: f.story()}
-		}
-	}
 	f.ct.Children = append(f.ct.Children, p)
 	return &Paragraph{p: p, st: f.story()}
 }
 
-// AddTable appends a new table to the footer and returns its proxy.
-// The table is inserted before the OOXML-required trailing paragraph so
-// that w:ftr always ends with w:p.
+// SetText replaces the footer's content with one paragraph holding text and
+// returns that paragraph, to add runs, images or fields to. The first
+// paragraph's formatting is kept. SetText("") gives the footer's own
+// paragraph, empty, to build on.
+func (f *Footer) SetText(text string) *Paragraph {
+	return setBlocksText(&f.ct.Children, text, f.story())
+}
+
+// AddTable appends a new table to the footer and returns its proxy. An
+// empty paragraph follows it, because Word wants w:ftr to end with w:p; a
+// paragraph added afterwards comes after that empty one (as in python-docx).
 func (f *Footer) AddTable(rows, cols int, opts TableOptions) *Table {
 	if rows < 1 {
 		rows = 1
@@ -80,15 +81,6 @@ func (f *Footer) AddTable(rows, cols int, opts TableOptions) *Table {
 		cols = 1
 	}
 	tbl := buildTable(rows, cols, opts)
-	n := len(f.ct.Children)
-	if n > 0 {
-		if _, ok := f.ct.Children[n-1].(*wml.CT_P); ok {
-			f.ct.Children = append(f.ct.Children, nil)
-			copy(f.ct.Children[n:], f.ct.Children[n-1:])
-			f.ct.Children[n-1] = tbl
-			return &Table{tbl: tbl, st: f.story()}
-		}
-	}
-	f.ct.Children = append(f.ct.Children, tbl)
+	appendBlock(&f.ct.Children, tbl)
 	return &Table{tbl: tbl, st: f.story()}
 }

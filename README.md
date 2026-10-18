@@ -52,7 +52,7 @@ See [`examples/report`](examples/report) for a report that uses all of them. SVG
 
 | Feature | API surface |
 |---|---|
-| Paragraphs and runs | `Body.AddParagraph()`, `Paragraph.AddRun()`, `Paragraph.Text()` |
+| Paragraphs and runs | `Body/Cell/Header/Footer.AddParagraph()` (appends), `Cell/Header/Footer.SetText(s)` (one paragraph; returns it), `Paragraph.AddRun()`, `Paragraph.Text()`. A new cell, header or footer holds one empty paragraph: fill it with `SetText`, or `AddParagraph` adds a second |
 | Paragraph formatting | `ParagraphFormat` — alignment, indents, spacing, line spacing, OnOff flags |
 | Run formatting | `RunFont` — bold, italic, size, color, underline, highlight, vert-align |
 | Tables | `Body.AddTable(rows, cols, opts)`, `Row`, `Cell`, merged cells (`SetSpan`, `SetVMerge`) |
@@ -62,7 +62,7 @@ See [`examples/report`](examples/report) for a report that uses all of them. SVG
 | Document settings | `EvenAndOddHeaders`, `DefaultTabStop` |
 | Unknown-content preservation | All unmodelled elements pass through byte-for-byte |
 
-**Not yet supported**: templating (Phase 3b), comments, tracked changes, SVG and anchored images, multi-paragraph bookmarks, resolving the full style inheritance chain.
+**Not yet supported**: comments, tracked changes, SVG and anchored images, multi-paragraph bookmarks, resolving the full style inheritance chain.
 
 ---
 

@@ -144,14 +144,11 @@ func TestBlocks_MultiRowLoopAndRowIf(t *testing.T) {
 func TestBlocks_ParagraphRangeInsideCell(t *testing.T) {
 	doc := docx.New()
 	tbl := doc.Body().AddTable(1, 1, docx.TableOptions{})
-	// Cell.AddParagraph inserts before the cell's last paragraph, so the
-	// cell's own paragraph, written last, ends the cell.
 	for row := range tbl.Rows() {
 		for cell := range row.Cells() {
-			last := collect(cell.Paragraphs())[0]
-			cell.AddParagraph().AddRun("{{#each items}}")
+			cell.SetText("{{#each items}}")
 			cell.AddParagraph().AddRun("- {{.}}")
-			last.AddRun("{{/each}}")
+			cell.AddParagraph().AddRun("{{/each}}")
 		}
 	}
 	mustExecute(t, doc, map[string]any{"items": []string{"a", "b"}})
@@ -186,10 +183,9 @@ func TestBlocks_CellKeepsAParagraph(t *testing.T) {
 		n := 0
 		for cell := range row.Cells() {
 			if n == 1 {
-				last := collect(cell.Paragraphs())[0]
-				cell.AddParagraph().AddRun("{{#if no}}")
+				cell.SetText("{{#if no}}")
 				cell.AddParagraph().AddRun("x")
-				last.AddRun("{{/if}}")
+				cell.AddParagraph().AddRun("{{/if}}")
 			}
 			n++
 		}

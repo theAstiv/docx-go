@@ -53,28 +53,26 @@ func (h *Header) Tables() iter.Seq[*Table] {
 	}
 }
 
-// AddParagraph appends a new paragraph to the header and returns its proxy.
-// If the header's last child is an empty paragraph, the new paragraph is
-// inserted before it to preserve the OOXML-required trailing paragraph.
+// AddParagraph appends a paragraph to the header and returns its proxy, like
+// Body.AddParagraph. A new header already holds one empty paragraph: fill it
+// with SetText or the first element of Paragraphs, or this adds a second.
 func (h *Header) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
-	n := len(h.ct.Children)
-	// Insert before the last paragraph if it appears to be a structural terminal.
-	if n > 0 {
-		if _, ok := h.ct.Children[n-1].(*wml.CT_P); ok {
-			h.ct.Children = append(h.ct.Children, nil)
-			copy(h.ct.Children[n:], h.ct.Children[n-1:])
-			h.ct.Children[n-1] = p
-			return &Paragraph{p: p, st: h.story()}
-		}
-	}
 	h.ct.Children = append(h.ct.Children, p)
 	return &Paragraph{p: p, st: h.story()}
 }
 
-// AddTable appends a new table to the header and returns its proxy.
-// The table is inserted before the OOXML-required trailing paragraph so
-// that w:hdr always ends with w:p.
+// SetText replaces the header's content with one paragraph holding text and
+// returns that paragraph, to add runs, images or fields to. The first
+// paragraph's formatting is kept. SetText("") gives the header's own
+// paragraph, empty, to build on.
+func (h *Header) SetText(text string) *Paragraph {
+	return setBlocksText(&h.ct.Children, text, h.story())
+}
+
+// AddTable appends a new table to the header and returns its proxy. An
+// empty paragraph follows it, because Word wants w:hdr to end with w:p; a
+// paragraph added afterwards comes after that empty one (as in python-docx).
 func (h *Header) AddTable(rows, cols int, opts TableOptions) *Table {
 	if rows < 1 {
 		rows = 1
@@ -83,15 +81,6 @@ func (h *Header) AddTable(rows, cols int, opts TableOptions) *Table {
 		cols = 1
 	}
 	tbl := buildTable(rows, cols, opts)
-	n := len(h.ct.Children)
-	if n > 0 {
-		if _, ok := h.ct.Children[n-1].(*wml.CT_P); ok {
-			h.ct.Children = append(h.ct.Children, nil)
-			copy(h.ct.Children[n:], h.ct.Children[n-1:])
-			h.ct.Children[n-1] = tbl
-			return &Table{tbl: tbl, st: h.story()}
-		}
-	}
-	h.ct.Children = append(h.ct.Children, tbl)
+	appendBlock(&h.ct.Children, tbl)
 	return &Table{tbl: tbl, st: h.story()}
 }
