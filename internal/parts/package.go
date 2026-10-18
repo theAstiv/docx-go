@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/theAstiv/docx-go/internal/opc"
+	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
 // HeaderEntry pairs a document-level relationship ID with a HeaderPart.
@@ -40,6 +41,11 @@ type Package struct {
 	// imgByHash maps the SHA-256 of each media part to its path, so identical
 	// bytes are stored once. Built lazily by AddImage.
 	imgByHash map[[sha256.Size]byte]string
+
+	// IDCache is the docx layer's cached scan of document-wide ids (drawing
+	// ids, bookmarks). nil means "not scanned"; the docx layer owns its
+	// contents and invalidation.
+	IDCache *wml.IDScan
 }
 
 // New creates an empty Package with a minimal valid OOXML structure:

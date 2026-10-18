@@ -22,6 +22,9 @@ type CT_PPr struct {
 	SectPr *CT_SectPr
 }
 
+// isEmpty reports whether the element has no children.
+func (p *CT_PPr) isEmpty() bool { return len(p.raw) == 0 && p.SectPr == nil }
+
 // MarshalXML emits <w:pPr> with raw children, inserting SectPr (xs:sequence
 // position 35) before any element at a higher position (e.g. w:pPrChange=36).
 func (p *CT_PPr) MarshalXML(e *xml.Encoder, start xml.StartElement) error {

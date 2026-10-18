@@ -24,6 +24,9 @@ func templateStories(d any) []itemplate.Story {
 	if !ok || doc == nil || doc.pkg == nil {
 		return nil
 	}
+	// Execution hands out writable trees and may add bookmarks and drawings,
+	// so the cached id scan can no longer be trusted.
+	doc.pkg.IDCache = nil
 	var out []itemplate.Story
 	if doc.pkg.DocPart != nil {
 		if body := doc.pkg.DocPart.Body(); body != nil {

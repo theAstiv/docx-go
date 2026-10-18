@@ -84,7 +84,7 @@ func (n *CT_Numbering) UnmarshalXML(d *xml.Decoder, start xml.StartElement) erro
 				}
 				n.Nums = append(n.Nums, num)
 			default:
-				r := new(raw.RawElement) //nolint:exhaustruct // zero-value decode target; UnmarshalXML populates all fields
+				r := new(raw.RawElement) //nolint:exhaustruct_v5 // zero-value decode target; UnmarshalXML populates all fields
 				if err := r.UnmarshalXML(d, t); err != nil {
 					return err
 				}
@@ -202,7 +202,7 @@ func (a *CT_AbstractNum) UnmarshalXML(d *xml.Decoder, start xml.StartElement) er
 				}
 				a.Lvls = append(a.Lvls, lvl)
 			} else {
-				r := new(raw.RawElement) //nolint:exhaustruct // zero-value decode target; UnmarshalXML populates all fields
+				r := new(raw.RawElement) //nolint:exhaustruct_v5 // zero-value decode target; UnmarshalXML populates all fields
 				if err := r.UnmarshalXML(d, t); err != nil {
 					return err
 				}
@@ -322,7 +322,7 @@ func (l *CT_Lvl) SetIndent(left, hanging int64) {
 		}
 	}
 	if ppr == nil {
-		ppr = new(raw.RawElement) //nolint:exhaustruct // populated immediately below
+		ppr = new(raw.RawElement) //nolint:exhaustruct_v5 // populated immediately below
 		ppr.QName = ns.Qn("w:pPr")
 		l.rawBody = append(l.rawBody, ppr)
 	}
@@ -335,7 +335,7 @@ func (l *CT_Lvl) SetIndent(left, hanging int64) {
 		}
 	}
 	if ind == nil {
-		ind = new(raw.RawElement) //nolint:exhaustruct // populated immediately below
+		ind = new(raw.RawElement) //nolint:exhaustruct_v5 // populated immediately below
 		ind.QName = ns.Qn("w:ind")
 		ppr.Children = append(ppr.Children, ind)
 	}

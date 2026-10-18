@@ -24,7 +24,7 @@ var OnOffTrue = OnOffValue{Set: true, True: true}
 var OnOffFalse = OnOffValue{Set: true, True: false}
 
 // OnOffUnset is the "inherit" state.
-var OnOffUnset = OnOffValue{} //nolint:exhaustruct // intentional zero-value sentinel; Set==false means unset
+var OnOffUnset = OnOffValue{} //nolint:exhaustruct_v5 // intentional zero-value sentinel; Set==false means unset
 
 // FromBool converts a *bool proxy value to OnOffValue.
 func FromBool(b *bool) OnOffValue {

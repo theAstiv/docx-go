@@ -30,6 +30,9 @@ func (r *CT_RPr) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeToken(xml.EndElement{Name: start.Name})
 }
 
+// isEmpty reports whether the element has no children.
+func (r *CT_RPr) isEmpty() bool { return len(r.raw) == 0 }
+
 // UnmarshalXML reads a w:rPr element, capturing all children as raw.
 func (r *CT_RPr) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
 	var err error

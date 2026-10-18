@@ -42,7 +42,7 @@ func (r *RawElement) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error 
 		case xml.EndElement:
 			return nil
 		case xml.StartElement:
-			child := &RawElement{} //nolint:exhaustruct // zero-value decode target; UnmarshalXML populates all fields
+			child := &RawElement{} //nolint:exhaustruct_v5 // zero-value decode target; UnmarshalXML populates all fields
 			if err := child.UnmarshalXML(d, t); err != nil {
 				return err
 			}

@@ -80,6 +80,16 @@ func (s *story) bookmarkStarts() []*wml.CT_BookmarkStart {
 	return out
 }
 
+// hasBookmarkName reports whether any bookmark in the (cached) scan has name.
+func (s *story) hasBookmarkName(name string) bool {
+	for _, ref := range s.scan().Bookmarks {
+		if ref.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // nextBookmarkID returns an id one above the largest in use, or 0 when the
 // document has no bookmarks. w:id must be unique across all stories.
 func (s *story) nextBookmarkID() int64 {
@@ -102,8 +112,11 @@ func (p *Paragraph) AddBookmark(name string) (*Bookmark, error) {
 	if err := validateBookmarkName(name); err != nil {
 		return nil, err
 	}
-	for _, b := range p.st.bookmarkStarts() {
-		if b.Name == name {
+	if p.st.hasBookmarkName(name) {
+		// The cache can be stale after content was removed; confirm on a
+		// fresh scan before refusing.
+		p.st.invalidateIDs()
+		if p.st.hasBookmarkName(name) {
 			return nil, fmt.Errorf("%w: %q", ErrDuplicateBookmark, name)
 		}
 	}
@@ -120,6 +133,7 @@ func (p *Paragraph) AddBookmark(name string) (*Bookmark, error) {
 	children = append(children, p.p.Children...)
 	children = append(children, be)
 	p.p.Children = children
+	p.st.noteBookmark(bs)
 	return &Bookmark{bs: bs}, nil
 }
 
