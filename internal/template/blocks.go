@@ -88,9 +88,10 @@ func marker(p *wml.CT_P) (tag, bool) {
 // blockLocs returns the location of each block.
 func blockLocs(blocks []wml.BlockElement, loc Location) []Location {
 	locs := make([]Location, len(blocks))
-	var np, nt, nsdt int
+	var np, nt int
+	nraw := map[string]int{}
 	for i, b := range blocks {
-		switch b.(type) {
+		switch el := b.(type) {
 		case *wml.CT_P:
 			locs[i] = loc.child("p", np)
 			np++
@@ -98,8 +99,13 @@ func blockLocs(blocks []wml.BlockElement, loc Location) []Location {
 			locs[i] = loc.child("tbl", nt)
 			nt++
 		default:
-			locs[i] = loc.child("other", nsdt)
-			nsdt++
+			// Name raw blocks by element: "sdt[0]", "customXml[1]".
+			kind := "block"
+			if rb, ok := el.(*wml.RawBlock); ok && rb.E != nil {
+				kind = rb.E.QName.Local
+			}
+			locs[i] = loc.child(kind, nraw[kind])
+			nraw[kind]++
 		}
 	}
 	return locs
@@ -148,6 +154,9 @@ func (en *engine) expandRange(blocks []wml.BlockElement, locs []Location, sc *sc
 			if en.expandTable(el, sc, locs[i]) {
 				out = append(out, el)
 			}
+		case *wml.RawBlock:
+			en.fillRaw(el.E, sc, locs[i])
+			out = append(out, el)
 		default:
 			out = append(out, el)
 		}
@@ -263,8 +272,11 @@ func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *s
 			k = j
 			continue
 		}
-		if row, ok := rows[k].(*wml.CT_Tr); ok {
+		switch row := rows[k].(type) {
+		case *wml.CT_Tr:
 			en.fillRow(row, sc, rlocs[k])
+		case *wml.RawTableRow:
+			en.fillRaw(row.E, sc, rlocs[k])
 		}
 		out = append(out, rows[k])
 	}
@@ -303,6 +315,10 @@ func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k
 func (en *engine) fillRow(row *wml.CT_Tr, sc *scope, rloc Location) {
 	nc := 0
 	for _, c := range row.Children {
+		if rc, isRaw := c.(*wml.RawTableCell); isRaw {
+			en.fillRaw(rc.E, sc, rloc)
+			continue
+		}
 		cell, ok := c.(*wml.CT_Tc)
 		if !ok {
 			continue

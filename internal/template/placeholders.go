@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/theAstiv/docx-go/internal/oxml/raw"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -30,19 +31,98 @@ func Placeholders(stories []Story) ([]Placeholder, []Issue, error) {
 		}
 		loc := Location{Part: s.Part}
 		issues = append(issues, normalizeBlocks(blocks, loc)...)
-		walkParagraphs(blocks, loc, func(p *wml.CT_P, ploc Location) {
-			for _, txt := range paragraphTexts(p.Children) {
-				if !strings.Contains(txt.Content, "{{") {
-					continue
-				}
-				tags, _ := lexTags(txt.Content)
-				for _, t := range tags {
-					out = append(out, Placeholder{Kind: kindName(t), Path: t.path, Tag: t.text, Location: ploc})
-				}
-			}
-		})
+		c := &collector{}
+		c.blocks(blocks, loc)
+		out = append(out, c.out...)
 	}
 	return out, issues, nil
+}
+
+// collector gathers the tags of typed and raw content in document order.
+type collector struct {
+	out []Placeholder
+}
+
+func (c *collector) text(s string, loc Location) {
+	if !strings.Contains(s, "{{") {
+		return
+	}
+	tags, _ := lexTags(s)
+	for _, t := range tags {
+		c.out = append(c.out, Placeholder{Kind: kindName(t), Path: t.path, Tag: t.text, Location: loc})
+	}
+}
+
+func (c *collector) raw(re *raw.RawElement, loc Location) {
+	for _, s := range rawTexts(re) {
+		c.text(s, loc)
+	}
+}
+
+func (c *collector) blocks(blocks []wml.BlockElement, loc Location) {
+	locs := blockLocs(blocks, loc)
+	for i, b := range blocks {
+		switch el := b.(type) {
+		case *wml.CT_P:
+			c.inlines(el.Children, locs[i])
+		case *wml.CT_Tbl:
+			c.table(el, locs[i])
+		case *wml.RawBlock:
+			c.raw(el.E, locs[i])
+		}
+	}
+}
+
+func (c *collector) table(t *wml.CT_Tbl, loc Location) {
+	nr := 0
+	for _, r := range t.Children {
+		switch row := r.(type) {
+		case *wml.RawTableRow:
+			c.raw(row.E, loc)
+		case *wml.CT_Tr:
+			rloc := loc.child("tr", nr)
+			nc := 0
+			for _, cl := range row.Children {
+				switch cell := cl.(type) {
+				case *wml.RawTableCell:
+					c.raw(cell.E, rloc)
+				case *wml.CT_Tc:
+					c.blocks(cell.Children, rloc.child("tc", nc))
+					nc++
+				}
+			}
+			nr++
+		}
+	}
+}
+
+func (c *collector) inlines(children []wml.InlineElement, loc Location) {
+	for _, ch := range children {
+		switch el := ch.(type) {
+		case *wml.CT_R:
+			for _, rc := range el.Children {
+				switch r := rc.(type) {
+				case *wml.CT_Text:
+					c.text(r.Content, loc)
+				case *wml.RawRunContent:
+					c.raw(r.E, loc)
+				case *wml.CT_Drawing:
+					for _, re := range r.Rest {
+						c.raw(re, loc)
+					}
+					if in := r.Inline; in != nil && in.Graphic != nil && in.Graphic.GraphicData != nil {
+						for _, re := range in.Graphic.GraphicData.Rest {
+							c.raw(re, loc)
+						}
+					}
+				}
+			}
+		case *wml.CT_Hyperlink:
+			c.inlines(el.Children, loc)
+		case *wml.RawInline:
+			c.raw(el.E, loc)
+		}
+	}
 }
 
 func kindName(t tag) string {
@@ -55,38 +135,6 @@ func kindName(t tag) string {
 		return "image"
 	}
 	return "value"
-}
-
-// walkParagraphs calls fn for every typed paragraph in blocks, including
-// those in table cells, with its location.
-func walkParagraphs(blocks []wml.BlockElement, loc Location, fn func(*wml.CT_P, Location)) {
-	var np, nt int
-	for _, b := range blocks {
-		switch el := b.(type) {
-		case *wml.CT_P:
-			fn(el, loc.child("p", np))
-			np++
-		case *wml.CT_Tbl:
-			tloc := loc.child("tbl", nt)
-			nr := 0
-			for _, r := range el.Children {
-				row, ok := r.(*wml.CT_Tr)
-				if !ok {
-					continue
-				}
-				rloc := tloc.child("tr", nr)
-				nc := 0
-				for _, c := range row.Children {
-					if cell, ok := c.(*wml.CT_Tc); ok {
-						walkParagraphs(cell.Children, rloc.child("tc", nc), fn)
-						nc++
-					}
-				}
-				nr++
-			}
-			nt++
-		}
-	}
 }
 
 // paragraphTexts returns the w:t elements of a paragraph in document order,

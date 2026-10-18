@@ -8,6 +8,13 @@ import (
 
 func init() {
 	bridge.Stories = templateStories
+	bridge.UnparsedParts = func(d any) map[string][]byte {
+		doc, ok := d.(*Document)
+		if !ok || doc == nil || doc.pkg == nil {
+			return nil
+		}
+		return doc.pkg.UnparsedStoryParts()
+	}
 }
 
 // templateStories hands docx/template the document's stories: the body,

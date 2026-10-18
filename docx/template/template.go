@@ -161,6 +161,7 @@ type Placeholder struct {
 // every problem, and doc is unchanged.
 func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, error) {
 	warnings, err := itemplate.Execute(bridge.Stories(doc), data, itemplate.Options{Mode: itemplate.Mode(opts.Mode)})
+	warnings = append(warnings, itemplate.ScanUnparsed(bridge.UnparsedParts(doc))...)
 	var ie *itemplate.Error
 	if errors.As(err, &ie) {
 		return convertIssues(warnings), &Error{Issues: convertIssues(ie.Issues)}

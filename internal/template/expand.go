@@ -51,6 +51,8 @@ func (en *engine) fillInlines(children []wml.InlineElement, sc *scope, loc Locat
 			en.fillRun(el, sc, loc)
 		case *wml.CT_Hyperlink:
 			en.fillInlines(el.Children, sc, loc)
+		case *wml.RawInline:
+			en.fillRaw(el.E, sc, loc)
 		}
 	}
 }
@@ -59,6 +61,12 @@ func (en *engine) fillRun(r *wml.CT_R, sc *scope, loc Location) {
 	var out []wml.RunContentElement
 	changed := false
 	for _, rc := range r.Children {
+		switch el := rc.(type) {
+		case *wml.RawRunContent:
+			en.fillRaw(el.E, sc, loc)
+		case *wml.CT_Drawing:
+			en.fillDrawing(el, sc, loc)
+		}
 		txt, ok := rc.(*wml.CT_Text)
 		if !ok || !strings.Contains(txt.Content, "{{") {
 			out = append(out, rc)
