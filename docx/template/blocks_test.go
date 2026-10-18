@@ -254,6 +254,20 @@ func TestBlocks_Errors(t *testing.T) {
 	}
 }
 
+// A close tag in the last cell but not at its end is reported as misplaced,
+// not only as an open tag without a close.
+func TestBlocks_StrayRowClose(t *testing.T) {
+	doc := docx.New()
+	table(doc, [][]string{{"{{#each rows}}{{.a}}", "{{/each}} trailing"}})
+	_, err := template.Execute(doc, map[string]any{"rows": []any{}}, template.Options{})
+	if !errors.Is(err, template.ErrMisplacedBlock) {
+		t.Errorf("err = %v, want ErrMisplacedBlock", err)
+	}
+	if !errors.Is(err, template.ErrUnbalancedBlock) {
+		t.Errorf("err = %v, want ErrUnbalancedBlock as well", err)
+	}
+}
+
 func TestBlocks_MissingFieldNamesItem(t *testing.T) {
 	doc := docx.New()
 	paras(doc, "{{#each threats}}", "{{.severity}}", "{{/each}}")

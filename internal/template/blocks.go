@@ -175,15 +175,86 @@ func (en *engine) reportMisplaced(blocks []wml.BlockElement, locs []Location) {
 		if _, isMarker := marker(p); isMarker {
 			continue
 		}
-		for _, txt := range paragraphTexts(p.Children) {
-			tags, _ := lexTags(txt.Content)
-			for _, t := range tags {
-				if t.kind == tagOpen || t.kind == tagClose {
+		for _, t := range paragraphBlockTags(p) {
+			en.fail(locs[i], t, ErrMisplacedBlock, misplacedDetail)
+		}
+	}
+}
+
+// reportMisplacedRows reports block tags in rows that are neither row-edge
+// tags nor in marker paragraphs.
+func (en *engine) reportMisplacedRows(rows []wml.TableRowElement, rlocs []Location) {
+	for k, r := range rows {
+		row, ok := r.(*wml.CT_Tr)
+		if !ok {
+			continue
+		}
+		// The paragraphs holding this row's edge tags, and which end to skip.
+		var openPara, closePara *wml.CT_P
+		if _, ok := en.rowOpen(row); ok {
+			openPara = edgeParagraph(row, true)
+		}
+		if _, ok := en.rowClose(row); ok {
+			closePara = edgeParagraph(row, false)
+		}
+		nc := 0
+		for _, c := range row.Children {
+			cell, ok := c.(*wml.CT_Tc)
+			if !ok {
+				continue
+			}
+			locs := blockLocs(cell.Children, rlocs[k].child("tc", nc))
+			for i, b := range cell.Children {
+				p, ok := b.(*wml.CT_P)
+				if !ok {
+					continue
+				}
+				if _, isMarker := marker(p); isMarker {
+					continue
+				}
+				tags := paragraphBlockTags(p)
+				if p == openPara && len(tags) > 0 {
+					tags = tags[1:] // the row's open tag
+				}
+				if p == closePara && len(tags) > 0 {
+					tags = tags[:len(tags)-1] // the row's close tag
+				}
+				for _, t := range tags {
 					en.fail(locs[i], t, ErrMisplacedBlock, misplacedDetail)
 				}
 			}
+			nc++
 		}
 	}
+}
+
+// edgeParagraph returns the first paragraph of a row's first cell or the last
+// paragraph of its last cell.
+func edgeParagraph(row *wml.CT_Tr, first bool) *wml.CT_P {
+	cell := edgeCell(row, first)
+	if cell == nil || len(cell.Children) == 0 {
+		return nil
+	}
+	idx := 0
+	if !first {
+		idx = len(cell.Children) - 1
+	}
+	p, _ := cell.Children[idx].(*wml.CT_P)
+	return p
+}
+
+// paragraphBlockTags returns the open and close tags of a paragraph in order.
+func paragraphBlockTags(p *wml.CT_P) []tag {
+	var out []tag
+	for _, txt := range paragraphTexts(p.Children) {
+		tags, _ := lexTags(txt.Content)
+		for _, t := range tags {
+			if t.kind == tagOpen || t.kind == tagClose {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
 }
 
 // misplacedDetail explains where block tags may go.
@@ -263,6 +334,10 @@ func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *s
 	}
 	ranges, ok := en.pair(marks, true)
 	if !ok {
+		// As for paragraph ranges: report block tags that are not at a row
+		// edge (a close tag in the last cell but not at its end, say), which
+		// is often why the rows do not pair.
+		en.reportMisplacedRows(rows, rlocs)
 		return rows
 	}
 	out := make([]wml.TableRowElement, 0, len(rows))

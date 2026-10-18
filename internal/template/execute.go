@@ -51,7 +51,9 @@ func Execute(stories []Story, data map[string]any, opts Options) ([]Issue, error
 		work[i] = blocks
 	}
 	// Drawings copied by {{#each}} need wp:docPr ids unique across every
-	// story; scan once, allocate many.
+	// story; scan once, allocate many. Known gap: footnotes and endnotes are
+	// unparsed, so a drawing there is not seen and a copy's new id could, in
+	// principle, equal its id.
 	scan := new(wml.IDScan)
 	for _, blocks := range work {
 		wml.ScanBlocks(blocks, scan)

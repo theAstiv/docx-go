@@ -235,6 +235,15 @@ func TestExecute_RelativePathOutsideLoop(t *testing.T) {
 	}
 }
 
+func TestNilDocument(t *testing.T) {
+	if _, err := template.Execute(nil, nil, template.Options{}); err == nil {
+		t.Error("Execute(nil) returned no error")
+	}
+	if _, err := template.Placeholders(nil); err == nil {
+		t.Error("Placeholders(nil) returned no error")
+	}
+}
+
 func TestPlaceholders(t *testing.T) {
 	doc := docx.New()
 	doc.Body().AddParagraph().AddRun("{{a}} and {{")

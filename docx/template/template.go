@@ -39,6 +39,10 @@ var (
 	ErrUnsupportedLocation = itemplate.ErrUnsupportedLocation
 )
 
+// errNilDocument is returned for a nil *docx.Document: without it a nil
+// document has no stories and would "succeed" with nothing filled.
+var errNilDocument = errors.New("template: nil document")
+
 // Mode decides what a value tag with a missing key does.
 type Mode int
 
@@ -160,6 +164,9 @@ type Placeholder struct {
 // On success it returns any warnings. On failure it returns an *Error listing
 // every problem, and doc is unchanged.
 func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, error) {
+	if doc == nil {
+		return nil, errNilDocument
+	}
 	warnings, err := itemplate.Execute(bridge.Stories(doc), data, itemplate.Options{Mode: itemplate.Mode(opts.Mode)})
 	warnings = append(warnings, itemplate.ScanUnparsed(bridge.UnparsedParts(doc))...)
 	var ie *itemplate.Error
@@ -177,6 +184,9 @@ func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, er
 // non-nil error is an *Error listing the malformed tags; the well-formed
 // ones are still returned.
 func Placeholders(doc *docx.Document) ([]Placeholder, error) {
+	if doc == nil {
+		return nil, errNilDocument
+	}
 	ps, issues, err := itemplate.Placeholders(bridge.Stories(doc))
 	if err != nil {
 		return nil, fmt.Errorf("template: %w", err)
