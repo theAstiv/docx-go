@@ -37,17 +37,30 @@ type Story struct {
 // issues are warnings; errors come back together in an *Error. A non-nil
 // error that is not an *Error means the element tree could not be copied.
 func Execute(stories []Story, data map[string]any, opts Options) ([]Issue, error) {
+	_, warnings, err := ExecuteAll(stories, nil, data, opts)
+	return warnings, err
+}
+
+// ExecuteAll is Execute that also fills the parts data-bound content
+// controls read from (see xmlparts.go). It returns the parts that changed;
+// the caller writes them back, and only on success, so the run stays
+// atomic.
+func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]any, opts Options) (map[string][]byte, []Issue, error) {
 	if data == nil {
 		data = map[string]any{}
 	}
-	en := &engine{opts: opts}
+	en := &engine{opts: opts, skip: skipSet{}}
 	work := make([][]wml.BlockElement, len(stories))
 	for i, s := range stories {
 		blocks, err := cloneBlocks(*s.Blocks)
 		if err != nil {
-			return nil, fmt.Errorf("template: copy %s: %w", s.Part, err)
+			return nil, nil, fmt.Errorf("template: copy %s: %w", s.Part, err)
 		}
-		en.issues = append(en.issues, normalizeBlocks(blocks, Location{Part: s.Part})...)
+		skip, issues := normalizeStory(blocks, Location{Part: s.Part})
+		for t := range skip {
+			en.skip[t] = true
+		}
+		en.issues = append(en.issues, issues...)
 		work[i] = blocks
 	}
 	// Drawings copied by {{#each}} need wp:docPr ids unique across every
@@ -64,18 +77,19 @@ func Execute(stories []Story, data map[string]any, opts Options) ([]Issue, error
 	for i, s := range stories {
 		work[i] = en.expandBlocks(work[i], root, Location{Part: s.Part})
 	}
+	filled := en.fillXMLParts(boundParts, root)
 	if en.err != nil {
-		return nil, fmt.Errorf("template: %w", en.err)
+		return nil, nil, fmt.Errorf("template: %w", en.err)
 	}
 
 	warnings, errs := split(en.issues)
 	if len(errs) > 0 {
-		return warnings, &Error{Issues: errs}
+		return nil, warnings, &Error{Issues: errs}
 	}
 	for i, s := range stories {
 		*s.Blocks = work[i]
 	}
-	return warnings, nil
+	return filled, warnings, nil
 }
 
 func cloneBlocks(blocks []wml.BlockElement) ([]wml.BlockElement, error) {

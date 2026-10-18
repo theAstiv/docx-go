@@ -16,6 +16,11 @@ type engine struct {
 	// err is an internal failure (an element that could not be copied);
 	// it aborts Execute.
 	err error
+	// skip holds text that is not template text (tables of contents).
+	skip skipSet
+	// inRaw is set while filling raw content (content controls, text
+	// boxes), where block tags are not supported.
+	inRaw bool
 }
 
 // missing reports a value tag whose key is absent: an error in Strict mode,
@@ -68,7 +73,7 @@ func (en *engine) fillRun(r *wml.CT_R, sc *scope, loc Location) {
 			en.fillDrawing(el, sc, loc)
 		}
 		txt, ok := rc.(*wml.CT_Text)
-		if !ok || !strings.Contains(txt.Content, "{{") {
+		if !ok || en.skip[txt] || !strings.Contains(txt.Content, "{{") {
 			out = append(out, rc)
 			continue
 		}
@@ -102,7 +107,11 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 			en.fail(loc, t, ErrUnsupportedLocation, "image placeholders are not supported yet")
 			w.text(t.text)
 		case tagOpen, tagClose:
-			en.fail(loc, t, ErrMisplacedBlock, misplacedDetail)
+			if en.inRaw {
+				en.fail(loc, t, ErrUnsupportedLocation, "block tags are not supported "+rawLocation)
+			} else {
+				en.fail(loc, t, ErrMisplacedBlock, misplacedDetail)
+			}
 			w.text(t.text)
 		}
 	}

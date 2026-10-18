@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/raw"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
@@ -22,6 +23,21 @@ type Placeholder struct {
 // Placeholders lists every well-formed tag in the stories, in document
 // order, and reports malformed ones as issues. The stories are not modified.
 func Placeholders(stories []Story) ([]Placeholder, []Issue, error) {
+	return PlaceholdersAll(stories, nil)
+}
+
+// PlaceholdersAll is Placeholders that also lists the tags in the parts
+// data-bound content controls read from, after the stories' tags.
+func PlaceholdersAll(stories []Story, boundParts map[string][]byte) ([]Placeholder, []Issue, error) {
+	out, issues, err := storyPlaceholders(stories)
+	if err != nil {
+		return nil, nil, err
+	}
+	ps, is := xmlPartPlaceholders(boundParts)
+	return append(out, ps...), append(issues, is...), nil
+}
+
+func storyPlaceholders(stories []Story) ([]Placeholder, []Issue, error) {
 	var out []Placeholder
 	var issues []Issue
 	for _, s := range stories {
@@ -30,17 +46,26 @@ func Placeholders(stories []Story) ([]Placeholder, []Issue, error) {
 			return nil, nil, fmt.Errorf("template: copy %s: %w", s.Part, err)
 		}
 		loc := Location{Part: s.Part}
-		issues = append(issues, normalizeBlocks(blocks, loc)...)
-		c := &collector{}
+		skip, normIssues := normalizeStory(blocks, loc)
+		issues = append(issues, normIssues...)
+		c := &collector{out: nil, issues: nil, skip: skip, err: nil}
 		c.blocks(blocks, loc)
+		if c.err != nil {
+			return nil, nil, c.err
+		}
 		out = append(out, c.out...)
+		issues = append(issues, c.issues...)
 	}
 	return out, issues, nil
 }
 
 // collector gathers the tags of typed and raw content in document order.
 type collector struct {
-	out []Placeholder
+	out    []Placeholder
+	issues []Issue
+	// skip holds text that is not template text (tables of contents).
+	skip skipSet
+	err  error
 }
 
 func (c *collector) text(s string, loc Location) {
@@ -53,9 +78,32 @@ func (c *collector) text(s string, loc Location) {
 	}
 }
 
+// raw collects the tags of raw content. Its paragraphs are typed and
+// normalized as Execute does, so a split tag there is found, or reported.
 func (c *collector) raw(re *raw.RawElement, loc Location) {
-	for _, s := range rawTexts(re) {
-		c.text(s, loc)
+	if re == nil || c.err != nil {
+		return
+	}
+	if re.QName == ns.Qn("w:t") {
+		c.text(rawText(re), loc)
+		return
+	}
+	err := walkRawParagraphs(re, loc, false, func(paras []*wml.CT_P, ploc Location) {
+		for t := range tocSkipsParagraphs(paras) {
+			c.skip[t] = true
+		}
+		for i, p := range paras {
+			ploc := ploc.child("p", i)
+			var bad []badTag
+			p.Children, bad = normalizeInlines(p.Children, c.skip)
+			for _, b := range bad {
+				c.issues = append(c.issues, issueErr(ploc, b.text, b.err, b.detail))
+			}
+			c.inlines(p.Children, ploc)
+		}
+	}, func(t *raw.RawElement) { c.text(rawText(t), loc) })
+	if err != nil {
+		c.err = err
 	}
 }
 
@@ -103,7 +151,9 @@ func (c *collector) inlines(children []wml.InlineElement, loc Location) {
 			for _, rc := range el.Children {
 				switch r := rc.(type) {
 				case *wml.CT_Text:
-					c.text(r.Content, loc)
+					if !c.skip[r] {
+						c.text(r.Content, loc)
+					}
 				case *wml.RawRunContent:
 					c.raw(r.E, loc)
 				case *wml.CT_Drawing:

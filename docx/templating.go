@@ -15,6 +15,18 @@ func init() {
 		}
 		return doc.pkg.UnparsedStoryParts()
 	}
+	bridge.BoundParts = func(d any) map[string][]byte {
+		doc, ok := d.(*Document)
+		if !ok || doc == nil || doc.pkg == nil {
+			return nil
+		}
+		return doc.pkg.BoundDataParts()
+	}
+	bridge.SetPart = func(d any, path string, data []byte) {
+		if doc, ok := d.(*Document); ok && doc != nil && doc.pkg != nil {
+			doc.pkg.SetPartData(path, data)
+		}
+	}
 }
 
 // templateStories hands docx/template the document's stories: the body,

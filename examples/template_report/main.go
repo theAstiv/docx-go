@@ -56,7 +56,7 @@ func main() {
 
 	doc, warnings, err := fill(tpl, data)
 	for _, w := range warnings {
-		log.Printf("warning: %s", w)
+		log.Print(w) // Issue.String starts with its severity
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -85,6 +85,10 @@ func fill(tpl, data []byte) (*docx.Document, []template.Issue, error) {
 	if err := json.Unmarshal(data, &values); err != nil {
 		return nil, nil, fmt.Errorf("read data: %w", err)
 	}
+	// Word then refreshes page numbers and any table of contents from the
+	// filled text when the report opens. A TOC repeats heading tags, which
+	// Execute leaves for Word to rebuild.
+	doc.SetUpdateFieldsOnOpen(true)
 	// Strict mode: a key missing from the data is an error, listed with
 	// every other one, and the template is left as it was.
 	warnings, err := template.Execute(doc, values, template.Options{Mode: template.Strict})

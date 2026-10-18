@@ -39,6 +39,11 @@ var (
 	ErrUnsupportedLocation = itemplate.ErrUnsupportedLocation
 )
 
+// errTOCNeedsUpdate explains the warning for a table of contents that still
+// shows template tags.
+var errTOCNeedsUpdate = errors.New("the table of contents shows the headings' tags until Word updates fields; " +
+	"call doc.SetUpdateFieldsOnOpen(true) so Word rebuilds it when the document opens")
+
 // errNilDocument is returned for a nil *docx.Document: without it a nil
 // document has no stories and would "succeed" with nothing filled.
 var errNilDocument = errors.New("template: nil document")
@@ -167,7 +172,8 @@ func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, er
 	if doc == nil {
 		return nil, errNilDocument
 	}
-	warnings, err := itemplate.Execute(bridge.Stories(doc), data, itemplate.Options{Mode: itemplate.Mode(opts.Mode)})
+	filled, warnings, err := itemplate.ExecuteAll(bridge.Stories(doc), bridge.BoundParts(doc), data,
+		itemplate.Options{Mode: itemplate.Mode(opts.Mode)})
 	warnings = append(warnings, itemplate.ScanUnparsed(bridge.UnparsedParts(doc))...)
 	var ie *itemplate.Error
 	if errors.As(err, &ie) {
@@ -176,7 +182,25 @@ func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, er
 	if err != nil {
 		return nil, fmt.Errorf("template: %w", err)
 	}
-	return convertIssues(warnings), nil
+	// Document properties and custom XML that data-bound content controls
+	// read from: written only now, so a failed run changes nothing.
+	for path, data := range filled {
+		bridge.SetPart(doc, path, data)
+	}
+	out := convertIssues(warnings)
+	// A table of contents repeats heading text, tags included; Execute
+	// leaves it to Word to rebuild, which happens only when fields update.
+	if !doc.UpdateFieldsOnOpen() {
+		for _, part := range itemplate.TOCTagParts(bridge.Stories(doc)) {
+			out = append(out, Issue{
+				Severity: SeverityWarning,
+				Location: Location{Part: part, Path: ""},
+				Tag:      "",
+				Err:      errTOCNeedsUpdate,
+			})
+		}
+	}
+	return out, nil
 }
 
 // Placeholders lists every tag in doc in document order, without filling
@@ -187,7 +211,7 @@ func Placeholders(doc *docx.Document) ([]Placeholder, error) {
 	if doc == nil {
 		return nil, errNilDocument
 	}
-	ps, issues, err := itemplate.Placeholders(bridge.Stories(doc))
+	ps, issues, err := itemplate.PlaceholdersAll(bridge.Stories(doc), bridge.BoundParts(doc))
 	if err != nil {
 		return nil, fmt.Errorf("template: %w", err)
 	}
