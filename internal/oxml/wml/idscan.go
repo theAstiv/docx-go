@@ -25,6 +25,23 @@ type IDScan struct {
 	Bookmarks []BookmarkRef
 }
 
+// DocPrAllocator returns a function that hands out wp:docPr ids, one per
+// call, all above every id in s. Scan once, then allocate many: rescanning
+// every story per new drawing is quadratic in a loop that adds hundreds.
+func (s *IDScan) DocPrAllocator() func() int64 {
+	next := int64(1)
+	for _, id := range s.DocPr {
+		if id >= next {
+			next = id + 1
+		}
+	}
+	return func() int64 {
+		id := next
+		next++
+		return id
+	}
+}
+
 // ScanBlocks adds the ids found in blocks to s. It reaches everything, not
 // just plain paragraphs: tables and their cells, hyperlinks, and all raw
 // content (w:sdt, w:ins, w:del, w:smartTag, w:customXml, mc:AlternateContent),

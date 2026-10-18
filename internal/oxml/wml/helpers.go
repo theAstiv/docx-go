@@ -22,6 +22,21 @@ func wAttr(attrs []xml.Attr, localName string) string {
 	return ""
 }
 
+// elementAttrs returns the attributes of start minus namespace declarations.
+// The encoder re-emits declarations itself; keeping them would double-declare
+// (or emit xmlns:_xmlns junk) on the next marshal. Returns nil when no
+// attributes remain, so an attribute-free element compares equal to a fresh one.
+func elementAttrs(start xml.StartElement) []xml.Attr {
+	var attrs []xml.Attr
+	for _, a := range start.Attr {
+		if a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns") {
+			continue
+		}
+		attrs = append(attrs, a)
+	}
+	return attrs
+}
+
 // setAttrInSlice sets or appends an attribute in a slice.
 func setAttrInSlice(attrs *[]xml.Attr, name xml.Name, value string) {
 	for i, a := range *attrs {

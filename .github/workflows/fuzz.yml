@@ -17,22 +17,35 @@ jobs:
 
       - name: Fuzz registered oxml types
         run: |
-          # Fuzz each function for 5 minutes.
-          # Crash inputs are saved to testdata/fuzz/ automatically by go test.
-          for pkg in ./internal/oxml/raw ./internal/oxml/common; do
-            go test -fuzz=Fuzz -fuzztime=5m "$pkg" || true
-          done
-          # wml has multiple fuzz functions — run each named explicitly.
-          go test -fuzz=FuzzCT_P -fuzztime=5m ./internal/oxml/wml || true
-          go test -fuzz=FuzzCT_R -fuzztime=5m ./internal/oxml/wml || true
+          # Fuzz each function for 5 minutes. Every target runs even after a
+          # failure; the step fails at the end if any target found a crash.
+          # Crash inputs are saved to <package>/testdata/fuzz/ by go test.
+          failed=0
+          fuzz() { go test -run='^$' -fuzz="^$1\$" -fuzztime=5m "$2" || failed=1; }
+          # Name each fuzz function explicitly: -fuzz must match exactly one.
+          fuzz FuzzCT_P ./internal/oxml/wml
+          fuzz FuzzCT_R ./internal/oxml/wml
           # dml: inline pictures (Phase 3a).
-          go test -fuzz=FuzzCT_Inline -fuzztime=5m ./internal/oxml/dml || true
-          go test -fuzz=FuzzCT_Picture -fuzztime=5m ./internal/oxml/dml || true
+          fuzz FuzzCT_Inline ./internal/oxml/dml
+          fuzz FuzzCT_Picture ./internal/oxml/dml
+          # template: placeholder normalizer and the whole engine (Phase 3b).
+          fuzz FuzzTemplateScan ./internal/template
+          fuzz FuzzTemplateExecute ./internal/template
+          exit "$failed"
+
+      # Committed seeds are tracked; a crash input go test writes is not.
+      - name: Collect new crash inputs
+        if: always()
+        run: |
+          git ls-files --others --exclude-standard -- '*/testdata/fuzz/*' | while read -r f; do
+            mkdir -p "fuzz-crashers/$(dirname "$f")"
+            cp "$f" "fuzz-crashers/$f"
+          done
 
       - name: Upload crash inputs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: fuzz-corpus
-          path: testdata/fuzz/
+          name: fuzz-crashers
+          path: fuzz-crashers/
           if-no-files-found: ignore

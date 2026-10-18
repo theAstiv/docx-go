@@ -46,12 +46,16 @@ linters:
     depguard:
       # Three-layer architecture — see CLAUDE.md for the rationale.
       # Failure messages include a link so contributors understand WHY.
+      #
+      # File globs use "**/pkg/**.go", not "**/pkg/**/*.go": the latter needs at
+      # least one directory below pkg/, so files directly in docx/ or
+      # internal/opc/ never matched and those rules silently never fired.
       rules:
         oxml-layer:
           # internal/oxml/** must NOT import parts, opc, or docx.
           list-mode: lax
           files:
-            - "**/internal/oxml/**/*.go"
+            - "**/internal/oxml/**.go"
           deny:
             - pkg: "github.com/theAstiv/docx-go/internal/parts"
               desc: "oxml layer must not import parts — see CLAUDE.md three-layer architecture"
@@ -64,7 +68,7 @@ linters:
           # internal/opc/** must use stdlib only.
           list-mode: lax
           files:
-            - "**/internal/opc/**/*.go"
+            - "**/internal/opc/**.go"
           deny:
             - pkg: "github.com/theAstiv/docx-go/internal/oxml"
               desc: "opc layer must not import oxml — see CLAUDE.md three-layer architecture"
@@ -74,13 +78,13 @@ linters:
               desc: "opc layer must not import docx — see CLAUDE.md three-layer architecture"
 
         docx-layer:
-          # docx/ must not reach into oxml internals or opc directly.
+          # docx/ may use parts and internal/oxml/wml (type construction only;
+          # see the CLAUDE.md decision log, 2026-04-26), but no other oxml
+          # internals and not opc directly.
           list-mode: lax
           files:
-            - "**/docx/**/*.go"
+            - "**/docx/**.go"
           deny:
-            - pkg: "github.com/theAstiv/docx-go/internal/oxml/wml"
-              desc: "docx layer must not import wml directly — use parts; see CLAUDE.md"
             - pkg: "github.com/theAstiv/docx-go/internal/oxml/dml"
               desc: "docx layer must not import dml directly — use parts; see CLAUDE.md"
             - pkg: "github.com/theAstiv/docx-go/internal/oxml/registry"
@@ -95,6 +99,20 @@ linters:
               desc: "docx layer must not import opc directly — use parts; see CLAUDE.md"
             - pkg: "encoding/xml"
               desc: "docx layer must not import encoding/xml — enforced by forbidigo too"
+
+        template-engine:
+          # internal/template works on wml trees only; the package graph and the
+          # public proxies reach it through docx/internal/bridge.
+          list-mode: lax
+          files:
+            - "**/internal/template/**.go"
+          deny:
+            - pkg: "github.com/theAstiv/docx-go/internal/parts"
+              desc: "template engine must not import parts — see docs/architecture.md (templating)"
+            - pkg: "github.com/theAstiv/docx-go/internal/opc"
+              desc: "template engine must not import opc — see docs/architecture.md (templating)"
+            - pkg: "github.com/theAstiv/docx-go/docx"
+              desc: "template engine must not import docx — see docs/architecture.md (templating)"
 
     wrapcheck:
       ignore-package-globs:

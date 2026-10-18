@@ -112,14 +112,57 @@ CI enforces this with `go test -tags=roundtripaudit`.
 
 `depguard` in `.golangci.yml` machine-enforces:
 
-- `internal/opc/**` imports stdlib only
-- `internal/oxml/**` imports stdlib + `internal/oxml/**` only
-- `internal/parts/**` imports stdlib + `internal/oxml/**` + `internal/opc/**`
-- `docx/**` imports stdlib + `internal/parts/**` + `internal/oxml/common` + `internal/oxml/ns`
+- `internal/opc/**` must not import `internal/oxml`, `internal/parts` or `docx`
+- `internal/oxml/**` must not import `internal/parts`, `internal/opc` or `docx`
+- `docx/**` may import `internal/parts` and `internal/oxml/wml` (element
+  construction only); it must not import any other `internal/oxml`
+  sub-package, `internal/opc` or `encoding/xml`
+- `internal/template/**` must not import `internal/parts`, `internal/opc` or
+  `docx` (see [Templating](#templating))
 
 `forbidigo` additionally bans `encoding/xml` from `docx/**`.
 
-Without these guards the architecture is social, not mechanical.
+Without these guards the architecture is social, not mechanical.  Each rule
+is checked by planting a violation: a glob that matches no files fails
+silently (the `docx/` rule once never fired because `**/docx/**/*.go` needs a
+directory below `docx/`).
+
+---
+
+## Templating
+
+```
+docx/template/          public API: Execute, Options, Issue, Error
+   │
+   ├── docx/internal/bridge/   function variables set by docx in init():
+   │                           the document's stories, the unparsed note parts
+   └── internal/template/      engine over []wml.BlockElement
+```
+
+The engine works on WordprocessingML block trees only, so it cannot reach the
+package graph.  `docx/template` gets the document's stories (body, headers,
+footers) through `docx/internal/bridge`, which `docx` fills in at init time.
+Being internal to `docx/`, the bridge adds nothing to the public API.
+
+`Execute` runs in four steps per story: copy the blocks (`wml.Clone`),
+normalise split tags, expand blocks and fill values, then swap the copies in.
+Any error-severity issue skips the swap, so a failed call leaves the
+document unchanged.
+
+### Design decisions
+
+| Decision | Why |
+|---|---|
+| Syntax `{{path}}`, `{{#each}}`, `{{#if}}`, `{{#unless}}`; `{{.field}}` and `{{.}}` inside loops; paths without a leading `.` always start at the root data | Familiar to template authors; one unambiguous lookup rule |
+| Data is `map[string]any`, JSON-shaped; no struct reflection | Matches `json.Unmarshal` output |
+| Values are plain text: written through the encoder (escaped), `\n` → `w:br`, `\t` → `w:tab`, numbers as written (`strconv.FormatFloat(v, 'f', -1, 64)`) | No markup injection; JSON numbers are `float64` and must not print as `3e+00` |
+| Block tags sit alone in a paragraph, or at row edges: open at the start of a row's first cell, close at the end of the last cell of the same or a later row | Keeps the template row readable in Word with no throwaway marker rows. Anything else is `ErrMisplacedBlock` |
+| A tag split across runs collapses into the run holding `{{` (its formatting wins). `w:proofErr` and `w:lastRenderedPageBreak` inside a tag are dropped and `_GoBack` is moved before it; any other boundary (field, bookmark, hyperlink edge, content control, tracked change) is `ErrSplitAcrossBoundary` | These are the splits Word actually produces. Merging only moves text between `w:t` nodes, so paragraph text never changes |
+| `Strict` (default) collects every missing key into one `*template.Error`; `Lenient` writes `""` and warns. Structural template errors fail in both modes. A missing `#if` key is false; a missing `#each` list is a missing key | A broken template is a template bug; an absent optional section is normal data, but a mistyped list name must not silently print nothing |
+| Copies made by `{{#each}}` drop `w14:paraId`/`w14:textId` and bookmarks (the first copy keeps them), get fresh `wp:docPr` ids, and lose comment anchors (with a warning). The fix-ups run as a token filter inside `wml.CloneWith`, so they reach raw content too | Duplicate bookmark and drawing ids are known causes of Word's "unreadable content" warning; duplicate paraIds are invalid |
+| In content Word stores raw (content controls, text boxes, tracked changes), value tags wholly inside one `w:t` are filled; split tags and multi-line values there are reported; block tags there fail. Footnotes, endnotes and comments are unparsed: `Execute` warns if they contain `{{` | Branded cover pages usually live in a content control or text box; full support needs typed SDTs |
+| A cell keeps a closing paragraph only if it had one before expansion; an emptied table is removed (warning) | `w:tc` needs a block and Word wants it to end with a paragraph, but a cell that already ended with a nested table must stay as it was |
+| `CT_P` and `CT_R` keep their attributes (`w:rsid*`, `w14:paraId`) | Word templates carry them on nearly every element; dropping them broke "unknown content round-trips untouched" |
 
 ---
 

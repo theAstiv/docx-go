@@ -1,0 +1,59 @@
+{
+  "_comment": "Sample data for the template_report example. Fictional client; not legal advice.",
+  "client": {
+    "name": "Example Health Pvt. Ltd.",
+    "city": "Pune"
+  },
+  "assessment": {
+    "date": "17 October 2026",
+    "assessor": "A. Assessor"
+  },
+  "summary": {
+    "score": 58,
+    "max": 100,
+    "text": "Consent capture and breach response need work before the next audit.\nRetention and grievance handling are largely in place."
+  },
+  "areas": [
+    { "name": "Notice and consent", "status": "Partial", "score": 12 },
+    { "name": "Purpose and retention", "status": "In place", "score": 18 },
+    { "name": "Data principal rights", "status": "Partial", "score": 14 },
+    { "name": "Breach notification", "status": "Missing", "score": 4 },
+    { "name": "Grievance redressal", "status": "In place", "score": 10 }
+  ],
+  "gaps": [
+    {
+      "id": "G-01",
+      "title": "Consent is bundled with the terms of service",
+      "provision": "Section 6 (consent)",
+      "finding": "The sign-up form asks for one acceptance covering the terms of service and all processing purposes.",
+      "critical": true,
+      "actions": [
+        "Separate consent from the terms of service.",
+        "Ask for consent per purpose, with a plain-language notice.",
+        "Record consent with a timestamp and the notice version shown."
+      ]
+    },
+    {
+      "id": "G-02",
+      "title": "No documented breach response procedure",
+      "provision": "Section 8(6) (personal data breach)",
+      "finding": "There is no procedure for notifying the Board and affected data principals of a breach.",
+      "critical": true,
+      "actions": [
+        "Write a breach response runbook with named owners.",
+        "Rehearse it once a quarter."
+      ]
+    },
+    {
+      "id": "G-03",
+      "title": "Erasure requests are handled by email only",
+      "provision": "Section 12 (correction and erasure)",
+      "finding": "Requests arrive in a shared inbox and are not tracked to completion.",
+      "critical": false,
+      "actions": [
+        "Track requests in a ticketing queue with a response deadline."
+      ]
+    }
+  ],
+  "next_steps": "Address G-01 and G-02 first.\tA follow-up review is planned for January 2027."
+}
