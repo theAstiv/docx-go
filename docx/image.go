@@ -90,12 +90,14 @@ func (r *Run) AddImage(rd io.Reader, opts ImageOptions) (*Image, error) {
 		return nil, fmt.Errorf("docx: add image: %w", err)
 	}
 
+	docPrID := r.st.nextDocPrID()
+	r.st.noteDocPr(docPrID)
 	d := wml.NewInlinePicture(wml.InlinePictureSpec{
 		RID:      relID,
 		FileName: fileName,
 		CX:       cx,
 		CY:       cy,
-		DocPrID:  r.st.nextDocPrID(),
+		DocPrID:  docPrID,
 		AltText:  opts.AltText,
 		Title:    opts.Title,
 	})

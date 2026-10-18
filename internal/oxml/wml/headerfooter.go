@@ -128,7 +128,7 @@ func unmarshalBlockElement(d *xml.Decoder, t xml.StartElement) (BlockElement, er
 		}
 		return tbl, nil
 	default:
-		r := new(raw.RawElement) //nolint:exhaustruct // zero-value decode target; UnmarshalXML populates all fields
+		r := new(raw.RawElement) //nolint:exhaustruct_v5 // zero-value decode target; UnmarshalXML populates all fields
 		if err := r.UnmarshalXML(d, t); err != nil {
 			return nil, err
 		}
@@ -270,7 +270,7 @@ func hdrFtrRefs(children []*raw.RawElement, qname xml.Name) []CT_HdrFtrRef {
 		if r.QName != qname {
 			continue
 		}
-		ref := CT_HdrFtrRef{ //nolint:exhaustruct // Type and RelID populated below; missing fields are zero
+		ref := CT_HdrFtrRef{ //nolint:exhaustruct_v5 // Type and RelID populated below; missing fields are zero
 			Type:  HdrFtrDefault,
 			RelID: "",
 		}
@@ -289,7 +289,7 @@ func hdrFtrRefs(children []*raw.RawElement, qname xml.Name) []CT_HdrFtrRef {
 
 // buildHdrFtrRef creates a raw element for a header or footer reference.
 func buildHdrFtrRef(qname xml.Name, typ HdrFtrType, relID string) *raw.RawElement {
-	el := new(raw.RawElement) //nolint:exhaustruct // populated immediately below
+	el := new(raw.RawElement) //nolint:exhaustruct_v5 // populated immediately below
 	el.QName = qname
 	el.Attrs = []xml.Attr{
 		{Name: ns.Qn("w:type"), Value: string(typ)},

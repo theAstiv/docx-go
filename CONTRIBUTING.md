@@ -25,7 +25,7 @@ Key rules enforced in CI:
 |---|---|
 | `forbidigo` | `encoding/xml` imports in `docx/` |
 | `depguard` | Layer leaks (oxml importing parts, docx importing oxml internals) |
-| `exhaustruct` | Forgetting a field when a CT struct grows |
+| `exhaustruct_v5` | Forgetting a field when a CT struct grows |
 | `errcheck` | Silently swallowed `MarshalXML` errors |
 
 ## PR checklist

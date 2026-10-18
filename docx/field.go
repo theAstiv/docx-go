@@ -60,83 +60,112 @@ func (p *Paragraph) AddPageNumber() *Field { return p.AddField("PAGE", "1") }
 // Word when the document is laid out.
 func (p *Paragraph) AddPageCount() *Field { return p.AddField("NUMPAGES", "1") }
 
-// Fields iterates over the outermost complex fields of the paragraph, in
-// order. Runs inside hyperlinks are included.
+// Fields iterates over the outermost complex fields that begin in the
+// paragraph, in order. Runs inside hyperlinks are included.
 //
-// Limits: only fields whose begin and end markers are both in this paragraph
-// are reported, and simple fields (w:fldSimple) are not. A field that spans
-// paragraphs is not found; the common case is a table of contents written by
-// Word, which begins in one paragraph and ends many paragraphs later. Fields
-// created by AddField, AddPageNumber, AddPageCount and Document.AddTOC always
-// sit in a single paragraph and are found.
+// A field whose end marker lies in a later paragraph, such as a table of
+// contents written by Word, is reported by the paragraph where it begins: the
+// scan continues through the following sibling paragraphs of the same
+// container, and CachedResult joins their text with newlines. The paragraphs
+// the field passes through report only the fields that begin and end within
+// them (the PAGEREF fields of TOC entries, for example). A field that is never
+// closed, or that runs into a table before closing, is not reported. Simple
+// fields (w:fldSimple) are not supported.
 func (p *Paragraph) Fields() iter.Seq[*Field] {
 	return func(yield func(*Field) bool) {
-		var (
-			depth   int
-			inInstr bool
-			cur     *Field
-		)
-		var instr, result strings.Builder
-		visit := func(r *wml.CT_R) bool {
-			for _, c := range r.Children {
-				switch el := c.(type) {
-				case *wml.CT_FldChar:
-					switch el.FldCharType {
-					case wml.FldCharBegin:
-						depth++
-						if depth == 1 {
-							cur = new(Field)
-							inInstr = true
-							instr.Reset()
-							result.Reset()
-						}
-					case wml.FldCharSeparate:
-						if depth == 1 {
-							inInstr = false
-						}
-					case wml.FldCharEnd:
-						if depth == 1 && cur != nil {
-							cur.instr = instr.String()
-							cur.result = result.String()
-							f := cur
-							cur = nil
-							depth = 0
-							if !yield(f) {
-								return false
-							}
-							continue
-						}
-						if depth > 0 {
-							depth--
-						}
-					}
-				case *wml.CT_InstrText:
-					if depth == 1 && inInstr {
-						instr.WriteString(el.Content)
-					}
-				case *wml.CT_Text:
-					if depth >= 1 && !inInstr {
-						result.WriteString(el.Content)
-					}
-				}
-			}
-			return true
+		var sc fieldScanner
+		if !sc.paragraph(p.p, yield) || sc.cur == nil {
+			return
 		}
-		for _, child := range p.p.Children {
-			switch el := child.(type) {
-			case *wml.CT_R:
-				if !visit(el) {
-					return
-				}
-			case *wml.CT_Hyperlink:
-				for _, hc := range el.Children {
-					if r, ok := hc.(*wml.CT_R); ok && !visit(r) {
-						return
-					}
+		// A field is still open: it continues into the following paragraphs.
+		for _, b := range p.st.blocksAfter(p.p) {
+			next, ok := b.(*wml.CT_P)
+			if !ok {
+				return
+			}
+			if !sc.inInstr {
+				sc.result.WriteByte('\n')
+			}
+			if !sc.paragraph(next, yield) || sc.cur == nil {
+				return
+			}
+		}
+	}
+}
+
+// fieldScanner tracks complex-field state across runs and paragraphs.
+type fieldScanner struct {
+	depth   int
+	inInstr bool
+	cur     *Field
+	instr   strings.Builder
+	result  strings.Builder
+}
+
+// paragraph feeds the paragraph's runs to the scanner. It returns false when
+// yield asked to stop.
+func (sc *fieldScanner) paragraph(p *wml.CT_P, yield func(*Field) bool) bool {
+	for _, child := range p.Children {
+		switch el := child.(type) {
+		case *wml.CT_R:
+			if !sc.run(el, yield) {
+				return false
+			}
+		case *wml.CT_Hyperlink:
+			for _, hc := range el.Children {
+				if r, ok := hc.(*wml.CT_R); ok && !sc.run(r, yield) {
+					return false
 				}
 			}
 		}
 	}
+	return true
+}
+
+func (sc *fieldScanner) run(r *wml.CT_R, yield func(*Field) bool) bool {
+	for _, c := range r.Children {
+		switch el := c.(type) {
+		case *wml.CT_FldChar:
+			switch el.FldCharType {
+			case wml.FldCharBegin:
+				sc.depth++
+				if sc.depth == 1 {
+					sc.cur = new(Field)
+					sc.inInstr = true
+					sc.instr.Reset()
+					sc.result.Reset()
+				}
+			case wml.FldCharSeparate:
+				if sc.depth == 1 {
+					sc.inInstr = false
+				}
+			case wml.FldCharEnd:
+				if sc.depth == 1 && sc.cur != nil {
+					sc.cur.instr = sc.instr.String()
+					sc.cur.result = sc.result.String()
+					f := sc.cur
+					sc.cur = nil
+					sc.depth = 0
+					if !yield(f) {
+						return false
+					}
+					continue
+				}
+				if sc.depth > 0 {
+					sc.depth--
+				}
+			}
+		case *wml.CT_InstrText:
+			if sc.depth == 1 && sc.inInstr {
+				sc.instr.WriteString(el.Content)
+			}
+		case *wml.CT_Text:
+			if sc.depth >= 1 && !sc.inInstr {
+				sc.result.WriteString(el.Content)
+			}
+		}
+	}
+	return true
 }
 
 // TOCOptions configures Document.AddTOC. The zero value is valid.

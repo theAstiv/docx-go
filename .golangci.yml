@@ -15,7 +15,7 @@ linters:
     - errcheck        # no silently ignored errors
     - wrapcheck       # errors from external packages must be wrapped
     - nilnil          # catches (nil, nil) return anti-patterns
-    - exhaustruct     # enforced on internal/oxml/ — flags missing fields
+    - exhaustruct_v5  # enforced on internal/oxml/ — flags missing fields
     - godot           # comment punctuation on exported doc comments
     - forbidigo       # encoding/xml banned in docx/
     - depguard        # three-layer import boundaries
@@ -38,9 +38,13 @@ linters:
       # Only check doc comments for exported declarations, not every inline comment.
       scope: declarations
 
-    exhaustruct:
+    exhaustruct_v5:
       # Enforce on internal/oxml/ types only; option structs in docx/ are exempt.
-      include:
+      # v5 checks every struct literal unless explicit mode is on (v1's include
+      # list implied it). Patterns must match the full type name, package path
+      # included.
+      explicit-mode: true
+      enforce-patterns:
         - "github\\.com/theAstiv/docx-go/internal/oxml/.*"
 
     depguard:
@@ -132,7 +136,7 @@ linters:
         linters: [forbidigo]
       # exhaustruct is noisy in test files.
       - path: "_test\\.go"
-        linters: [exhaustruct]
+        linters: [exhaustruct_v5]
       # wrapcheck is too strict for cmd/ entry points.
       - path: "^cmd/"
         linters: [wrapcheck]

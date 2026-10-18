@@ -21,6 +21,14 @@ type CT_DocDefaults struct {
 	// PPr is the content of w:pPrDefault; nil when the wrapper is absent.
 	PPr    *CT_PPr
 	extras []*raw.RawElement
+
+	// bare records that the wrapper was read without its inner element
+	// (<w:rPrDefault/>). RPr/PPr are then non-nil but empty, and are written
+	// back as a bare wrapper until a property is set on them.
+	rprBare, pprBare bool
+	// rprExtras and pprExtras hold unknown children of the wrapper itself,
+	// written back inside it rather than promoted to docDefaults.
+	rprExtras, pprExtras []*raw.RawElement
 }
 
 // MarshalXML emits <w:docDefaults>.
@@ -30,12 +38,12 @@ func (dd *CT_DocDefaults) MarshalXML(e *xml.Encoder, start xml.StartElement) err
 		return fmt.Errorf("wml: CT_DocDefaults start: %w", err)
 	}
 	if dd.RPr != nil {
-		if err := marshalWrapped(e, ns.Qn("w:rPrDefault"), dd.RPr); err != nil {
+		if err := marshalWrapped(e, ns.Qn("w:rPrDefault"), dd.RPr, dd.rprBare && dd.RPr.isEmpty(), dd.rprExtras); err != nil {
 			return err
 		}
 	}
 	if dd.PPr != nil {
-		if err := marshalWrapped(e, ns.Qn("w:pPrDefault"), dd.PPr); err != nil {
+		if err := marshalWrapped(e, ns.Qn("w:pPrDefault"), dd.PPr, dd.pprBare && dd.PPr.isEmpty(), dd.pprExtras); err != nil {
 			return err
 		}
 	}
@@ -47,14 +55,22 @@ func (dd *CT_DocDefaults) MarshalXML(e *xml.Encoder, start xml.StartElement) err
 	return e.EncodeToken(xml.EndElement{Name: start.Name})
 }
 
-// marshalWrapped emits <wrapper>child</wrapper>.
-func marshalWrapped(e *xml.Encoder, wrapper xml.Name, child xml.Marshaler) error {
+// marshalWrapped emits <wrapper>child extras...</wrapper>. With omitChild the
+// child is left out, reproducing a wrapper that had none.
+func marshalWrapped(e *xml.Encoder, wrapper xml.Name, child xml.Marshaler, omitChild bool, extras []*raw.RawElement) error {
 	ws := xml.StartElement{Name: wrapper}
 	if err := e.EncodeToken(ws); err != nil {
 		return fmt.Errorf("wml: %s start: %w", wrapper.Local, err)
 	}
-	if err := child.MarshalXML(e, xml.StartElement{}); err != nil {
-		return err
+	if !omitChild {
+		if err := child.MarshalXML(e, xml.StartElement{}); err != nil {
+			return err
+		}
+	}
+	for _, x := range extras {
+		if err := x.MarshalXML(e, xml.StartElement{}); err != nil {
+			return err
+		}
 	}
 	return e.EncodeToken(xml.EndElement{Name: wrapper})
 }
@@ -64,6 +80,8 @@ func (dd *CT_DocDefaults) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error
 	dd.RPr = nil
 	dd.PPr = nil
 	dd.extras = nil
+	dd.rprBare, dd.pprBare = false, false
+	dd.rprExtras, dd.pprExtras = nil, nil
 	for {
 		tok, err := d.Token()
 		if err != nil {
@@ -74,26 +92,20 @@ func (dd *CT_DocDefaults) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error
 			switch t.Name {
 			case ns.Qn("w:rPrDefault"):
 				rpr := new(CT_RPr)
-				ok, err := unmarshalWrapped(d, ns.Qn("w:rPr"), rpr, &dd.extras)
+				ok, err := unmarshalWrapped(d, ns.Qn("w:rPr"), rpr, &dd.rprExtras)
 				if err != nil {
 					return err
 				}
-				if ok {
-					dd.RPr = rpr
-				} else {
-					dd.RPr = new(CT_RPr)
-				}
+				dd.RPr = rpr
+				dd.rprBare = !ok
 			case ns.Qn("w:pPrDefault"):
 				ppr := new(CT_PPr)
-				ok, err := unmarshalWrapped(d, ns.Qn("w:pPr"), ppr, &dd.extras)
+				ok, err := unmarshalWrapped(d, ns.Qn("w:pPr"), ppr, &dd.pprExtras)
 				if err != nil {
 					return err
 				}
-				if ok {
-					dd.PPr = ppr
-				} else {
-					dd.PPr = new(CT_PPr)
-				}
+				dd.PPr = ppr
+				dd.pprBare = !ok
 			default:
 				re := new(raw.RawElement)
 				if err := re.UnmarshalXML(d, t); err != nil {

@@ -53,7 +53,7 @@ var exampleFooName = xml.Name{Space: exampleNS, Local: "foo"}
 func init() {
 	// Register with the global registry so the roundtripaudit can find it.
 	registry.Register(exampleFooName, func() registry.Element {
-		return &CT_ExampleFoo{} //nolint:exhaustruct // registry factory returns zero-value; UnmarshalXML populates fields
+		return &CT_ExampleFoo{} //nolint:exhaustruct_v5 // registry factory returns zero-value; UnmarshalXML populates fields
 	})
 	// Teach the ns package about this namespace so canon works.
 	// (In real types the namespace is already in ns/ns.go.)
