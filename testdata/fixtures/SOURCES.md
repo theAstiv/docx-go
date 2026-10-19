@@ -2,7 +2,7 @@
 
 Files under `word/` were created manually in Microsoft Word for this project.
 
-The `word/template_*.docx` templating fixtures (PLAN-3B P3b.8.1) were made by
+The `word/template_*.docx` templating fixtures (plan task P3b.8.1) were made by
 Microsoft Word 16 driven through COM automation, so Word itself wrote every
 part. Each file went through three Word sessions (type, toggle formatting
 mid-tag, edit a letter inside a tag and restore it), with background spell-check

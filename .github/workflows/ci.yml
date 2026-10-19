@@ -1,21 +1,83 @@
-name: validator
+name: ci
 
+# The checks every change must pass. Their job names (lint, test (…),
+# validate, libreoffice) are the required status checks of the ruleset on
+# main: renaming a job breaks the ruleset. Nightly fuzzing (fuzz.yml) and
+# benchmarks (bench.yml) have their own triggers and stay separate.
 on:
   push:
-    paths:
-      - "**/*.go"
-      - "testdata/fixtures/**"
-      - "examples/**"
-      - "tools/validator/**"
-      - "tools/libreoffice/**"
-      - "scripts/**"
-      - ".github/workflows/validator.yml"
-  # Every pull request, with no path filter: validate and libreoffice are
-  # required status checks on main, and a required check that never runs
-  # (a docs-only PR outside the paths) would block the PR forever.
+    branches: [main, "feature/**", "fix/**"]
+  # Every pull request, with no path filter: a required check that never
+  # runs (a docs-only PR outside a path list) would block the PR forever.
   pull_request:
 
+# A new push to a pull request cancels its superseded run; runs on main are
+# never cancelled, so every merge commit is checked in full.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          # setup-go v6+ sets GOTOOLCHAIN=local, so the runner's Go must be new
+          # enough to build the pinned staticcheck (requires Go >= 1.26).
+          go-version: stable
+
+      # Linter versions are pinned so new lint rules cannot fail CI unannounced.
+      # Bump deliberately, and keep the local install in sync (see CLAUDE.md).
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: "2026.2.2"
+          install-go: false
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          args: --timeout=5m
+
+  test:
+    strategy:
+      matrix:
+        go: ["1.23", "1.24"]
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: test (race)
+        run: go test -race -count=1 ./...
+
+      - name: test (roundtripaudit)
+        run: go test -tags=roundtripaudit ./...
+
+      - name: coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.24'
+        run: |
+          go test -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out
+
+      - uses: codecov/codecov-action@v7
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.24'
+        with:
+          files: coverage.out
+
+  # OOXML schema validation: re-saved fixtures must gain no errors, and
+  # documents docx-go generates must be schema-clean.
   validate:
     runs-on: ubuntu-latest
     steps:
