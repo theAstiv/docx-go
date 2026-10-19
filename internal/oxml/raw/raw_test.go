@@ -51,6 +51,41 @@ func roundTrip(t *testing.T, r *raw.RawElement) {
 	}
 }
 
+// An element in no namespace, kept raw inside a namespaced parent, must stay
+// in no namespace when written back: without xmlns="" it would fall into the
+// parent's default namespace and be read back as a different element (a
+// <bookmarkEnd/> becoming w:bookmarkEnd). Found by the nightly fuzzer.
+func TestRawElement_NoNamespaceStaysNoNamespace(t *testing.T) {
+	const w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+	parent := &raw.RawElement{
+		QName: xml.Name{Space: w, Local: "p"},
+		Attrs: nil,
+		Children: []xml.Token{&raw.RawElement{
+			QName: xml.Name{Space: "", Local: "bookmarkEnd"}, Attrs: nil, Children: nil,
+		}},
+	}
+	var buf bytes.Buffer
+	enc := xml.NewEncoder(&buf)
+	if err := parent.MarshalXML(enc, xml.StartElement{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := enc.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	var back raw.RawElement
+	if err := xml.Unmarshal(buf.Bytes(), &back); err != nil {
+		t.Fatal(err)
+	}
+	child, ok := back.Children[0].(*raw.RawElement)
+	if !ok {
+		t.Fatalf("child is %T", back.Children[0])
+	}
+	if child.QName.Space != "" {
+		t.Errorf("child namespace = %q after a round-trip, want none\n%s", child.QName.Space, buf.String())
+	}
+	roundTrip(t, parent)
+}
+
 func TestRawElement_SimpleElement(t *testing.T) {
 	const src = `<w14:foo xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">hello world</w14:foo>`
 	r := parseRaw(t, src)

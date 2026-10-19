@@ -70,6 +70,9 @@ func FuzzCT_Inline(f *testing.F) {
 	f.Add([]byte(`<wp:inline xmlns:wp="` + ns.WP + `"/>`))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
+		if !roundtrip.NamespaceWellFormed(data) {
+			return // not valid namespaced XML; nothing Word could write
+		}
 		dec, se, ok := startOf(data)
 		if !ok || se.Name != ns.Qn("wp:inline") {
 			return
@@ -93,6 +96,9 @@ func FuzzCT_Picture(f *testing.F) {
 	f.Add([]byte(`<pic:pic ` + pic + `/>`))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
+		if !roundtrip.NamespaceWellFormed(data) {
+			return // not valid namespaced XML; nothing Word could write
+		}
 		dec, se, ok := startOf(data)
 		if !ok || se.Name != ns.Qn("pic:pic") {
 			return
