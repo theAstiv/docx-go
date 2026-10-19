@@ -32,6 +32,9 @@ func FuzzCT_P(f *testing.F) {
 		`</w:p>`)
 
 	f.Fuzz(func(t *testing.T, data []byte) {
+		if !roundtrip.NamespaceWellFormed(data) {
+			return // not valid namespaced XML; nothing Word could write
+		}
 		v := new(wml.CT_P)
 		dec := xml.NewDecoder(bytes.NewReader(data))
 		tok, err := dec.Token()
@@ -67,6 +70,9 @@ func FuzzCT_R(f *testing.F) {
 	add(`<w:r ` + wNS + `><w:noBreakHyphen/></w:r>`)
 
 	f.Fuzz(func(t *testing.T, data []byte) {
+		if !roundtrip.NamespaceWellFormed(data) {
+			return // not valid namespaced XML; nothing Word could write
+		}
 		v := new(wml.CT_R)
 		dec := xml.NewDecoder(bytes.NewReader(data))
 		tok, err := dec.Token()
