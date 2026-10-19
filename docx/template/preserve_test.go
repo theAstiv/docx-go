@@ -14,7 +14,7 @@ import (
 // TestExecute_PreservesFixtures runs every fixture in the corpus through
 // Execute with no data and checks the saved file is byte-identical to a
 // plain open and save: executing a template must not touch content that
-// holds no tags (exit criterion E2 in .claude/PLAN-3B.md).
+// holds no tags (Phase 3b exit criterion E2).
 func TestExecute_PreservesFixtures(t *testing.T) {
 	files, err := filepath.Glob("../../testdata/fixtures/*/*.docx")
 	if err != nil {

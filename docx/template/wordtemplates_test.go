@@ -21,7 +21,7 @@ import (
 var filledParts = regexp.MustCompile(`^(word/(document|header\d+|footer\d+)\.xml|docProps/core\.xml|customXml/item\d+\.xml)$`)
 
 // TestWordTemplates fills the templates made in Microsoft Word itself
-// (testdata/fixtures/word/template_*.docx, PLAN-3B P3b.8.1): tags Word split
+// (testdata/fixtures/word/template_*.docx, plan task P3b.8.1): tags Word split
 // across runs, spell-check marks, revision ids, a table of contents, a
 // built-in cover page with data-bound content controls. Every tag must be
 // filled, and the expected text must come out.
