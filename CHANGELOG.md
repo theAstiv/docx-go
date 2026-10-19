@@ -61,6 +61,7 @@ Check these when upgrading from v0.2.0:
 - **Table rows:** `w:tblPrEx` is written before `w:trPr`.
 - **Unique ids:** drawing and bookmark ids stay unique across the whole document, including inside content controls, tracked changes and text boxes. Duplicates are a cause of Word's "unreadable content" warning.
 - **Empty defaults:** an empty `w:rPrDefault` / `w:pPrDefault` is written back as it was.
+- **Elements in no namespace:** an unknown element in no namespace inside a namespaced one is written with `xmlns=""`. Before, it fell into its parent's namespace on save, and on the next open it was read back as a different element.
 - **Faster many-image reports:** adding many images or bookmarks no longer rescans the whole document for each one.
 
 ## v0.2.0: tables, lists, sections, headers and footers

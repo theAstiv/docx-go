@@ -67,6 +67,13 @@ func (r *RawElement) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error 
 // MarshalXML replays the captured token stream.
 func (r *RawElement) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 	start := xml.StartElement{Name: r.QName, Attr: r.Attrs}
+	if r.QName.Space == "" {
+		// An element in no namespace must say so: encoding/xml writes it
+		// without a declaration, so it would fall into its parent's default
+		// namespace (WordprocessingML, say) and be read back as a different
+		// element. xmlns="" keeps it in no namespace.
+		start.Attr = append([]xml.Attr{{Name: xml.Name{Space: "", Local: "xmlns"}, Value: ""}}, r.Attrs...)
+	}
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}

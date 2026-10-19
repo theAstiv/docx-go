@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("<wp:inline A0000=\"\"A0000=\"\"A0000=\"\"A0000=\"\"xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\"A000000=\"0\"A00000000=\"0\"A000000=\"0000000000000\"><docPr/></wp:inline>")

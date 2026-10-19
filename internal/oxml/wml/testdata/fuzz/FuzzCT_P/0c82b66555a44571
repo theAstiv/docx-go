@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("<w:p A000000=\"\"><bookmarkEnd/></w:p>")
