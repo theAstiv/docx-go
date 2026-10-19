@@ -10,15 +10,10 @@ on:
       - "tools/libreoffice/**"
       - "scripts/**"
       - ".github/workflows/validator.yml"
+  # Every pull request, with no path filter: validate and libreoffice are
+  # required status checks on main, and a required check that never runs
+  # (a docs-only PR outside the paths) would block the PR forever.
   pull_request:
-    paths:
-      - "**/*.go"
-      - "testdata/fixtures/**"
-      - "examples/**"
-      - "tools/validator/**"
-      - "tools/libreoffice/**"
-      - "scripts/**"
-      - ".github/workflows/validator.yml"
 
 jobs:
   validate:
