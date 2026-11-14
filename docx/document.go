@@ -53,6 +53,10 @@ func (d *Document) Body() *Body {
 	return &Body{docPart: d.pkg.DocPart, st: docStory(d.pkg)}
 }
 
+// Text returns the plain text of the document body, laid out as described
+// at Body.Text. Headers and footers are not included.
+func (d *Document) Text() string { return d.Body().Text() }
+
 // EvenAndOddHeaders reports whether separate even/odd page headers/footers are
 // enabled for this document. Requires the settings part to be present.
 func (d *Document) EvenAndOddHeaders() bool {

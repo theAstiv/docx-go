@@ -62,6 +62,10 @@ func (f *Footer) AddParagraph() *Paragraph {
 	return &Paragraph{p: p, st: f.story()}
 }
 
+// Text returns the plain text of the footer, laid out as described at
+// Body.Text.
+func (f *Footer) Text() string { return wml.BlocksText(f.ct.Children) }
+
 // SetText replaces the footer's content with one paragraph holding text and
 // returns that paragraph, to add runs, images or fields to. The first
 // paragraph's formatting is kept. SetText("") gives the footer's own

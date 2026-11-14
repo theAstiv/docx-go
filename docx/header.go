@@ -62,6 +62,10 @@ func (h *Header) AddParagraph() *Paragraph {
 	return &Paragraph{p: p, st: h.story()}
 }
 
+// Text returns the plain text of the header, laid out as described at
+// Body.Text.
+func (h *Header) Text() string { return wml.BlocksText(h.ct.Children) }
+
 // SetText replaces the header's content with one paragraph holding text and
 // returns that paragraph, to add runs, images or fields to. The first
 // paragraph's formatting is kept. SetText("") gives the header's own

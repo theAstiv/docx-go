@@ -38,6 +38,20 @@ func (b *Body) Paragraphs() iter.Seq[*Paragraph] {
 	}
 }
 
+// Text returns the plain text of the body. Every paragraph ends with "\n";
+// in a table, cells are separated by "\t" and each row ends with "\n", and
+// the paragraphs of one cell are joined with "\n" (see Cell.Text). Text in
+// content controls, tracked insertions and smart tags is included; tracked
+// deletions, field instructions and text boxes are not. Headers, footers
+// and notes are not part of the body; use Header.Text and Footer.Text.
+func (b *Body) Text() string {
+	body := b.ctBody()
+	if body == nil {
+		return ""
+	}
+	return wml.BlocksText(body.Children)
+}
+
 // AddParagraph appends a new empty paragraph to the body and returns its proxy.
 func (b *Body) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)

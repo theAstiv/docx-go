@@ -2,7 +2,6 @@ package docx
 
 import (
 	"iter"
-	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
@@ -282,21 +281,12 @@ func (c *Cell) ColSpan() int {
 	return int(v)
 }
 
-// Text returns the concatenated text of all paragraphs in the cell joined
-// by newlines. Trailing empty paragraphs (the structurally required terminal
-// paragraph) are excluded so callers see only user-visible content.
-func (c *Cell) Text() string {
-	var parts []string
-	for _, child := range c.tc.Children {
-		if p, ok := child.(*wml.CT_P); ok {
-			parts = append(parts, p.Text())
-		}
-	}
-	for len(parts) > 0 && parts[len(parts)-1] == "" {
-		parts = parts[:len(parts)-1]
-	}
-	return strings.Join(parts, "\n")
-}
+// Text returns the text of the cell's paragraphs joined by newlines.
+// Trailing empty paragraphs (the structurally required terminal paragraph)
+// are excluded so callers see only user-visible content. A nested table is
+// written as at Body.Text, without its final newline, and text in content
+// controls is included.
+func (c *Cell) Text() string { return c.tc.Text() }
 
 // tcpr lazily creates the TcPr element when a setter needs it.
 func (c *Cell) tcpr() *wml.CT_TcPr {
