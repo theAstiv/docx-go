@@ -16,6 +16,17 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - Tab stops: `TabStops`, `SetTabStops`, `AddTabStop`, `RemoveTabStop` and `ClearTabStop`, with `TabAlign*` alignments and `TabLeader*` fill characters. Stops are written sorted by position. `ClearTabStop` cancels a stop inherited from the style.
   - Borders: `SetBorders(ParagraphBorderOptions{Top, Left, Bottom, Right, Between, Bar})`, `Borders` and `ClearBorders`.
   - Shading: `SetShading(fill)` and `Shading`.
+- Structural editing of existing documents:
+  - Removal: `Paragraph.Remove()`, `Table.Remove()`, `Row.Remove()` and `Run.Remove()`. They return `ErrNotInDocument` (already removed), `ErrSectionBreak` (the paragraph carries a section break), `ErrUnbalancedField` (the content holds only part of a field, such as the start of a table of contents) or `ErrLastRow`.
+  - A removal also removes the other end of any bookmark or comment range it cuts.
+  - A cell, header or footer always keeps a final paragraph.
+  - Removing the row where a vertical merge starts passes the start to the row below.
+  - Insertion: `Paragraph.InsertParagraphBefore/After(text)`, `Table.InsertParagraphBefore/After(text)`, `Paragraph.InsertTableAfter(rows, cols, opts)` and `Table.InsertRow(i, opts)`.
+  - `InsertRow` copies the neighbouring row's cell structure, widths, borders, shading and paragraph formatting, and extends a vertical merge it is inserted into.
+
+### Fixes
+
+- A table created without a style (`AddTable(…, TableOptions{})`) had no `w:tblPr`, which the schema requires. It now always has one.
 
 ### Behaviour changes
 

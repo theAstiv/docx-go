@@ -53,6 +53,9 @@ const (
 type Table struct {
 	tbl *wml.CT_Tbl
 	st  *story
+	// parent is the block list the table was found in or added to: a hint
+	// for Remove and the Insert methods, checked before use (locate.go).
+	parent *[]wml.BlockElement
 }
 
 // Rows returns an iterator over all CT_Tr rows in the table (skipping raw passthrough elements).
@@ -63,7 +66,7 @@ func (t *Table) Rows() iter.Seq[*Row] {
 			if !ok {
 				continue
 			}
-			if !yield(&Row{tr: tr, st: t.st}) {
+			if !yield(&Row{tr: tr, st: t.st, tbl: t.tbl}) {
 				return
 			}
 		}
@@ -85,7 +88,7 @@ func (t *Table) AddRowWithOptions(opts RowOptions) *Row {
 		tr.TrPr = trpr
 	}
 	t.tbl.Children = append(t.tbl.Children, tr)
-	return &Row{tr: tr, st: t.st}
+	return &Row{tr: tr, st: t.st, tbl: t.tbl}
 }
 
 // Style returns the table style ID, or "" if none.
@@ -110,6 +113,8 @@ func (t *Table) SetStyle(id string) {
 type Row struct {
 	tr *wml.CT_Tr
 	st *story
+	// tbl is the table the row belongs to.
+	tbl *wml.CT_Tbl
 }
 
 // Cells returns an iterator over all CT_Tc cells in the row.
@@ -177,7 +182,7 @@ func (c *Cell) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p, st: c.st}) {
+			if !yield(&Paragraph{p: p, st: c.st, parent: &c.tc.Children}) {
 				return
 			}
 		}
@@ -192,7 +197,7 @@ func (c *Cell) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl, st: c.st}) {
+			if !yield(&Table{tbl: tbl, st: c.st, parent: &c.tc.Children}) {
 				return
 			}
 		}
@@ -205,7 +210,7 @@ func (c *Cell) Tables() iter.Seq[*Table] {
 func (c *Cell) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
 	c.tc.Children = append(c.tc.Children, p)
-	return &Paragraph{p: p, st: c.st}
+	return &Paragraph{p: p, st: c.st, parent: &c.tc.Children}
 }
 
 // SetText replaces the cell's content with one paragraph holding text and
@@ -301,11 +306,11 @@ func (c *Cell) tcpr() *wml.CT_TcPr {
 // addTable is called from body.go to create and append a CT_Tbl.
 func buildTable(rows, cols int, opts TableOptions) *wml.CT_Tbl {
 	tbl := new(wml.CT_Tbl)
-	// Table properties.
+	// Table properties. w:tblPr is required (it precedes w:tblGrid), even
+	// when empty.
+	tbl.TblPr = new(wml.CT_TblPr)
 	if opts.Style != "" {
-		tblPr := new(wml.CT_TblPr)
-		tblPr.SetStyleID(opts.Style)
-		tbl.TblPr = tblPr
+		tbl.TblPr.SetStyleID(opts.Style)
 	}
 	// Column grid.
 	if cols > 0 {

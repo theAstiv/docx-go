@@ -19,7 +19,7 @@ func setBlocksText(children *[]wml.BlockElement, text string, st *story) *Paragr
 	}
 	p.Children = nil
 	*children = []wml.BlockElement{p}
-	para := &Paragraph{p: p, st: st}
+	para := &Paragraph{p: p, st: st, parent: children}
 	if text != "" {
 		para.AddRun(text)
 	}

@@ -113,7 +113,7 @@ func (h *Hyperlink) AddRun(text string) *Run {
 		r.Children = append(r.Children, t)
 	}
 	h.h.Children = append(h.h.Children, r)
-	run := &Run{r: r, st: h.st}
+	run := &Run{r: r, st: h.st, parent: &h.h.Children}
 	// Use the document's own hyperlink style id, which a localized or custom
 	// template may have under a different name than "Hyperlink".
 	styleID := string(StyleHyperlink)
@@ -131,7 +131,7 @@ func (h *Hyperlink) Runs() iter.Seq[*Run] {
 	return func(yield func(*Run) bool) {
 		for _, c := range h.h.Children {
 			if r, ok := c.(*wml.CT_R); ok {
-				if !yield(&Run{r: r, st: h.st}) {
+				if !yield(&Run{r: r, st: h.st, parent: &h.h.Children}) {
 					return
 				}
 			}

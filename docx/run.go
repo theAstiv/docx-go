@@ -10,6 +10,9 @@ import (
 type Run struct {
 	r  *wml.CT_R
 	st *story
+	// parent is the inline list (a paragraph's or hyperlink's children) the
+	// run was found in or added to: a hint for Remove (locate.go).
+	parent *[]wml.InlineElement
 }
 
 // Text returns the visible text of this run, using the same rendering rules as

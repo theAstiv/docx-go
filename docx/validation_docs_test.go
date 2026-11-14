@@ -8,6 +8,7 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -42,6 +43,65 @@ func TestGenerateValidationDocs(t *testing.T) {
 	write("gen-features.docx", featuresDoc(t))
 	write("gen-formatting-order.docx", formattingOrderDoc())
 	write("gen-coreprops.docx", corePropsDoc())
+	write("gen-structure.docx", structureDoc(t))
+}
+
+// structureDoc builds content and then edits it with every structural
+// method: removals in the body, a cell and a header, row removal and
+// insertion around vertical merges, and inserted paragraphs and tables.
+func structureDoc(t *testing.T) *docx.Document {
+	t.Helper()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	d := docx.New()
+	b := d.Body()
+	var ps []*docx.Paragraph
+	for _, s := range []string{"Keep 1", "Drop", "Keep 2", "Drop with bookmark"} {
+		ps = append(ps, b.AddParagraph())
+		ps[len(ps)-1].AddRun(s)
+	}
+	_, err := ps[3].AddBookmark("Dropped")
+	must(err)
+	must(ps[1].Remove())
+	must(ps[3].Remove())
+
+	ps[0].InsertParagraphBefore("Inserted first")
+	ps[2].InsertParagraphAfter("Inserted after Keep 2").AddPageNumber()
+
+	tbl := ps[0].InsertTableAfter(4, 3, docx.TableOptions{Style: "TableGrid", ColWidth: []docx.Twip{2000, 2000, 2000}})
+	rs := slices.Collect(tbl.Rows())
+	col := func(r *docx.Row) *docx.Cell { return slices.Collect(r.Cells())[1] }
+	col(rs[0]).SetVMerge(docx.VMergeStart)
+	col(rs[1]).SetVMerge(docx.VMergeContinue)
+	col(rs[2]).SetVMerge(docx.VMergeContinue)
+	slices.Collect(rs[3].Cells())[0].SetShading("D9E2F3")
+	must(rs[0].Remove())                 // the merge start passes down
+	tbl.InsertRow(1, docx.RowOptions{})  // inside the merge
+	tbl.InsertRow(99, docx.RowOptions{}) // copies the shaded last row
+	tbl.InsertRow(0, docx.RowOptions{Header: true})
+	tbl.InsertParagraphAfter("After the table")
+
+	c := slices.Collect(slices.Collect(tbl.Rows())[2].Cells())[0]
+	cp := c.SetText("cell text")
+	cp.InsertTableAfter(1, 2, docx.TableOptions{Style: "TableGrid"})
+	must(cp.Remove())
+
+	h := d.LastSection().SetHeader(docx.HeaderDefault)
+	h.SetText("Header")
+	h.AddTable(1, 1, docx.TableOptions{})
+	hps := slices.Collect(h.Paragraphs())
+	must(hps[len(hps)-1].Remove()) // the header gets a new final paragraph
+
+	p := b.AddParagraph()
+	p.AddRun("x")
+	gone := p.AddRun("removed run")
+	p.AddRun("y")
+	must(gone.Remove())
+	return d
 }
 
 // corePropsDoc sets every core property the API exposes, on a document that
