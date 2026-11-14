@@ -165,9 +165,7 @@ func nextTypedRow(t *wml.CT_Tbl, after int) *wml.CT_Tr {
 func gridCells(tr *wml.CT_Tr) map[int]*wml.CT_Tc {
 	col := 0
 	if tr.TrPr != nil {
-		if n := tr.TrPr.GridBefore(); n != nil && *n > 0 {
-			col = int(min(*n, 1<<20))
-		}
+		col = gridCount(tr.TrPr.GridBefore(), 0)
 	}
 	out := map[int]*wml.CT_Tc{}
 	for _, c := range tr.Children {
@@ -175,14 +173,26 @@ func gridCells(tr *wml.CT_Tr) map[int]*wml.CT_Tc {
 		if tc, ok := c.(*wml.CT_Tc); ok {
 			out[col] = tc
 			if tc.TcPr != nil {
-				if n := tc.TcPr.GridSpan(); n != nil && *n > 1 {
-					span = int(min(*n, 1<<20))
-				}
+				span = gridCount(tc.TcPr.GridSpan(), 1)
 			}
 		}
 		col += span
 	}
 	return out
+}
+
+// gridCount converts a stored column count (w:gridBefore, w:gridSpan) to
+// an int, returning def when it is absent, below def, or outside the int32
+// range (a value no real table has).
+func gridCount(n *int64, def int) int {
+	if n == nil {
+		return def
+	}
+	v, ok := toInt32(*n)
+	if !ok || int(v) < def {
+		return def
+	}
+	return int(v)
 }
 
 func vmergeState(tc *wml.CT_Tc) VMergeState {
