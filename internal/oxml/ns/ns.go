@@ -30,6 +30,13 @@ const (
 	WPG  = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
 	W10  = "urn:schemas-microsoft-com:office:word"
 	VT   = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"
+
+	// Core document properties (docProps/core.xml, OPC part 2 §11).
+	CP       = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+	DC       = "http://purl.org/dc/elements/1.1/"
+	DCTerms  = "http://purl.org/dc/terms/"
+	DCMIType = "http://purl.org/dc/dcmitype/"
+	XSI      = "http://www.w3.org/2001/XMLSchema-instance"
 )
 
 // prefixTable maps namespace URI → canonical prefix.
@@ -56,6 +63,12 @@ var prefixTable = map[string]string{
 	WPG:    "wpg",
 	W10:    "w10",
 	VT:     "vt",
+
+	CP:       "cp",
+	DC:       "dc",
+	DCTerms:  "dcterms",
+	DCMIType: "dcmitype",
+	XSI:      "xsi",
 }
 
 // uriTable maps canonical prefix → namespace URI (inverse of prefixTable).

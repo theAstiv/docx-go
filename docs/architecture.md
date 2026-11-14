@@ -114,9 +114,10 @@ CI enforces this with `go test -tags=roundtripaudit`.
 
 - `internal/opc/**` must not import `internal/oxml`, `internal/parts` or `docx`
 - `internal/oxml/**` must not import `internal/parts`, `internal/opc` or `docx`
-- `docx/**` may import `internal/parts` and `internal/oxml/wml` (element
-  construction only); it must not import any other `internal/oxml`
-  sub-package, `internal/opc` or `encoding/xml`
+- `docx/**` may import `internal/parts`, `internal/oxml/wml` (element
+  construction only) and `internal/oxml/docprops` (core property names); it
+  must not import any other `internal/oxml` sub-package, `internal/opc` or
+  `encoding/xml`
 - `internal/template/**` must not import `internal/parts`, `internal/opc` or
   `docx` (see [Templating](#templating))
 - `internal/textmerge/**` must not import `internal/parts`, `internal/opc`,

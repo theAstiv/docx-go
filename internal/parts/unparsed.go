@@ -14,7 +14,12 @@ var boundData = regexp.MustCompile(`^(docProps/core\.xml|customXml/item\d+\.xml)
 // read from (w:dataBinding): docProps/core.xml and customXml/item*.xml. Word
 // re-syncs a bound control from its part when it opens a file, so text
 // written into such a control must also be written to the part.
+//
+// Core properties changed through EditCoreProps are written into the part
+// first, so the bytes returned include them. If that fails the part's
+// previous bytes are returned, and Save reports the error.
 func (p *Package) BoundDataParts() map[string][]byte {
+	_ = p.flushCoreProps() // a failure resurfaces in Save, which flushes again
 	out := map[string][]byte{}
 	for _, name := range p.pkg.PartPaths() {
 		if boundData.MatchString(name) {
@@ -26,9 +31,14 @@ func (p *Package) BoundDataParts() map[string][]byte {
 
 // SetPartData replaces the bytes of an existing part. It is for parts this
 // package keeps opaque (BoundDataParts); typed parts are written from their
-// element trees on Save and would overwrite it.
+// element trees on Save and would overwrite it. Writing the core properties
+// part drops its parsed copy, which is re-read from the new bytes on next
+// use.
 func (p *Package) SetPartData(path string, data []byte) {
 	p.pkg.SetPart(path, data)
+	if p.core != nil && p.core.path == path {
+		p.core = nil
+	}
 }
 
 // UnparsedStoryParts returns the footnotes, endnotes and comments parts by

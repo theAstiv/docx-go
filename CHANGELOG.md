@@ -7,6 +7,11 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 ### Added
 
 - `Document.Text()`, `Body.Text()`, `Header.Text()` and `Footer.Text()` return a story's plain text. Every paragraph ends with `\n`. In a table, cells are separated by `\t` and each row ends with `\n`, and a cell's paragraphs are joined with `\n`. Headers and footers are not part of `Document.Text()`. Text in text boxes is not included yet.
+- `Document.CoreProperties()` reads and writes the core document properties (`docProps/core.xml`): `Title`, `Subject`, `Author`, `Keywords`, `Description`, `Category`, `LastModifiedBy`, `Revision`, `Created` and `Modified`.
+  - Setting a property on a document without the part creates it. An empty string or a zero time removes the property.
+  - A document whose properties are not changed keeps `core.xml` byte-for-byte.
+  - Properties this API does not name are kept.
+  - `Modified` and `LastModifiedBy` are not updated automatically on save.
 
 ### Behaviour changes
 
