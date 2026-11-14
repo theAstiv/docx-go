@@ -119,6 +119,9 @@ CI enforces this with `go test -tags=roundtripaudit`.
   sub-package, `internal/opc` or `encoding/xml`
 - `internal/template/**` must not import `internal/parts`, `internal/opc` or
   `docx` (see [Templating](#templating))
+- `internal/textmerge/**` must not import `internal/parts`, `internal/opc`,
+  `docx` or `internal/template`: it works on wml trees and is shared by the
+  template engine and `docx`
 
 `forbidigo` additionally bans `encoding/xml` from `docx/**`.
 
@@ -137,6 +140,8 @@ docx/template/          public API: Execute, Options, Issue, Error
    ├── docx/internal/bridge/   function variables set by docx in init():
    │                           the document's stories, the unparsed note parts
    └── internal/template/      engine over []wml.BlockElement
+          └── internal/textmerge/   merges text Word split across runs;
+                                    finds TOC field results (shared with docx)
 ```
 
 The engine works on WordprocessingML block trees only, so it cannot reach the
@@ -145,7 +150,7 @@ footers) through `docx/internal/bridge`, which `docx` fills in at init time.
 Being internal to `docx/`, the bridge adds nothing to the public API.
 
 `Execute` runs in four steps per story: copy the blocks (`wml.Clone`),
-normalise split tags, expand blocks and fill values, then swap the copies in.
+normalise split tags (`textmerge.Flatten` / `Collapse`), expand blocks and fill values, then swap the copies in.
 Any error-severity issue skips the swap, so a failed call leaves the
 document unchanged.
 

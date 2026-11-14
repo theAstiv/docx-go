@@ -118,6 +118,22 @@ linters:
             - pkg: "github.com/theAstiv/docx-go/docx"
               desc: "template engine must not import docx — see docs/architecture.md (templating)"
 
+        textmerge:
+          # internal/textmerge works on wml trees only; it is shared by the
+          # template engine and docx.Replace, so it must not depend on either.
+          list-mode: lax
+          files:
+            - "**/internal/textmerge/**.go"
+          deny:
+            - pkg: "github.com/theAstiv/docx-go/internal/parts"
+              desc: "textmerge must not import parts — wml trees only"
+            - pkg: "github.com/theAstiv/docx-go/internal/opc"
+              desc: "textmerge must not import opc — wml trees only"
+            - pkg: "github.com/theAstiv/docx-go/docx"
+              desc: "textmerge must not import docx — wml trees only"
+            - pkg: "github.com/theAstiv/docx-go/internal/template"
+              desc: "textmerge must not import the template engine — it is shared by it"
+
     wrapcheck:
       ignore-package-globs:
         - "encoding/*"

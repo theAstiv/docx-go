@@ -35,6 +35,7 @@ jobs:
           # template: placeholder normalizer and the whole engine (Phase 3b).
           fuzz FuzzTemplateScan ./internal/template
           fuzz FuzzTemplateExecute ./internal/template
+          fuzz FuzzCollapse ./internal/textmerge
           exit "$failed"
 
       # Committed seeds are tracked; a crash input go test writes is not.

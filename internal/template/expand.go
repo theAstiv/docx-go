@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
+	"github.com/theAstiv/docx-go/internal/textmerge"
 )
 
 // engine carries the state of one Execute call.
@@ -166,7 +167,7 @@ func (w *textWriter) flush() {
 		return
 	}
 	t := &wml.CT_Text{Space: w.space, Content: w.sb.String()}
-	preserveSpace(t)
+	textmerge.PreserveSpace(t)
 	w.out = append(w.out, t)
 	w.sb.Reset()
 }
