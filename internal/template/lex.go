@@ -2,18 +2,19 @@ package template
 
 import (
 	"strings"
+
+	"github.com/theAstiv/docx-go/internal/textmerge"
 )
 
 // Barrier characters stand in for non-text content when a paragraph's text
-// is flattened for lexing. Neither can occur in XML text, so they never
-// collide with document content.
+// is flattened for lexing (see textmerge.Flatten).
 const (
 	// barrierBreak marks a tab, line break or other run content that a tag
 	// cannot contain.
-	barrierBreak = '\x00'
+	barrierBreak = textmerge.BarrierBreak
 	// barrierBoundary marks a field character, bookmark, hyperlink edge,
 	// content control or other element a tag must not be split across.
-	barrierBoundary = '\x01'
+	barrierBoundary = textmerge.BarrierBoundary
 )
 
 type tagKind int
