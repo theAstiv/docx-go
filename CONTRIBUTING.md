@@ -1,5 +1,9 @@
 # Contributing to docx-go
 
+By taking part you agree to the [code of conduct](CODE_OF_CONDUCT.md).
+Report security problems privately, as described in [SECURITY.md](SECURITY.md),
+not in a public issue.
+
 ## Round-trip rule (non-negotiable)
 
 Every `oxml` type **must ship all three of these in the same PR**:
