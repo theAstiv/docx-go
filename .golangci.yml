@@ -82,9 +82,10 @@ linters:
               desc: "opc layer must not import docx — see CLAUDE.md three-layer architecture"
 
         docx-layer:
-          # docx/ may use parts and internal/oxml/wml (type construction only;
-          # see the CLAUDE.md decision log, 2026-04-26), but no other oxml
-          # internals and not opc directly.
+          # docx/ may use parts, internal/oxml/wml (type construction only;
+          # see the CLAUDE.md decision log, 2026-04-26) and internal/oxml/docprops
+          # (property names; 2026-11-14), but no other oxml internals and not
+          # opc directly.
           list-mode: lax
           files:
             - "**/docx/**.go"

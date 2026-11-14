@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/theAstiv/docx-go/docx"
 )
@@ -40,6 +41,26 @@ func TestGenerateValidationDocs(t *testing.T) {
 	write("gen-baseline.docx", baselineDoc())
 	write("gen-features.docx", featuresDoc(t))
 	write("gen-formatting-order.docx", formattingOrderDoc())
+	write("gen-coreprops.docx", corePropsDoc())
+}
+
+// corePropsDoc sets every core property the API exposes, on a document that
+// had no docProps/core.xml.
+func corePropsDoc() *docx.Document {
+	d := docx.New()
+	d.Body().AddParagraph().AddRun("Core properties")
+	cp := d.CoreProperties()
+	cp.SetTitle("Validation: core properties & <escaping>")
+	cp.SetSubject("docx-go")
+	cp.SetAuthor("docx-go tests")
+	cp.SetKeywords("validation; core.xml")
+	cp.SetDescription("Every core property docx-go writes.")
+	cp.SetCategory("Test")
+	cp.SetLastModifiedBy("docx-go tests")
+	cp.SetRevision(2)
+	cp.SetCreated(time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC))
+	cp.SetModified(time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC))
+	return d
 }
 
 // formattingOrderDoc sets every paragraph and run property in reverse schema

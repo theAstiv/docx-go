@@ -46,6 +46,9 @@ type Package struct {
 	// ids, bookmarks). nil means "not scanned"; the docx layer owns its
 	// contents and invalidation.
 	IDCache *wml.IDScan
+
+	// core is the parsed docProps/core.xml, loaded on first use (coreprops.go).
+	core *corePropsState
 }
 
 // New creates an empty Package with a minimal valid OOXML structure:
@@ -300,6 +303,9 @@ func (p *Package) Save(w io.Writer) error {
 			return fmt.Errorf("parts: save: marshal footer %q: %w", entry.path, err)
 		}
 		p.pkg.SetPart(entry.path, ftrData)
+	}
+	if err := p.flushCoreProps(); err != nil {
+		return fmt.Errorf("parts: save: %w", err)
 	}
 	return p.pkg.Save(w)
 }
