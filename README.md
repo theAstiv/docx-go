@@ -111,8 +111,10 @@ See [`examples/report`](examples/report) for a report that uses all of them.
 |---|---|
 | v0.2.0 ✅ | Paragraphs, runs and formatting; tables; lists; sections; headers and footers |
 | v0.3.0 ✅ | Report building (images, hyperlinks, bookmarks, table formatting, styles, page and TOC fields) and templating |
-| Next, on demand | Built when a user needs it: anchored images with text wrapping; SVG with a PNG fallback; threaded comments; resolving style inheritance into effective formatting; REF, HYPERLINK and SEQ fields; bookmarks spanning paragraphs; templating extras (`{{else}}`, image values) |
-| Later | Typed content controls, tracked changes (accept / reject), equations, shapes and charts (kept as they are today) |
+| v0.4.0 | Editing existing documents: remove and insert paragraphs, tables, rows and runs; find and replace across runs; whole-document text; document properties; paragraph tab stops, borders and shading |
+| v0.5.0 | Templating: image values, `{{else}}`, formatters (dates, numbers, currency), rich-text values, conditions inside a paragraph |
+| v0.6.0 | Appending and merging documents, template includes, footnotes and endnotes, floating images and SVG, a PDF conversion recipe |
+| Later | Threaded comments, resolving style inheritance into effective formatting, REF/HYPERLINK/SEQ fields, bookmarks spanning paragraphs, typed content controls, tracked changes (accept / reject), equations, shapes and charts (kept as they are today) |
 | v1.0 | A stable public API, once the surface above has settled |
 
 Requests and real documents that break the library are the most useful input: please [open an issue](https://github.com/theAstiv/docx-go/issues).
