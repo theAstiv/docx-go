@@ -86,6 +86,19 @@ func formattingOrderDoc() *docx.Document {
 		f.SetAlignment(docx.AlignJustify)
 		lvl := int64(1)
 		f.SetOutlineLevel(&lvl)
+		f.SetTabStops([]docx.TabStop{
+			{Position: 9000, Align: docx.TabAlignRight, Leader: docx.TabLeaderDot},
+			{Position: 4500, Align: docx.TabAlignCenter},
+			{Position: 2000, Align: docx.TabAlignClear},
+			{Position: 720, Align: docx.TabAlignDecimal, Leader: docx.TabLeaderMiddleDot},
+		})
+		f.SetShading("F2F2F2")
+		edge := &docx.Border{Style: docx.BorderSingle, Width: 6, Space: 1, Color: "1F3864"}
+		f.SetBorders(docx.ParagraphBorderOptions{
+			Top: edge, Left: edge, Bottom: edge, Right: edge,
+			Between: &docx.Border{Style: docx.BorderDotted, Width: 4},
+			Bar:     &docx.Border{Style: docx.BorderDouble, Width: 4},
+		})
 		f.SetSuppressLineNumbers(docx.On())
 		f.SetWidowControl(docx.On())
 		f.SetPageBreakBefore(docx.On())

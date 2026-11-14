@@ -46,9 +46,10 @@ func (r *Run) AddBreak(kind BreakType) {
 	r.r.Children = append(r.r.Children, br)
 }
 
-// AddTab appends a w:tab element to this run, advancing to the next paragraph-level
-// tab stop. Without explicit tab stops (SetTabs — not yet implemented in Phase 1),
-// the visual position is determined by the renderer's default tab width.
+// AddTab appends a w:tab element to this run, advancing to the next tab stop:
+// one set with ParagraphFormat.SetTabStops or AddTabStop, one from the
+// paragraph style, or else the next multiple of the document's default tab
+// stop (Document.SetDefaultTabStop).
 func (r *Run) AddTab() {
 	r.r.Children = append(r.r.Children, new(wml.CT_Tab))
 }

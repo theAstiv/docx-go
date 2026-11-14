@@ -12,6 +12,10 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - A document whose properties are not changed keeps `core.xml` byte-for-byte.
   - Properties this API does not name are kept.
   - `Modified` and `LastModifiedBy` are not updated automatically on save.
+- Paragraph tab stops, borders and shading on `ParagraphFormat`, so they work for paragraphs and paragraph styles alike:
+  - Tab stops: `TabStops`, `SetTabStops`, `AddTabStop`, `RemoveTabStop` and `ClearTabStop`, with `TabAlign*` alignments and `TabLeader*` fill characters. Stops are written sorted by position. `ClearTabStop` cancels a stop inherited from the style.
+  - Borders: `SetBorders(ParagraphBorderOptions{Top, Left, Bottom, Right, Between, Bar})`, `Borders` and `ClearBorders`.
+  - Shading: `SetShading(fill)` and `Shading`.
 
 ### Behaviour changes
 
