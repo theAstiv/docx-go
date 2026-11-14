@@ -265,7 +265,8 @@ func (c *Cell) VMerge() VMergeState {
 	return VMergeContinue
 }
 
-// ColSpan returns the column span (gridSpan) of this cell. Returns 1 if not set.
+// ColSpan returns the column span (gridSpan) of this cell. Returns 1 if not
+// set, or if the stored value is outside the int32 range.
 func (c *Cell) ColSpan() int {
 	if c.tc.TcPr == nil {
 		return 1
@@ -274,7 +275,11 @@ func (c *Cell) ColSpan() int {
 	if n == nil {
 		return 1
 	}
-	return int(*n)
+	v, ok := toInt32(*n)
+	if !ok {
+		return 1
+	}
+	return int(v)
 }
 
 // Text returns the concatenated text of all paragraphs in the cell joined

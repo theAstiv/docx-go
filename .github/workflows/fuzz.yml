@@ -5,6 +5,10 @@ on:
     - cron: "0 2 * * *"   # nightly at 02:00 UTC
   workflow_dispatch:
 
+# Read-only token: no job writes to the repository, issues or PRs.
+permissions:
+  contents: read
+
 jobs:
   fuzz:
     runs-on: ubuntu-latest
