@@ -43,6 +43,21 @@ jobs:
           version: v2.15.0
           args: --timeout=5m
 
+  # Known vulnerabilities in reachable code, including the Go standard
+  # library. Not a required check: a new stdlib advisory should be fixed
+  # promptly, but it must not block unrelated pull requests.
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
   test:
     strategy:
       matrix:

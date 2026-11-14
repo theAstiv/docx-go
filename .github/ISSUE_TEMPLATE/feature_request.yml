@@ -1,0 +1,38 @@
+name: Feature request
+description: Something docx-go can't do yet.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: The document you want to produce or change, not the API you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: ooxml
+    attributes:
+      label: OOXML elements involved
+      description: If you know them, for example `w:sdt`, `w:commentRangeStart`, `w:tblStylePr`.
+    validations:
+      required: false
+
+  - type: textarea
+    id: api
+    attributes:
+      label: API you would like
+      description: Optional. A sketch of how you would call it.
+      render: go
+    validations:
+      required: false
+
+  - type: textarea
+    id: file
+    attributes:
+      label: Example document
+      description: |
+        Optional. A `.docx` made in Word that shows the result you want.
+        **Remove any confidential content first:** attachments are public.
+    validations:
+      required: false

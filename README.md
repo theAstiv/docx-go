@@ -1,5 +1,11 @@
 # docx-go
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/theAstiv/docx-go.svg)](https://pkg.go.dev/github.com/theAstiv/docx-go)
+[![CI](https://github.com/theAstiv/docx-go/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/theAstiv/docx-go/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/theAstiv/docx-go)](https://goreportcard.com/report/github.com/theAstiv/docx-go)
+[![Release](https://img.shields.io/github/v/release/theAstiv/docx-go)](https://github.com/theAstiv/docx-go/releases)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 A permissively-licensed Go library for creating, reading, and modifying `.docx`
 (OOXML WordprocessingML) files, without losing unknown content.
 

@@ -1,0 +1,71 @@
+name: Bug report
+description: Something docx-go reads, writes or fills wrongly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A minimal reproducer and, if the bug depends on
+        input, a sample `.docx` make most bugs fixable in one pass.
+
+        **Security problems:** don't file them here. See
+        [SECURITY.md](https://github.com/theAstiv/docx-go/blob/main/SECURITY.md).
+
+  - type: input
+    id: version
+    attributes:
+      label: docx-go version
+      placeholder: v0.3.0 (or a commit hash)
+    validations:
+      required: true
+
+  - type: input
+    id: go
+    attributes:
+      label: Go version and OS
+      placeholder: go1.24.2 windows/amd64
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does the problem show?
+      multiple: true
+      options:
+        - docx-go returns an error or panics
+        - Word shows a "Repaired document" or "unreadable content" prompt
+        - Word opens the file but content is wrong or missing
+        - LibreOffice
+        - Google Docs
+        - OOXML schema validator (docxlint)
+        - Template filling (docx/template)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproducer
+      description: The smallest Go program that shows the problem.
+      render: go
+    validations:
+      required: true
+
+  - type: textarea
+    id: file
+    attributes:
+      label: Sample document
+      description: |
+        Drag a `.docx` here if the problem depends on input. **Remove any
+        confidential content first:** attachments are public.
+    validations:
+      required: false
