@@ -17,6 +17,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Read-only token: no job writes to the repository, issues or PRs.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest

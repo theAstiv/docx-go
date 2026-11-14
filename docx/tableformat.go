@@ -83,7 +83,10 @@ func borderFromWML(b *wml.Border) *Border {
 		}
 	}
 	if b.Space != nil {
-		out.Space = int(*b.Space)
+		// Likewise for spacing; also keeps the int conversion safe on 32-bit.
+		if v, ok := toInt32(*b.Space); ok {
+			out.Space = int(v)
+		}
 	}
 	if b.Color != "auto" {
 		out.Color = b.Color

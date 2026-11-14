@@ -7,6 +7,10 @@ on:
       - "**/*_bench_test.go"
       - "**/*bench*_test.go"
 
+# Read-only token: no job writes to the repository, issues or PRs.
+permissions:
+  contents: read
+
 jobs:
   bench:
     runs-on: ubuntu-latest
