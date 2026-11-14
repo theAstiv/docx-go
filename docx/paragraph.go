@@ -10,6 +10,9 @@ import (
 type Paragraph struct {
 	p  *wml.CT_P
 	st *story
+	// parent is the block list the paragraph was found in or added to: a
+	// hint for Remove and the Insert methods, checked before use (locate.go).
+	parent *[]wml.BlockElement
 }
 
 // Format returns a ParagraphFormat proxy for reading and writing paragraph
@@ -28,7 +31,7 @@ func (p *Paragraph) Runs() iter.Seq[*Run] {
 			if !ok {
 				continue
 			}
-			if !yield(&Run{r: r, st: p.st}) {
+			if !yield(&Run{r: r, st: p.st, parent: &p.p.Children}) {
 				return
 			}
 		}
@@ -46,7 +49,7 @@ func (p *Paragraph) AddRun(text string) *Run {
 		r.Children = append(r.Children, t)
 	}
 	p.p.Children = append(p.p.Children, r)
-	return &Run{r: r, st: p.st}
+	return &Run{r: r, st: p.st, parent: &p.p.Children}
 }
 
 // Text returns the visible text of the paragraph by walking all w:t descendants

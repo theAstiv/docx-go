@@ -31,7 +31,7 @@ func (f *Footer) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p, st: f.story()}) {
+			if !yield(&Paragraph{p: p, st: f.story(), parent: &f.ct.Children}) {
 				return
 			}
 		}
@@ -46,7 +46,7 @@ func (f *Footer) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl, st: f.story()}) {
+			if !yield(&Table{tbl: tbl, st: f.story(), parent: &f.ct.Children}) {
 				return
 			}
 		}
@@ -59,7 +59,7 @@ func (f *Footer) Tables() iter.Seq[*Table] {
 func (f *Footer) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
 	f.ct.Children = append(f.ct.Children, p)
-	return &Paragraph{p: p, st: f.story()}
+	return &Paragraph{p: p, st: f.story(), parent: &f.ct.Children}
 }
 
 // Text returns the plain text of the footer, laid out as described at
@@ -86,5 +86,5 @@ func (f *Footer) AddTable(rows, cols int, opts TableOptions) *Table {
 	}
 	tbl := buildTable(rows, cols, opts)
 	appendBlock(&f.ct.Children, tbl)
-	return &Table{tbl: tbl, st: f.story()}
+	return &Table{tbl: tbl, st: f.story(), parent: &f.ct.Children}
 }

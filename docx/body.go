@@ -31,7 +31,7 @@ func (b *Body) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p, st: b.st}) {
+			if !yield(&Paragraph{p: p, st: b.st, parent: &body.Children}) {
 				return
 			}
 		}
@@ -59,7 +59,7 @@ func (b *Body) AddParagraph() *Paragraph {
 	// Insert before the trailing sectPr (which is not a child but a field),
 	// so we simply append to Children.
 	body.Children = append(body.Children, p)
-	return &Paragraph{p: p, st: b.st}
+	return &Paragraph{p: p, st: b.st, parent: &body.Children}
 }
 
 // Tables returns an iterator over all top-level tables in the body.
@@ -75,7 +75,7 @@ func (b *Body) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl, st: b.st}) {
+			if !yield(&Table{tbl: tbl, st: b.st, parent: &body.Children}) {
 				return
 			}
 		}
@@ -92,6 +92,7 @@ func (b *Body) AddTable(rows, cols int, opts TableOptions) *Table {
 		cols = 1
 	}
 	tbl := buildTable(rows, cols, opts)
-	b.ctBody().Children = append(b.ctBody().Children, tbl)
-	return &Table{tbl: tbl, st: b.st}
+	body := b.ctBody()
+	body.Children = append(body.Children, tbl)
+	return &Table{tbl: tbl, st: b.st, parent: &body.Children}
 }

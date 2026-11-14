@@ -31,7 +31,7 @@ func (h *Header) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p, st: h.story()}) {
+			if !yield(&Paragraph{p: p, st: h.story(), parent: &h.ct.Children}) {
 				return
 			}
 		}
@@ -46,7 +46,7 @@ func (h *Header) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl, st: h.story()}) {
+			if !yield(&Table{tbl: tbl, st: h.story(), parent: &h.ct.Children}) {
 				return
 			}
 		}
@@ -59,7 +59,7 @@ func (h *Header) Tables() iter.Seq[*Table] {
 func (h *Header) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
 	h.ct.Children = append(h.ct.Children, p)
-	return &Paragraph{p: p, st: h.story()}
+	return &Paragraph{p: p, st: h.story(), parent: &h.ct.Children}
 }
 
 // Text returns the plain text of the header, laid out as described at
@@ -86,5 +86,5 @@ func (h *Header) AddTable(rows, cols int, opts TableOptions) *Table {
 	}
 	tbl := buildTable(rows, cols, opts)
 	appendBlock(&h.ct.Children, tbl)
-	return &Table{tbl: tbl, st: h.story()}
+	return &Table{tbl: tbl, st: h.story(), parent: &h.ct.Children}
 }

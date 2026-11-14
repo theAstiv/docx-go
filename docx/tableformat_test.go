@@ -138,10 +138,15 @@ func TestTable_ClearingDoesNotCreateProperties(t *testing.T) {
 	c.SetShading("")
 
 	xml := string(partXML(t, d, "word/document.xml"))
-	for _, name := range []string{"<tblPr", "<trPr", "<tcPr"} {
+	for _, name := range []string{"<trPr", "<tcPr"} {
 		if strings.Contains(xml, name) {
 			t.Errorf("clearing unset properties created %s: %s", name, xml)
 		}
+	}
+	// w:tblPr is required by the schema, so a new table always has one; it
+	// must stay empty.
+	if !strings.Contains(xml, "<tblPr></tblPr>") {
+		t.Errorf("want an empty tblPr: %s", xml)
 	}
 }
 

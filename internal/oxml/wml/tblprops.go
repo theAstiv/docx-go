@@ -459,3 +459,9 @@ func (p *CT_TrPr) CantSplit() *bool { return rawGetOnOff(p.raw, ns.Qn("w:cantSpl
 // SetCantSplit sets w:cantSplit (keep the row on one page). nil removes it.
 // CT_TrPrBase is an unordered choice, so position does not matter.
 func (p *CT_TrPr) SetCantSplit(b *bool) { rawSetOnOff(&p.raw, ns.Qn("w:cantSplit"), b) }
+
+// GridBefore returns w:gridBefore/@w:val, the number of grid columns
+// skipped before the row's first cell; nil when absent.
+func (p *CT_TrPr) GridBefore() *int64 {
+	return rawGetInt64Attr(p.raw, ns.Qn("w:gridBefore"), "val")
+}

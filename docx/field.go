@@ -78,7 +78,7 @@ func (p *Paragraph) Fields() iter.Seq[*Field] {
 			return
 		}
 		// A field is still open: it continues into the following paragraphs.
-		for _, b := range p.st.blocksAfter(p.p) {
+		for _, b := range p.st.blocksAfter(p.p, p.parent) {
 			next, ok := b.(*wml.CT_P)
 			if !ok {
 				return
