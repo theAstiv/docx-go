@@ -105,8 +105,9 @@ func (p *CT_P) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 //
 // Tabs render as \t, breaks and carriage-returns as \n.
 // Field instructions (w:instrText) are excluded; field results are included.
-// w:del runs (tracked deletions) are excluded; w:ins runs are included.
-// Unknown elements (RawInline) contribute nothing.
+// Content the typed model keeps raw is walked too: text inside w:ins,
+// w:smartTag, inline w:sdt, w:fldSimple and w:customXml is included; tracked
+// deletions (w:del, w:moveFrom) are excluded (see text.go).
 func (p *CT_P) Text() string {
 	var sb strings.Builder
 	textFromInlines(p.Children, &sb, false)
@@ -122,7 +123,15 @@ func textFromInlines(children []InlineElement, sb *strings.Builder, inField bool
 			inField = textFromRunContent(c.Children, sb, inField)
 		case *CT_Hyperlink:
 			inField = textFromInlines(c.Children, sb, inField)
-		case *CT_BookmarkStart, *CT_BookmarkEnd, *RawInline:
+		case *RawInline:
+			if c.E != nil && !rawSkip[c.E.QName] {
+				if c.E.QName == ns.Qn("w:r") {
+					inField = rawRunText(c.E, sb, inField)
+				} else {
+					inField = rawInlineText(c.E.Children, sb, inField)
+				}
+			}
+		case *CT_BookmarkStart, *CT_BookmarkEnd:
 			// No visible text.
 		}
 	}

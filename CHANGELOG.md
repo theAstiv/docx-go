@@ -2,6 +2,18 @@
 
 docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the public API may change between minor versions.** Requires Go ≥ 1.23.
 
+## Unreleased
+
+### Added
+
+- `Document.Text()`, `Body.Text()`, `Header.Text()` and `Footer.Text()` return a story's plain text. Every paragraph ends with `\n`. In a table, cells are separated by `\t` and each row ends with `\n`, and a cell's paragraphs are joined with `\n`. Headers and footers are not part of `Document.Text()`. Text in text boxes is not included yet.
+
+### Behaviour changes
+
+- `Paragraph.Text()` (and `Hyperlink.Text()`) now include text inside content the library keeps unparsed: tracked insertions (`w:ins`), smart tags, inline content controls, simple fields and custom XML. Tracked deletions (`w:del`, `w:moveFrom`) are still excluded. Before, all of this text was silently dropped.
+- `Cell.Text()` now includes nested tables (laid out as in `Body.Text()`) and content controls in the cell.
+- Templating: whether a paragraph is a block tag (`{{#each}}`, `{{/if}}`, …) is now decided on its whole visible text, including text in tracked insertions and content controls. A block tag typed with track changes on now works. A block-tag paragraph that also holds other inserted text used to be removed along with that text; it is now reported as a misplaced block tag.
+
 ## v0.3.0: report building and templating
 
 Everything needed to generate a professional report: from scratch with the API, or by filling a Word template from JSON data.
