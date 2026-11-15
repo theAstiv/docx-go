@@ -83,9 +83,9 @@ linters:
 
         docx-layer:
           # docx/ may use parts, internal/oxml/wml (type construction only;
-          # see the CLAUDE.md decision log, 2026-04-26) and internal/oxml/docprops
-          # (property names; 2026-11-14), but no other oxml internals and not
-          # opc directly.
+          # see the CLAUDE.md decision log, 2026-04-26), internal/oxml/docprops
+          # (property names; 2026-11-14) and internal/textmerge (Replace;
+          # 2026-11-15), but no other oxml internals and not opc directly.
           list-mode: lax
           files:
             - "**/docx/**.go"

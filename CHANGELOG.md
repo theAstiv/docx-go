@@ -24,6 +24,12 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - Insertion: `Paragraph.InsertParagraphBefore/After(text)`, `Table.InsertParagraphBefore/After(text)`, `Paragraph.InsertTableAfter(rows, cols, opts)` and `Table.InsertRow(i, opts)`.
   - `InsertRow` copies the neighbouring row's cell structure, widths, borders, shading and paragraph formatting, and extends a vertical merge it is inserted into.
 
+- Find and replace: `Document.Replace(old, new, ReplaceOptions)` and `Paragraph.Replace`.
+  - Text that Word split across runs (spell-check marks, formatting or revision changes) is found. The replacement takes the formatting of the run holding the match's first character.
+  - `\n` and `\t` in the replacement become a line break and a tab.
+  - Options: `IgnoreCase`, `SkipHeaders`, `SkipFooters` and `Limit`.
+  - The result reports `Count`, and in `Skipped` the matches that could not be replaced: those split by a field, bookmark or hyperlink edge, those inside content controls or tracked insertions, and those inside a table of contents. Field results are replaced; field instructions are not searched.
+
 ### Fixes
 
 - A table created without a style (`AddTable(…, TableOptions{})`) had no `w:tblPr`, which the schema requires. It now always has one.
