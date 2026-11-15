@@ -30,6 +30,12 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - Options: `IgnoreCase`, `SkipHeaders`, `SkipFooters` and `Limit`.
   - The result reports `Count`, and in `Skipped` the matches that could not be replaced: those split by a field, bookmark or hyperlink edge, those inside content controls or tracked insertions, and those inside a table of contents. Field results are replaced; field instructions are not searched.
 
+- `cmd/docxfill`: fill a template from JSON on the command line.
+  - `docxfill [-lenient] -o out.docx template.docx data.json`, where `data.json` may be `-` for stdin and `-o -` writes to stdout.
+  - `docxfill -placeholders template.docx` lists the template's tags.
+  - Warnings go to stderr. Exit status is 2 for template or data errors (each one listed), and 1 for usage or file errors.
+  - The output is written only on success, never partially.
+
 ### Fixes
 
 - A table created without a style (`AddTable(…, TableOptions{})`) had no `w:tblPr`, which the schema requires. It now always has one.

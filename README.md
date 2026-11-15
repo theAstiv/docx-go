@@ -72,6 +72,16 @@ Block tags go **alone in their own paragraph** (the paragraphs and tables betwee
 
 See [`examples/template_report`](examples/template_report) for a gap-assessment report built from a template and [`data.json`](examples/template_report/data.json).
 
+Without writing Go, use the [`docxfill`](cmd/docxfill) command:
+
+```sh
+go install github.com/theAstiv/docx-go/cmd/docxfill@latest
+docxfill -o report.docx template.docx data.json   # -lenient: missing keys become empty text
+docxfill -placeholders template.docx              # list the template's tags
+```
+
+It exits with status 2 and lists every problem when the template or data has errors, and writes the output only on success.
+
 ## What works
 
 ### Report building
