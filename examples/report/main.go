@@ -214,26 +214,33 @@ func cellsOf(r *docx.Row) []*docx.Cell {
 	return out
 }
 
-// sampleChart draws a small bar chart so the example needs no image file.
+// sampleChart draws a bar chart of the findings by severity (High, Medium,
+// Low), so the example needs no image file. Each finding adds barUnit pixels
+// to its bar.
 func sampleChart() ([]byte, error) {
-	const w, h = 320, 160
+	const w, h, barUnit = 320, 160, 40
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := range h {
 		for x := range w {
 			img.Set(x, y, color.White)
 		}
 	}
+	count := map[string]int{}
+	for _, f := range findings {
+		count[f.severity]++
+	}
 	bars := []struct {
-		height int
-		col    color.RGBA
+		severity string
+		col      color.RGBA
 	}{
-		{120, color.RGBA{R: 0xC0, G: 0x39, B: 0x2B, A: 0xFF}},
-		{80, color.RGBA{R: 0xE6, G: 0xA2, B: 0x3C, A: 0xFF}},
-		{40, color.RGBA{R: 0x4C, G: 0xA6, B: 0x5B, A: 0xFF}},
+		{"High", color.RGBA{R: 0xC0, G: 0x39, B: 0x2B, A: 0xFF}},
+		{"Medium", color.RGBA{R: 0xE6, G: 0xA2, B: 0x3C, A: 0xFF}},
+		{"Low", color.RGBA{R: 0x4C, G: 0xA6, B: 0x5B, A: 0xFF}},
 	}
 	for i, b := range bars {
 		x0 := 40 + i*90
-		for y := h - 20 - b.height; y < h-20; y++ {
+		height := min(count[b.severity]*barUnit, h-20)
+		for y := h - 20 - height; y < h-20; y++ {
 			for x := x0; x < x0+60; x++ {
 				img.Set(x, y, b.col)
 			}

@@ -6,6 +6,7 @@
 # Generated documents:
 #   - docx/validation_docs_test.go  (TestGenerateValidationDocs)
 #   - examples/report
+#   - examples/edit, applied to the examples/report output
 #   - examples/template_report: the template itself and the filled report
 #     (templating must not turn a valid template into an invalid document)
 #   - the Word-authored templates (testdata/fixtures/word/template_*.docx),
@@ -27,6 +28,7 @@ mkdir -p "${OUT}"
   # go test runs inside ./docx, so the output directory must be absolute.
   DOCX_VALIDATION_DIR="${OUT}" go test -count=1 -run TestGenerateValidationDocs ./docx
   go run ./examples/report "${OUT}/example-report.docx"
+  go run ./examples/edit "${OUT}/example-report.docx" "${OUT}/example-edited.docx" >/dev/null
   cp examples/template_report/template.docx "${OUT}/example-template.docx"
   go run ./examples/template_report "${OUT}/example-template-report.docx"
   go build -o "${REPO_ROOT}/tmp/template_report" ./examples/template_report
@@ -40,7 +42,7 @@ mkdir -p "${OUT}"
 shopt -s nullglob
 files=("${OUT}"/*.docx)
 # Guard against a generator that silently wrote nothing (a vacuous pass).
-expected=13
+expected=14
 if [[ ${#files[@]} -ne ${expected} ]]; then
   echo "expected ${expected} generated documents, found ${#files[@]}: ${files[*]:-none}" >&2
   exit 1

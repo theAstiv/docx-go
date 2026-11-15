@@ -58,6 +58,7 @@ func structureDoc(t *testing.T) *docx.Document {
 		}
 	}
 	d := docx.New()
+	d.Styles().EnsureBuiltin(docx.StyleTableGrid)
 	b := d.Body()
 	var ps []*docx.Paragraph
 	for _, s := range []string{"Keep 1", "Drop", "Keep 2", "Drop with bookmark"} {
@@ -87,7 +88,7 @@ func structureDoc(t *testing.T) *docx.Document {
 
 	c := slices.Collect(slices.Collect(tbl.Rows())[2].Cells())[0]
 	cp := c.SetText("cell text")
-	cp.InsertTableAfter(1, 2, docx.TableOptions{Style: "TableGrid"})
+	cp.InsertTableAfter(1, 2, docx.TableOptions{Style: "TableGrid", ColWidth: []docx.Twip{900, 900}})
 	must(cp.Remove())
 
 	h := d.LastSection().SetHeader(docx.HeaderDefault)

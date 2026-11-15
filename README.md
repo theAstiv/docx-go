@@ -9,14 +9,14 @@
 A permissively-licensed Go library for creating, reading, and modifying `.docx`
 (OOXML WordprocessingML) files, without losing unknown content.
 
-**Status: v0.3.0.** Build reports from scratch (images, hyperlinks, styled tables, page numbers, a table of contents) or fill Word templates from JSON data. Every document the library generates, and every template it fills, passes the OOXML schema validator and opens without a "Repaired document" prompt in Word, LibreOffice and Google Docs. **Pre-1.0:** the API may still change between minor versions; see the [changelog](CHANGELOG.md).
+**Status: v0.4.0.** Build reports from scratch (images, hyperlinks, styled tables, page numbers, a table of contents), fill Word templates from JSON data, or edit existing documents (remove and insert content, find and replace, plain text, document properties). Every document the library generates, and every template it fills, passes the OOXML schema validator and opens without a "Repaired document" prompt in Word, LibreOffice and Google Docs. **Pre-1.0:** the API may still change between minor versions; see the [changelog](CHANGELOG.md).
 
 ---
 
 ## Install
 
 ```sh
-go get github.com/theAstiv/docx-go@v0.3.0
+go get github.com/theAstiv/docx-go@v0.4.0
 ```
 
 Requires Go ≥ 1.23.
@@ -84,6 +84,18 @@ It exits with status 2 and lists every problem when the template or data has err
 
 ## What works
 
+### Editing existing documents
+
+| Feature | API surface |
+|---|---|
+| Removal | `Paragraph/Table/Row/Run.Remove()`; the other end of a cut bookmark or comment range goes too, and a cell, header or footer keeps its final paragraph. Refuses (with an error) to remove a section break or half a field |
+| Insertion | `Paragraph/Table.InsertParagraphBefore/After(text)`, `Paragraph.InsertTableAfter(rows, cols, opts)`, `Table.InsertRow(i, opts)` (copies the neighbouring row's shape) |
+| Find and replace | `Document.Replace(old, new, opts)`, `Paragraph.Replace`: finds text Word split across runs; reports the matches it could not replace |
+| Plain text | `Document/Body/Header/Footer/Cell.Text()` |
+| Document properties | `Document.CoreProperties()`: title, author, keywords, dates, … |
+
+See [`examples/edit`](examples/edit).
+
 ### Report building
 
 | Feature | API surface |
@@ -102,7 +114,7 @@ See [`examples/report`](examples/report) for a report that uses all of them.
 | Feature | API surface |
 |---|---|
 | Paragraphs and runs | `Body/Cell/Header/Footer.AddParagraph()` (appends), `Cell/Header/Footer.SetText(s)` (one paragraph; returns it), `Paragraph.AddRun()`, `Paragraph.Text()`. A new cell, header or footer holds one empty paragraph: fill it with `SetText`, or `AddParagraph` adds a second |
-| Paragraph formatting | `ParagraphFormat`: alignment, indents, spacing, line spacing, on/off flags |
+| Paragraph formatting | `ParagraphFormat`: alignment, indents, spacing, line spacing, tab stops, borders, shading, on/off flags |
 | Run formatting | `RunFont`: bold, italic, size, color, underline, highlight, vert-align |
 | Tables | `Body.AddTable(rows, cols, opts)`, `Row`, `Cell`, merged cells (`SetSpan`, `SetVMerge`) |
 | Numbered lists | `Document.CreateList(opts)`, `Paragraph.SetList(list, level)`, `List.RestartAt(lvl, start)` |
@@ -121,7 +133,7 @@ See [`examples/report`](examples/report) for a report that uses all of them.
 |---|---|
 | v0.2.0 ✅ | Paragraphs, runs and formatting; tables; lists; sections; headers and footers |
 | v0.3.0 ✅ | Report building (images, hyperlinks, bookmarks, table formatting, styles, page and TOC fields) and templating |
-| v0.4.0 | Editing existing documents: remove and insert paragraphs, tables, rows and runs; find and replace across runs; whole-document text; document properties; paragraph tab stops, borders and shading |
+| v0.4.0 ✅ | Editing existing documents: remove and insert paragraphs, tables, rows and runs; find and replace across runs; whole-document text; document properties; paragraph tab stops, borders and shading |
 | v0.5.0 | Templating: image values, `{{else}}`, formatters (dates, numbers, currency), rich-text values, conditions inside a paragraph |
 | v0.6.0 | Appending and merging documents, template includes, footnotes and endnotes, floating images and SVG, a PDF conversion recipe |
 | Later | Threaded comments, resolving style inheritance into effective formatting, REF/HYPERLINK/SEQ fields, bookmarks spanning paragraphs, typed content controls, tracked changes (accept / reject), equations, shapes and charts (kept as they are today) |
