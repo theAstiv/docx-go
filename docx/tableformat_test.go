@@ -10,6 +10,31 @@ import (
 
 func tw(v int64) *docx.Twip { t := docx.Twip(v); return &t }
 
+// ColWidth is written on every cell of the column, not only on the grid:
+// Word collapses an autofit table of empty cells that has no w:tcW.
+func TestTable_ColWidthOnCells(t *testing.T) {
+	d := docx.New()
+	tbl := d.Body().AddTable(2, 3, docx.TableOptions{ColWidth: []docx.Twip{1000, 2000}})
+	for r := range tbl.Rows() {
+		var i int
+		for c := range r.Cells() {
+			w, ok := c.Width()
+			switch i {
+			case 0, 1:
+				want := docx.Twip(1000 * (i + 1))
+				if !ok || w.Kind() != docx.WidthKindTwips || w.Twips() != want {
+					t.Errorf("cell %d width = %+v ok=%v, want %d twips", i, w, ok, want)
+				}
+			default:
+				if ok {
+					t.Errorf("cell %d without a column width has width %+v", i, w)
+				}
+			}
+			i++
+		}
+	}
+}
+
 func TestTable_BordersRoundTrip(t *testing.T) {
 	d := docx.New()
 	tbl := d.Body().AddTable(2, 2, docx.TableOptions{Style: "TableGrid"})

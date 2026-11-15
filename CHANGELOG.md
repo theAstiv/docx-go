@@ -2,7 +2,11 @@
 
 docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the public API may change between minor versions.** Requires Go ≥ 1.23.
 
-## Unreleased
+## v0.4.0: editing existing documents
+
+Open a document, then remove and insert content, find and replace text, read its plain text and set its properties. Templates can be filled without writing Go, using the new `docxfill` command.
+
+Every document this release generates passes the OOXML schema validator and opens without a "Repaired document" prompt in LibreOffice (checked in CI). Word and Google Docs were checked by hand. [`examples/edit`](examples/edit) edits the report that [`examples/report`](examples/report) builds.
 
 ### Added
 
@@ -23,13 +27,11 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - Removing the row where a vertical merge starts passes the start to the row below.
   - Insertion: `Paragraph.InsertParagraphBefore/After(text)`, `Table.InsertParagraphBefore/After(text)`, `Paragraph.InsertTableAfter(rows, cols, opts)` and `Table.InsertRow(i, opts)`.
   - `InsertRow` copies the neighbouring row's cell structure, widths, borders, shading and paragraph formatting, and extends a vertical merge it is inserted into.
-
 - Find and replace: `Document.Replace(old, new, ReplaceOptions)` and `Paragraph.Replace`.
   - Text that Word split across runs (spell-check marks, formatting or revision changes) is found. The replacement takes the formatting of the run holding the match's first character.
   - `\n` and `\t` in the replacement become a line break and a tab.
   - Options: `IgnoreCase`, `SkipHeaders`, `SkipFooters` and `Limit`.
   - The result reports `Count`, and in `Skipped` the matches that could not be replaced: those split by a field, bookmark or hyperlink edge, those inside content controls or tracked insertions, and those inside a table of contents. Field results are replaced; field instructions are not searched.
-
 - `cmd/docxfill`: fill a template from JSON on the command line.
   - `docxfill [-lenient] -o out.docx template.docx data.json`, where `data.json` may be `-` for stdin and `-o -` writes to stdout.
   - `docxfill -placeholders template.docx` lists the template's tags.
@@ -39,6 +41,7 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 ### Fixes
 
 - A table created without a style (`AddTable(…, TableOptions{})`) had no `w:tblPr`, which the schema requires. It now always has one.
+- `TableOptions.ColWidth` was written only on the table grid. Word lays out an autofit table from the cell widths, so a table whose cells were still empty collapsed to a sliver (LibreOffice was not affected). The width is now also written on every cell of the column (`w:tcW`).
 
 ### Behaviour changes
 

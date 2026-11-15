@@ -13,7 +13,7 @@ import (
 // buildTemplate builds the template that template.docx holds. A real
 // template is drawn in Word by a designer; this one is built in code so the
 // example needs no binary it cannot regenerate. TestTemplateUpToDate keeps
-// the committed file in step (go test ./examples/template_report -update).
+// the committed file in step (go test ./examples/template_report -update-template).
 //
 // It shows every placement the engine supports:
 //   - value tags in the body, the header and a table;

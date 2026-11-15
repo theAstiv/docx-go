@@ -13,7 +13,8 @@ type TableOptions struct {
 	// Style is the table style ID (e.g. "TableGrid", "PlainTable1").
 	// Empty string leaves the table unstyled.
 	Style string
-	// ColWidth specifies the width of each column in twips.
+	// ColWidth specifies the width of each column in twips. It is written
+	// on the table grid and on every cell of the column.
 	// If nil or shorter than cols, remaining columns get no explicit width.
 	ColWidth []Twip
 }
@@ -325,11 +326,17 @@ func buildTable(rows, cols int, opts TableOptions) *wml.CT_Tbl {
 		}
 		tbl.TblGrid = grid
 	}
-	// Rows.
+	// Rows. A column width goes on each cell (w:tcW) as well as on the grid:
+	// Word lays out an autofit table from the cell widths, and without them
+	// it collapses a table of empty cells to a sliver.
 	for range rows {
 		tr := new(wml.CT_Tr)
-		for range cols {
+		for i := range cols {
 			tc := new(wml.CT_Tc)
+			if i < len(opts.ColWidth) && opts.ColWidth[i] > 0 {
+				tc.TcPr = new(wml.CT_TcPr)
+				tc.TcPr.SetWidth(int64(opts.ColWidth[i]))
+			}
 			tc.Children = []wml.BlockElement{new(wml.CT_P)}
 			tr.Children = append(tr.Children, tc)
 		}
