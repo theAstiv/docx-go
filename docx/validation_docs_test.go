@@ -101,6 +101,15 @@ func structureDoc(t *testing.T) *docx.Document {
 	gone := p.AddRun("removed run")
 	p.AddRun("y")
 	must(gone.Remove())
+
+	// Find and replace across split runs, with breaks and tabs.
+	sp := b.AddParagraph()
+	sp.AddRun("Dear CL").Font().SetBold(docx.On())
+	sp.AddRun("IENT, see ")
+	sp.AddRun("CLIENT")
+	if res := d.Replace("CLIENT", "Acme Ltd\nAttn:\tLegal", docx.ReplaceOptions{}); res.Count != 2 {
+		t.Fatalf("Replace: %+v", res)
+	}
 	return d
 }
 
