@@ -84,7 +84,7 @@ func (h *Header) AddTable(rows, cols int, opts TableOptions) *Table {
 	if cols < 1 {
 		cols = 1
 	}
-	tbl := buildTable(rows, cols, opts)
+	tbl := buildTable(rows, cols, opts, h.story().textWidthAt(&h.ct.Children, len(h.ct.Children)))
 	appendBlock(&h.ct.Children, tbl)
 	return &Table{tbl: tbl, st: h.story(), parent: &h.ct.Children}
 }

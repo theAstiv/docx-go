@@ -263,9 +263,9 @@ func insertParagraph(st *story, el wml.BlockElement, hint *[]wml.BlockElement, o
 // empty paragraph follows the table when it would otherwise end the
 // container. If p is no longer in the document, the table is not attached.
 func (p *Paragraph) InsertTableAfter(rows, cols int, opts TableOptions) *Table {
-	tbl := buildTable(max(rows, 1), max(cols, 1), opts)
-	t := &Table{tbl: tbl, st: p.st, parent: nil}
 	list, i, ok := p.st.locateBlock(p.p, p.parent)
+	tbl := buildTable(max(rows, 1), max(cols, 1), opts, p.st.textWidthAt(list, i+1))
+	t := &Table{tbl: tbl, st: p.st, parent: nil}
 	if !ok {
 		return t
 	}

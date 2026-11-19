@@ -91,8 +91,8 @@ func (b *Body) AddTable(rows, cols int, opts TableOptions) *Table {
 	if cols < 1 {
 		cols = 1
 	}
-	tbl := buildTable(rows, cols, opts)
 	body := b.ctBody()
+	tbl := buildTable(rows, cols, opts, b.st.textWidthAt(&body.Children, len(body.Children)))
 	body.Children = append(body.Children, tbl)
 	return &Table{tbl: tbl, st: b.st, parent: &body.Children}
 }
