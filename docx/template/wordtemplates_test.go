@@ -65,6 +65,15 @@ func TestWordTemplates(t *testing.T) {
 			"Fee: €1.234.567,89", "Due: 15 December 2026", "Owner: data protection office",
 			"Reviewer: —", "MFA for admins", "IT", "₹125,000", "Audit logging", "SECURITY", "₹40,001",
 		}, []string{"{{", "“", "‘"}},
+		// Inline conditions typed in Word: tags split by spell-check marks,
+		// bold and italic edges and an edited letter; a nested range, a missing
+		// key (false), a tab and a line break in a branch, a range inside a
+		// hyperlink and ranges inside a row loop.
+		{"template_inline_if", []string{
+			"Dear valued customer,", "Status: 3 findings.", "Reviewer: S. Assessor", "Draft.",
+			"Plan: priority with fees support.", "Total:3", "Note.", "VIP portal",
+			"G-01critical", "G-02minor",
+		}, []string{"{{", "no totals", "not assigned", "(hidden)"}},
 		{"template_cover_sdt", []string{
 			"DPDPA Gap Assessment", "Acme Health & Co", "A. Author", "18 October 2026",
 		}, nil},
