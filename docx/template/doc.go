@@ -29,6 +29,14 @@
 // {{else}} that fills a one-cell row on its own is a row range, as before:
 // the row is kept or removed. {{#each}} cannot repeat part of a paragraph.
 //
+// {{image path}} places a picture inline, in the tag's run, from a
+// template.Image value (PNG, JPEG or GIF bytes, an optional size, and the
+// required alt text). It works in the body, tables, headers and footers and
+// inside loops (each copy gets its own drawing id; identical bytes are
+// stored once), but not in content controls or text boxes. Adding an image
+// changes the package, so Execute records it first and puts it back if
+// execution fails: a failed Execute still leaves the document unchanged.
+//
 // A value tag can pipe its value through formatters, left to right:
 //
 //	{{name | upper}}                     UPPER CASE (lower: lower case)

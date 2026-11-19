@@ -24,6 +24,16 @@ bolded `vip}}val` and `ndings{{else}}no` and italicised a letter run inside the
 kept text of a row range; the third replaced and restored a letter inside
 `show_totals`, `{{/unless}}`, `asessor` and `{{/if}}`.
 
+`word/template_images.docx` (P3c.6) was made the same way. The first session
+typed `{{image}}` tags in the body, in the default header (followed by text),
+in the second cell of a `{{#each team}}` row (`{{image .photo}}`) and in both
+branches of inline `{{#if}}`/`{{#unless}}` conditions. The second bolded
+`image sig` inside `{{image signature}}` and italicised the `{{im` that starts
+the header tag; the third replaced and restored a letter inside `logo`,
+`.photo`, `badge` and the header's `client_logo`. Its data holds images, which
+JSON cannot express, so `TestWordTemplates_Images` builds the data in Go and
+writes `filled-template_images.docx` for `generate-docs.sh`.
+
 Files under `python-docx/` are from the [python-docx](https://github.com/python-openxml/python-docx) project,
 licensed under the **MIT License**. Copyright © python-docx contributors.
 

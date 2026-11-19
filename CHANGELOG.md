@@ -26,6 +26,11 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - `{{#each}}` inside a paragraph is `ErrMisplacedBlock`. So is a range that opens in one paragraph and closes in another, as before.
   - A block tag at a table row's edge that closes inside its own paragraph is now an inline range, not the start of a row range. The exception is a range without `{{else}}` that fills a one-cell row on its own, which stays a row range: `{{#each items}}- {{.}}{{/each}}` in a one-column row still repeats the row.
   - Block tags in content controls and text boxes are still `ErrUnsupportedLocation`.
+- Templating: image values. `{{image logo}}` places a picture inline, in the tag's run, from a `template.Image{Data, Width, Height, AltText, Title}` value (also `*template.Image`) anywhere in the data.
+  - PNG, JPEG and GIF, validated and sized as `Run.AddImage` does: both sizes zero gives the pixel size at 96 DPI, and one zero follows from the aspect ratio.
+  - `AltText` is required. A missing or invalid image, a non-image value in an `{{image}}` tag, or an image in a plain value tag is `ErrUnsupportedValue`. A missing key follows Strict or Lenient mode, and in Lenient mode nothing is placed.
+  - Works in the body, tables, headers and footers (the relationship goes on the part that holds the tag) and in loops: every copy gets its own drawing id, and identical bytes are stored once. Image tags in content controls and text boxes are `ErrUnsupportedLocation`.
+  - `Execute` stays atomic. Adding an image changes the package itself (media part, relationship, content type), so `Execute` records the package before the first image and restores it if execution fails.
 
 ## v0.4.0: editing existing documents
 
