@@ -324,3 +324,8 @@ func resolveRelPath(sourcePart, target string) string {
 	}
 	return path.Join(path.Dir(sourcePart), target)
 }
+
+// ErrLimitExceeded is returned (wrapped) by Open when the archive exceeds a
+// resource limit: too many entries, an entry or the whole archive too large
+// uncompressed, or an XML part nested too deeply.
+var ErrLimitExceeded = opc.ErrLimitExceeded

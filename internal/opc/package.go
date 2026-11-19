@@ -31,7 +31,7 @@ func NewPackage() *Package {
 
 // Open reads an OPC package from r.
 func Open(r io.ReaderAt, size int64) (*Package, error) {
-	raw, err := readZip(r, size)
+	raw, err := readZip(r, size, defaultLimits)
 	if err != nil {
 		return nil, fmt.Errorf("opc: open zip: %w", err)
 	}
