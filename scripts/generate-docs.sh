@@ -10,7 +10,8 @@
 #   - examples/template_report: the template itself and the filled report
 #     (templating must not turn a valid template into an invalid document)
 #   - the Word-authored templates (testdata/fixtures/word/template_*.docx),
-#     filled from testdata/template/word-templates.json
+#     filled from testdata/template/word-templates.json, except
+#     template_images.docx, which TestWordTemplates_Images fills
 #
 # Usage: scripts/generate-docs.sh
 # Prints nothing on stdout but the output directory, so callers can capture it.
@@ -32,7 +33,11 @@ mkdir -p "${OUT}"
   cp examples/template_report/template.docx "${OUT}/example-template.docx"
   go run ./examples/template_report "${OUT}/example-template-report.docx"
   go build -o "${REPO_ROOT}/tmp/template_report" ./examples/template_report
+  # template_images.docx needs image values, which JSON cannot carry:
+  # TestWordTemplates_Images fills it and writes filled-template_images.docx.
+  DOCX_VALIDATION_DIR="${OUT}" go test -count=1 -run 'TestWordTemplates_Images$' ./docx/template
   for tpl in testdata/fixtures/word/template_*.docx; do
+    [[ "$(basename "${tpl}")" == template_images.docx ]] && continue
     "${REPO_ROOT}/tmp/template_report" -template "${tpl}" \
       -data testdata/template/word-templates.json \
       "${OUT}/filled-$(basename "${tpl}")"
@@ -42,7 +47,7 @@ mkdir -p "${OUT}"
 shopt -s nullglob
 files=("${OUT}"/*.docx)
 # Guard against a generator that silently wrote nothing (a vacuous pass).
-expected=17
+expected=18
 if [[ ${#files[@]} -ne ${expected} ]]; then
   echo "expected ${expected} generated documents, found ${#files[@]}: ${files[*]:-none}" >&2
   exit 1
