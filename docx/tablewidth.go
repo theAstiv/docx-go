@@ -3,13 +3,17 @@ package docx
 import "github.com/theAstiv/docx-go/internal/oxml/wml"
 
 // A table created without column widths gets them the way Word sizes an
-// inserted table: the text width (page width minus the left and right
-// margins) of the section holding it, shared evenly by the columns that
-// have no width. Without widths Word lays out a table of empty cells as a
-// sliver (CLAUDE.md C17).
+// inserted table: the text width of the place holding it, shared evenly by
+// the columns that have no width. Without widths Word lays out a table of
+// empty cells as a sliver (CLAUDE.md C17).
 
-// cellMargins is Word's default left plus right cell margin (2 × 0.075").
-const cellMargins Twip = 2 * 108
+const (
+	// cellMargins is Word's default left plus right cell margin (2 × 0.075").
+	cellMargins Twip = 2 * 108
+	// minColumnShare is the narrowest share a missing column gets from the
+	// width left over (0.5"); below it the columns share the whole width.
+	minColumnShare Twip = 720
+)
 
 // defaultSection is the page New() writes (wml.DefaultSectPr); its values
 // fill in what a section leaves out.
@@ -18,10 +22,13 @@ var defaultSection = wml.DefaultSectPr()
 // defaultTextWidth is the text width of defaultSection.
 var defaultTextWidth = Twip(*defaultSection.PgSzW() - *defaultSection.PgMarLeft() - *defaultSection.PgMarRight())
 
-// sectionTextWidth returns the width between a section's left and right
-// margins, taking missing values from DefaultSectPr.
+// sectionTextWidth returns the width of one text column of a section: the
+// page width less the left, right and gutter margins, divided among its
+// text columns (w:cols). Missing page values come from DefaultSectPr.
 func sectionTextWidth(sp *wml.CT_SectPr) Twip {
 	w, left, right := *defaultSection.PgSzW(), *defaultSection.PgMarLeft(), *defaultSection.PgMarRight()
+	var gutter int64
+	num, space, colWidths := 1, int64(720), []int64(nil)
 	if sp != nil {
 		if v := sp.PgSzW(); v != nil {
 			w = *v
@@ -32,24 +39,38 @@ func sectionTextWidth(sp *wml.CT_SectPr) Twip {
 		if v := sp.PgMarRight(); v != nil {
 			right = *v
 		}
+		if v := sp.PgMarGutter(); v != nil && *v > 0 {
+			gutter = *v
+		}
+		num, space, colWidths = sp.TextColumns()
 	}
-	if tw := Twip(w - left - right); tw > 0 {
-		return tw
+	text := w - left - right - gutter
+	switch {
+	case len(colWidths) > 0 && colWidths[0] > 0:
+		// Unequal columns: Word sizes a table to the column it is in; the
+		// first is the best guess without layout.
+		text = colWidths[0]
+	case num > 1:
+		text = (text - space*int64(num-1)) / int64(num)
+	}
+	if text > 0 {
+		return Twip(text)
 	}
 	return defaultTextWidth
 }
 
 // textWidthAt returns the width a table inserted into list at index i may
-// fill: in the body, the text width of the section it falls in (the next
-// paragraph-level section break at or after i, else the body's final
-// section); in a table cell with a fixed width, that width less the
-// default cell margins; anywhere else (headers, footers, other cells), the
-// body's final section.
+// fill:
+//   - in the body, the text column of the section it falls in (the next
+//     paragraph-level section break at or after i, else the body's final
+//     section);
+//   - in a table cell, the cell's width less the default cell margins: its
+//     w:tcW when that is fixed (dxa), else the width of the grid columns it
+//     spans;
+//   - in a header or footer, the first section that uses that part;
+//   - anywhere else, the body's final section.
 func (s *story) textWidthAt(list *[]wml.BlockElement, i int) Twip {
-	var body *wml.CT_Body
-	if s != nil && s.pkg != nil && s.pkg.DocPart != nil {
-		body = s.pkg.DocPart.Body()
-	}
+	body := s.body()
 	final := defaultTextWidth
 	if body != nil {
 		final = sectionTextWidth(body.SectPr)
@@ -65,16 +86,114 @@ func (s *story) textWidthAt(list *[]wml.BlockElement, i int) Twip {
 		}
 		return final
 	}
-	if cell := s.cellHolding(list); cell != nil && cell.TcPr != nil {
-		if ws := cell.TcPr.WidthSpec(); ws != nil && ws.Type == wml.WidthDxa && Twip(ws.W) > cellMargins {
-			return Twip(ws.W) - cellMargins
+	if loc := s.cellHolding(list); loc != nil {
+		if w := loc.width(); w > cellMargins {
+			return w - cellMargins
 		}
+		return final
+	}
+	if sp := s.sectionUsingPart(); sp != nil {
+		return sectionTextWidth(sp)
 	}
 	return final
 }
 
-// cellHolding returns the table cell whose block list is list, or nil.
-func (s *story) cellHolding(list *[]wml.BlockElement) *wml.CT_Tc {
+func (s *story) body() *wml.CT_Body {
+	if s == nil || s.pkg == nil || s.pkg.DocPart == nil {
+		return nil
+	}
+	return s.pkg.DocPart.Body()
+}
+
+// sections returns the document's sections in order: each paragraph-level
+// section break, then the body's final section.
+func (s *story) sections() []*wml.CT_SectPr {
+	body := s.body()
+	if body == nil {
+		return nil
+	}
+	var out []*wml.CT_SectPr
+	for _, b := range body.Children {
+		if p, ok := b.(*wml.CT_P); ok && p.PPr != nil && p.PPr.SectPr != nil {
+			out = append(out, p.PPr.SectPr)
+		}
+	}
+	if body.SectPr != nil {
+		out = append(out, body.SectPr)
+	}
+	return out
+}
+
+// sectionUsingPart returns the first section that references the story's
+// part as a header or footer, or nil when the story is not one (or no
+// section references it).
+func (s *story) sectionUsingPart() *wml.CT_SectPr {
+	if s == nil || s.pkg == nil {
+		return nil
+	}
+	relID, header := "", false
+	for _, h := range s.pkg.Headers {
+		if h.Path() == s.src {
+			relID, header = h.RelID, true
+		}
+	}
+	for _, f := range s.pkg.Footers {
+		if f.Path() == s.src {
+			relID = f.RelID
+		}
+	}
+	if relID == "" {
+		return nil
+	}
+	for _, sp := range s.sections() {
+		refs := sp.FooterRefs()
+		if header {
+			refs = sp.HeaderRefs()
+		}
+		for _, r := range refs {
+			if r.RelID == relID {
+				return sp
+			}
+		}
+	}
+	return nil
+}
+
+// cellLoc is a table cell with the table and column it sits in.
+type cellLoc struct {
+	cell *wml.CT_Tc
+	tbl  *wml.CT_Tbl
+	col  int // first grid column the cell covers
+}
+
+// width returns the cell's width: its w:tcW when fixed (dxa), else the
+// widths of the grid columns it spans, or 0 when neither is known.
+func (c *cellLoc) width() Twip {
+	if c.cell.TcPr != nil {
+		if ws := c.cell.TcPr.WidthSpec(); ws != nil && ws.Type == wml.WidthDxa && ws.W > 0 {
+			return Twip(ws.W)
+		}
+	}
+	if c.tbl.TblGrid == nil {
+		return 0
+	}
+	span := 1
+	if c.cell.TcPr != nil {
+		if n := c.cell.TcPr.GridSpan(); n != nil && *n > 1 {
+			span = int(*n)
+		}
+	}
+	var w Twip
+	for k := c.col; k < c.col+span && k < len(c.tbl.TblGrid.Cols); k++ {
+		if gc := c.tbl.TblGrid.Cols[k]; gc != nil && gc.W != nil {
+			w += Twip(*gc.W)
+		}
+	}
+	return w
+}
+
+// cellHolding finds the table cell whose block list is list.
+func (s *story) cellHolding(list *[]wml.BlockElement) *cellLoc {
 	for _, root := range s.roots() {
 		if c := findCell(*root, list); c != nil {
 			return c
@@ -83,7 +202,7 @@ func (s *story) cellHolding(list *[]wml.BlockElement) *wml.CT_Tc {
 	return nil
 }
 
-func findCell(blocks []wml.BlockElement, list *[]wml.BlockElement) *wml.CT_Tc {
+func findCell(blocks []wml.BlockElement, list *[]wml.BlockElement) *cellLoc {
 	for _, b := range blocks {
 		tbl, ok := b.(*wml.CT_Tbl)
 		if !ok {
@@ -94,17 +213,25 @@ func findCell(blocks []wml.BlockElement, list *[]wml.BlockElement) *wml.CT_Tc {
 			if !ok {
 				continue
 			}
+			col := 0
 			for _, c := range row.Children {
 				cell, ok := c.(*wml.CT_Tc)
 				if !ok {
 					continue
 				}
 				if &cell.Children == list {
-					return cell
+					return &cellLoc{cell: cell, tbl: tbl, col: col}
 				}
 				if found := findCell(cell.Children, list); found != nil {
 					return found
 				}
+				span := 1
+				if cell.TcPr != nil {
+					if n := cell.TcPr.GridSpan(); n != nil && *n > 1 {
+						span = int(*n)
+					}
+				}
+				col += span
 			}
 		}
 	}
@@ -113,8 +240,8 @@ func findCell(blocks []wml.BlockElement, list *[]wml.BlockElement) *wml.CT_Tc {
 
 // columnWidths returns the width of each of cols columns: the given width
 // where there is one, and an even share of what is left of width for the
-// others. When the given widths already fill width, each missing column
-// gets width / cols.
+// others. When that share would be narrower than minColumnShare (the given
+// widths fill or nearly fill width), each missing column gets width / cols.
 func columnWidths(cols int, given []Twip, width Twip) []Twip {
 	out := make([]Twip, cols)
 	var used Twip
@@ -131,7 +258,7 @@ func columnWidths(cols int, given []Twip, width Twip) []Twip {
 		return out
 	}
 	share := (width - used) / Twip(missing)
-	if share <= 0 {
+	if share < minColumnShare {
 		share = width / Twip(cols)
 	}
 	for i := range out {

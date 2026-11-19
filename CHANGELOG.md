@@ -8,9 +8,16 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 
 - A table created without column widths now gets them, the way Word sizes an inserted table, so a table of empty cells no longer collapses to a sliver in Word. This applies to `Body.AddTable`, `Header`/`Footer.AddTable` and `Paragraph.InsertTableAfter`.
   - Columns that `TableOptions.ColWidth` leaves out (nil, too short, or a zero entry) share what is left of the text width evenly, on the grid and on every cell (`w:tcW`).
-  - The text width is the page width less the left and right margins of the section holding the table. In a cell with a fixed width it is that width less the default cell margins.
-  - If the given widths already fill the page, each missing column gets an even share of the whole width.
+  - The text width depends on where the table goes:
+    - **In the body:** one text column of the section holding it: the page width less the left, right and gutter margins, divided among the section's text columns (`w:cols`; the first column's width when they are unequal).
+    - **In a cell:** the cell's width (its fixed `w:tcW`, else the outer grid columns it spans) less the default cell margins.
+    - **In a header or footer:** the first section that uses it.
+  - When the given widths leave less than half an inch per missing column, each missing column gets an even share of the whole width instead.
   - Columns with a width are unchanged.
+
+### Added
+
+- `Paragraph.AddSectionBreak` and `Paragraph.SectionBreak` return a `Section` that can set its own headers and footers. Before, only `Document.LastSection` could.
 
 ### Fixed
 

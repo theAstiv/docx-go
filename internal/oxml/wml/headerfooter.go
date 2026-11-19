@@ -194,6 +194,37 @@ func (s *CT_SectPr) PgMarRight() *int64 {
 	return rawGetInt64Attr(s.raw, ns.Qn("w:pgMar"), "right")
 }
 
+// PgMarGutter returns the gutter (binding) margin in twips, or nil.
+func (s *CT_SectPr) PgMarGutter() *int64 {
+	return rawGetInt64Attr(s.raw, ns.Qn("w:pgMar"), "gutter")
+}
+
+// TextColumns describes the section's text columns (w:cols): their number
+// (1 when absent), the space between equal columns (720 twips when not
+// given), and, for unequal columns, each w:col's width (nil otherwise).
+func (s *CT_SectPr) TextColumns() (num int, space int64, widths []int64) {
+	num, space = 1, 720
+	for _, re := range s.raw {
+		if re.QName != ns.Qn("w:cols") {
+			continue
+		}
+		if v := parseInt64Ptr(attrNS(re.Attrs, ns.W, "num")); v != nil && *v > 1 {
+			num = int(*v)
+		}
+		if v := parseInt64Ptr(attrNS(re.Attrs, ns.W, "space")); v != nil && *v >= 0 {
+			space = *v
+		}
+		for _, c := range rawKids(re) {
+			if c.QName == ns.Qn("w:col") {
+				if w := parseInt64Ptr(attrNS(c.Attrs, ns.W, "w")); w != nil {
+					widths = append(widths, *w)
+				}
+			}
+		}
+	}
+	return num, space, widths
+}
+
 // SetPgMargins sets all margins on w:pgMar in twips.
 func (s *CT_SectPr) SetPgMargins(top, right, bottom, left int64) {
 	rawSetInt64Attr(&s.raw, ns.Qn("w:pgMar"), ns.Qn("w:top"), &top)

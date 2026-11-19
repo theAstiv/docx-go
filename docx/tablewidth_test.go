@@ -1,7 +1,10 @@
 package docx_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/theAstiv/docx-go/docx"
@@ -109,11 +112,122 @@ func TestTableDefaultWidths_CellAndHeader(t *testing.T) {
 		t.Errorf("in a 4216-twip cell: %v, want [2000 2000]", got)
 	}
 	cell.SetWidth(docx.WidthPercent(50))
-	if got := gridWidths(t, p.InsertTableAfter(1, 1, docx.TableOptions{})); !slices.Equal(got, []docx.Twip{9000}) {
-		t.Errorf("in a percentage-width cell: %v, want the section's [9000]", got)
+	if got := gridWidths(t, p.InsertTableAfter(1, 1, docx.TableOptions{})); !slices.Equal(got, []docx.Twip{4000}) {
+		t.Errorf("in a percentage-width cell: %v, want its grid column less margins, [4000]", got)
 	}
 	h := d.LastSection().SetHeader(docx.HeaderDefault)
 	if got := gridWidths(t, h.AddTable(1, 3, docx.TableOptions{})); !slices.Equal(got, []docx.Twip{3000, 3000, 3000}) {
 		t.Errorf("in a header: %v, want [3000 3000 3000]", got)
+	}
+}
+
+// withFinalSection saves d, replaces its body-level w:sectPr with the
+// children given (raw WordprocessingML, w: prefix), and reopens it.
+func withFinalSection(t *testing.T, d *docx.Document, children string) *docx.Document {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := d.Save(&buf); err != nil {
+		t.Fatal(err)
+	}
+	entries := readZip(t, buf.Bytes())
+	doc := string(entries["word/document.xml"])
+	i, j := strings.LastIndex(doc, "<sectPr"), strings.LastIndex(doc, "</sectPr>")
+	if i < 0 || j < i {
+		t.Fatalf("no body sectPr in %s", doc)
+	}
+	entries["word/document.xml"] = []byte(doc[:i] + `<sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+		children + doc[j:])
+	var out bytes.Buffer
+	zw := zip.NewWriter(&out)
+	for name, data := range entries {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r, err := docx.OpenBytes(out.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// Widths that nearly fill the page do not leave sliver columns.
+func TestTableDefaultWidths_NearlyFull(t *testing.T) {
+	d := docx.New()
+	got := gridWidths(t, d.Body().AddTable(1, 3, docx.TableOptions{ColWidth: []docx.Twip{4500, 4490}}))
+	if !slices.Equal(got, []docx.Twip{4500, 4490, 3000}) {
+		t.Errorf("widths = %v, want [4500 4490 3000] (no 10-twip column)", got)
+	}
+}
+
+// Text columns and the gutter narrow the width a table fills.
+func TestTableDefaultWidths_ColumnsAndGutter(t *testing.T) {
+	const page = `<w:pgSz w:w="12240" w:h="15840"/>`
+	tests := []struct {
+		name, sect string
+		want       docx.Twip // width of a one-column table
+	}{
+		// 12240 − 2 × 1440 = 9360; two columns 720 apart: (9360 − 720) / 2.
+		{"two columns", page + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/><w:cols w:num="2" w:space="720"/>`, 4320},
+		// Default space between columns is 720.
+		{"three columns, default space", page + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/><w:cols w:num="3"/>`, 2640},
+		{"unequal columns: the first", page + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/><w:cols w:num="2" w:space="360" w:equalWidth="0"><w:col w:w="3000" w:space="360"/><w:col w:w="6000"/></w:cols>`, 3000},
+		{"gutter", page + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="720"/>`, 8640},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := withFinalSection(t, docx.New(), tt.sect)
+			if got := gridWidths(t, d.Body().AddTable(1, 1, docx.TableOptions{})); !slices.Equal(got, []docx.Twip{tt.want}) {
+				t.Errorf("width = %v, want [%d]", got, tt.want)
+			}
+		})
+	}
+}
+
+// A header table takes the width of the first section that uses the
+// header, not the final section's.
+func TestTableDefaultWidths_HeaderOfEarlierSection(t *testing.T) {
+	d := docx.New()
+	p := d.Body().AddParagraph()
+	p.AddRun("landscape section")
+	sec := p.AddSectionBreak()
+	sec.SetPageSize(15840, 12240)
+	sec.SetMargins(docx.PageMargins{Top: 1440, Right: 1440, Bottom: 1440, Left: 1440})
+	landscape := sec.SetHeader(docx.HeaderDefault)
+	d.Body().AddParagraph().AddRun("portrait section")
+	portrait := d.LastSection().SetHeader(docx.HeaderDefault)
+
+	if got := gridWidths(t, landscape.AddTable(1, 2, docx.TableOptions{})); !slices.Equal(got, []docx.Twip{6480, 6480}) {
+		t.Errorf("landscape header: %v, want [6480 6480] (15840 − 2880 shared)", got)
+	}
+	if got := gridWidths(t, portrait.AddTable(1, 1, docx.TableOptions{})); !slices.Equal(got, []docx.Twip{9000}) {
+		t.Errorf("portrait header: %v, want [9000]", got)
+	}
+}
+
+// A nested table in a cell without a fixed width fills the grid columns
+// the cell spans, not the page.
+func TestTableDefaultWidths_NestedInSpannedAutoCell(t *testing.T) {
+	d := docx.New()
+	outer := d.Body().AddTable(1, 3, docx.TableOptions{ColWidth: []docx.Twip{1000, 2216, 3000}})
+	var cells []*docx.Cell
+	for row := range outer.Rows() {
+		cells = slices.Collect(row.Cells())
+	}
+	cells[1].SetSpan(1, 2) // covers grid columns 1 and 2: 5216
+	cells[1].SetWidth(docx.WidthAuto())
+	var p *docx.Paragraph
+	for para := range cells[1].Paragraphs() {
+		p = para
+	}
+	if got := gridWidths(t, p.InsertTableAfter(1, 2, docx.TableOptions{})); !slices.Equal(got, []docx.Twip{2500, 2500}) {
+		t.Errorf("widths = %v, want [2500 2500] (5216 − 216 shared)", got)
 	}
 }
