@@ -3,6 +3,7 @@ package wml
 import (
 	"encoding/xml"
 	"fmt"
+	"math"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/raw"
@@ -212,12 +213,16 @@ func (s *CT_SectPr) TextColumns() (num int, space int64, widths []int64) {
 		if re.QName != ns.Qn("w:cols") {
 			continue
 		}
-		if v := parseInt64Ptr(attrNS(re.Attrs, ns.W, "num")); v != nil && *v > 1 {
+		if p := parseInt64Ptr(attrNS(re.Attrs, ns.W, "num")); p != nil {
 			// Word allows at most 45 text columns; clamp a larger count
 			// (only a broken or hostile document has one).
-			num = maxTextColumns
-			if *v < maxTextColumns {
-				num = int(*v)
+			switch v := *p; {
+			case v >= maxTextColumns:
+				num = maxTextColumns
+			// The int32 range check is implied by the case above, but it is
+			// the bound CodeQL's integer-conversion query recognises.
+			case v > 1 && v <= math.MaxInt32 && v >= math.MinInt32:
+				num = int(int32(v))
 			}
 		}
 		if v := parseInt64Ptr(attrNS(re.Attrs, ns.W, "space")); v != nil && *v >= 0 {

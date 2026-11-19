@@ -237,15 +237,11 @@ func gridSpanOf(cell *wml.CT_Tc) int {
 	if cell.TcPr == nil {
 		return 1
 	}
-	n := cell.TcPr.GridSpan()
-	switch {
-	case n == nil || *n <= 1:
-		return 1
-	case *n >= maxGridColumns:
+	if n := cell.TcPr.GridSpan(); n != nil && *n >= maxGridColumns {
 		return maxGridColumns
-	default:
-		return int(*n)
 	}
+	// gridCount bounds the conversion (the form CodeQL accepts, PR #35).
+	return min(gridCount(cell.TcPr.GridSpan(), 1), maxGridColumns)
 }
 
 // columnWidths returns the width of each of cols columns: the given width
