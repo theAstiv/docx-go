@@ -1,7 +1,8 @@
 package template
 
 import (
-	"sort"
+	"fmt"
+	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 	"github.com/theAstiv/docx-go/internal/textmerge"
@@ -92,33 +93,49 @@ func blockTagsOf(tags []tag) []tag {
 	return out
 }
 
-// pairedInText reports whether the block tag at index i of tags (block tags
-// only) pairs inside the same text, and returns its partner's index.
-func pairedInText(tags []tag, i int) (int, bool) {
-	roots, _ := inlinePairs(tags)
-	var find func([]*inlinePair) (int, bool)
-	find = func(ps []*inlinePair) (int, bool) {
-		for _, p := range ps {
-			if p.open == i {
-				return p.close, true
-			}
-			if p.close == i {
-				return p.open, true
-			}
-			if j, ok := find(p.children); ok {
-				return j, true
-			}
-		}
-		return 0, false
+// inlineAtEdge reports whether the block tag at a row edge, the first tag
+// of the row's first paragraph (first) or the last of its last, is part of
+// an inline range and so not a row-range edge (C13). The exception is a
+// range without {{else}} that fills a one-paragraph row on its own: that
+// stays a one-row row range, as before inline ranges existed. (A row range
+// cannot hold an {{else}} in its opening row, so with one the range is
+// inline.)
+func inlineAtEdge(row *wml.CT_Tr, p *wml.CT_P, first bool) bool {
+	text := p.Text()
+	all, _ := lexTags(text)
+	tags := blockTagsOf(all)
+	if len(tags) == 0 {
+		return false
 	}
-	return find(roots)
+	edge := 0
+	if !first {
+		edge = len(tags) - 1
+	}
+	roots, _ := inlinePairs(tags)
+	// An edge tag that pairs is an outermost range: nothing comes before
+	// (or after) it in the text.
+	var r *inlinePair
+	for _, c := range roots {
+		if c.open == edge || c.close == edge {
+			r = c
+		}
+	}
+	if r == nil {
+		return false
+	}
+	start := len(text) - len(strings.TrimLeft(text, " \t"))
+	end := len(strings.TrimRight(text, " \t"))
+	wholeRow := p == edgeParagraph(row, true) && p == edgeParagraph(row, false) &&
+		r.els < 0 && tags[r.open].start == start && tags[r.close].end == end
+	return !wholeRow
 }
 
 const (
 	inlineEachDetail = "{{#each}} cannot repeat part of a paragraph; put it alone in a paragraph or at a row's edges"
-	// inlineBoundaryDetail explains a range DeleteRange refused.
-	inlineBoundaryDetail = "an inline block cannot remove part of a field, hyperlink, content control or tracked change, " +
-		"or one end of a bookmark; move the tags, or put them alone in their own paragraphs"
+	// inlineBoundaryDetail explains a range CanDelete refused.
+	inlineBoundaryDetail = "an inline block can remove whole fields, hyperlinks and content controls, " +
+		"but not part of a field, one end of a bookmark or comment, or a footnote, endnote or comment reference; " +
+		"move the tags, or put them alone in their own paragraphs"
 )
 
 // expandInline expands the inline ranges of a typed paragraph's containers
@@ -141,22 +158,50 @@ func (en *engine) expandInline(children []wml.InlineElement, sc *scope, loc Loca
 		en.fail(loc, l.t, l.sentinel, l.detail)
 	}
 	var cuts []cut
-	if !en.planInline(roots, tags, children, pieces, sc, loc, &cuts) {
+	if !en.planInline(roots, tags, children, pieces, sc, loc, &cuts) || len(cuts) == 0 {
 		return children
 	}
-	// Right to left: a deletion leaves the offsets before it unchanged.
-	sort.Slice(cuts, func(a, b int) bool { return cuts[a].start > cuts[b].start })
-	for _, c := range cuts {
-		_, pieces = textmerge.Flatten(children, en.skip)
-		var ok bool
-		children, ok = textmerge.DeleteRange(children, pieces, c.start, c.end)
-		if !ok {
-			// planInline checked every cut against the same pieces.
-			en.fail(loc, c.open, ErrSplitAcrossBoundary, inlineBoundaryDetail)
-			return children
+	ranges := make([]textmerge.Range, len(cuts))
+	for i, c := range cuts {
+		ranges[i] = textmerge.Range{Start: c.start, End: c.end}
+		for _, name := range textmerge.RemovedBookmarks(children, pieces, c.start, c.end) {
+			en.removedBookmarks = append(en.removedBookmarks, removedBookmark{name: name, loc: loc, open: c.open})
 		}
 	}
-	return children
+	out, ok := textmerge.DeleteRanges(children, pieces, ranges)
+	if !ok {
+		// Unreachable: planInline checked every cut against these pieces.
+		en.fail(loc, cuts[0].open, ErrSplitAcrossBoundary, inlineBoundaryDetail)
+	}
+	return out
+}
+
+// removedBookmark is a bookmark an inline range removed.
+type removedBookmark struct {
+	name string
+	loc  Location
+	open tag
+}
+
+// warnRemovedReferences warns about removed bookmarks that a cross-reference
+// or internal link in the filled stories still points at: Word shows
+// "Error! Reference source not found." in their place.
+func (en *engine) warnRemovedReferences(stories [][]wml.BlockElement) {
+	if len(en.removedBookmarks) == 0 {
+		return
+	}
+	refs := map[string]bool{}
+	for _, blocks := range stories {
+		for name := range wml.ReferencedBookmarks(blocks) {
+			refs[name] = true
+		}
+	}
+	for _, b := range en.removedBookmarks {
+		if refs[b.name] {
+			en.warn(b.loc, b.open, fmt.Sprintf("removed bookmark %q, which a cross-reference or internal link points at; "+
+				"Word shows \"Error! Reference source not found.\" there", b.name))
+		}
+	}
 }
 
 // cut is a range of flattened text to delete, and the range it belongs to.
@@ -179,6 +224,7 @@ func (en *engine) planInline(ranges []*inlinePair, tags []tag, children []wml.In
 			ok = false
 			continue
 		}
+		cond := !en.check && en.condition(open, sc)
 		// thenEnd is where the then branch stops; elseStart where the else
 		// branch starts (both the close tag's start without an else).
 		thenEnd, elseStart := closeTag.start, closeTag.start
@@ -191,16 +237,22 @@ func (en *engine) planInline(ranges []*inlinePair, tags []tag, children []wml.In
 		switch {
 		case en.check:
 			chosen = append(keepThen, keepElse...)
-		case en.condition(open, sc):
+		case cond:
 			chosen = keepThen
 		default:
 			chosen = keepElse
 		}
+		refused := false
 		for _, c := range chosen {
 			if !textmerge.CanDelete(children, pieces, c.start, c.end) {
-				en.fail(loc, open, ErrSplitAcrossBoundary, inlineBoundaryDetail)
-				return false
+				refused = true
 			}
+		}
+		if refused {
+			// Keep going: every refused range is reported in one run.
+			en.fail(loc, open, ErrSplitAcrossBoundary, inlineBoundaryDetail)
+			ok = false
+			continue
 		}
 		if en.check {
 			ok = en.planInline(r.children, tags, children, pieces, sc, loc, cuts) && ok
@@ -210,7 +262,7 @@ func (en *engine) planInline(ranges []*inlinePair, tags []tag, children []wml.In
 		// Ranges inside the kept branch are expanded too; those in the
 		// removed branch go with it.
 		lo, hi := open.end, thenEnd
-		if !en.condition(open, sc) {
+		if !cond {
 			lo, hi = elseStart, closeTag.start
 		}
 		var kept []*inlinePair

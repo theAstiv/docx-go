@@ -163,19 +163,6 @@ func TestInline_Errors(t *testing.T) {
 		{"mismatched close", func(d *docx.Document) { paras(d, "a {{#if x}} b {{/unless}}") }, template.ErrMisplacedBlock},
 		{"second else", func(d *docx.Document) { paras(d, "{{#if x}}a{{else}}b{{else}}c{{/if}}") }, template.ErrUnbalancedBlock},
 		{"else outside", func(d *docx.Document) { paras(d, "a {{else}} b") }, template.ErrMisplacedBlock},
-		{"across a hyperlink edge", func(d *docx.Document) {
-			p := d.Body().AddParagraph()
-			p.AddRun("{{#if x}}a ")
-			h, _ := p.AddHyperlink("https://example.com", docx.HyperlinkOptions{})
-			h.AddRun("link")
-			p.AddRun(" b{{/if}}")
-		}, template.ErrSplitAcrossBoundary},
-		{"across a field", func(d *docx.Document) {
-			p := d.Body().AddParagraph()
-			p.AddRun("{{#if x}}page ")
-			p.AddPageNumber()
-			p.AddRun("{{/if}}")
-		}, template.ErrSplitAcrossBoundary},
 		{"half in a hyperlink", func(d *docx.Document) {
 			p := d.Body().AddParagraph()
 			p.AddRun("{{#if x}}a ")
@@ -200,6 +187,57 @@ func TestInline_Errors(t *testing.T) {
 					t.Error("a failed Execute changed the document")
 				}
 			})
+		}
+	}
+}
+
+// A range can remove whole hyperlinks and fields.
+func TestInline_RemovesWholeElements(t *testing.T) {
+	for _, x := range []bool{true, false} {
+		doc := docx.New()
+		p := doc.Body().AddParagraph()
+		p.AddRun("Report{{#if x}}, see ")
+		h, err := p.AddHyperlink("https://example.com", docx.HyperlinkOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.AddRun("the portal")
+		p.AddRun(" (page ")
+		p.AddPageNumber()
+		p.AddRun("){{/if}}.")
+		mustExecute(t, doc, map[string]any{"x": x})
+		re := reopen(t, doc)
+		got := bodyText(t, doc)
+		links, fields := 0, 0
+		for para := range re.Body().Paragraphs() {
+			for range para.Hyperlinks() {
+				links++
+			}
+			for range para.Fields() {
+				fields++
+			}
+		}
+		if x {
+			if !strings.HasPrefix(got, "Report, see the portal (page ") || links != 1 || fields != 1 {
+				t.Errorf("x=true: got %q, %d links, %d fields", got, links, fields)
+			}
+		} else if got != "Report." || links != 0 || fields != 0 {
+			t.Errorf("x=false: got %q, %d links, %d fields", got, links, fields)
+		}
+	}
+}
+
+// A one-cell row whose range has an {{else}} is inline: a row range cannot
+// hold an else in its opening row.
+func TestInline_OneCellRowWithElse(t *testing.T) {
+	for _, x := range []bool{true, false} {
+		doc := docx.New()
+		table(doc, [][]string{{"{{#if x}}A{{else}}B{{/if}}"}})
+		mustExecute(t, doc, map[string]any{"x": x})
+		got := strings.Join(tableTexts(reopen(t, doc).Body())[0], "\n")
+		want := map[bool]string{true: "A", false: "B"}[x]
+		if got != want {
+			t.Errorf("x=%v: got %q, want %q", x, got, want)
 		}
 	}
 }

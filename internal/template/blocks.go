@@ -553,15 +553,8 @@ func (en *engine) rowOpen(row *wml.CT_Tr) (tag, bool) {
 	if _, whole := marker(p); whole && en.pairedInCell(cell, 0) {
 		return tag{}, false
 	}
-	// A tag closed inside its own paragraph is an inline range (C13),
-	// unless that paragraph is the whole row and the range spans it: then
-	// it is a one-paragraph row range, as before inline ranges existed.
-	bt := blockTagsOf(tags)
-	if partner, paired := pairedInText(bt, 0); paired {
-		end := len(strings.TrimRight(text, " \t"))
-		if p != edgeParagraph(row, false) || partner != len(bt)-1 || bt[partner].end != end {
-			return tag{}, false
-		}
+	if inlineAtEdge(row, p, true) {
+		return tag{}, false
 	}
 	return tags[0], true
 }
@@ -590,13 +583,8 @@ func (en *engine) rowClose(row *wml.CT_Tr) (tag, bool) {
 	if _, whole := marker(p); whole && en.pairedInCell(cell, last) {
 		return tag{}, false
 	}
-	// The same rule as in rowOpen.
-	bt := blockTagsOf(tags)
-	if partner, paired := pairedInText(bt, len(bt)-1); paired {
-		start := len(text) - len(strings.TrimLeft(text, " \t"))
-		if p != edgeParagraph(row, true) || partner != 0 || bt[0].start != start {
-			return tag{}, false
-		}
+	if inlineAtEdge(row, p, false) {
+		return tag{}, false
 	}
 	return t, true
 }

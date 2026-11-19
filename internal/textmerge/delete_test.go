@@ -58,6 +58,25 @@ func TestDeleteRange(t *testing.T) {
 		{"run with other content keeps it",
 			`<w:r><w:t>a&lt;x&gt;</w:t><w:tab/><w:t>b</w:t></w:r>`,
 			"a" + string(BarrierBreak) + "b", "[a|<>|b]"},
+		{"whole hyperlink goes",
+			`<w:r><w:t>a&lt;</w:t></w:r><w:hyperlink w:anchor="x"><w:r><w:t>l</w:t></w:r></w:hyperlink><w:r><w:t>&gt;b</w:t></w:r>`,
+			"ab", "[a] [b]"},
+		{"whole content control goes",
+			`<w:r><w:t>a&lt;</w:t></w:r><w:sdt><w:sdtContent><w:r><w:t>s</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t>&gt;b</w:t></w:r>`,
+			"ab", "[a] [b]"},
+		{"whole tracked insertion goes",
+			`<w:r><w:t>a&lt;</w:t></w:r><w:ins w:id="1" w:author="x"><w:r><w:t>i</w:t></w:r></w:ins><w:r><w:t>&gt;b</w:t></w:r>`,
+			"ab", "[a] [b]"},
+		{"whole complex field goes",
+			`<w:r><w:t>a&lt;</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r>` +
+				`<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>7</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t>&gt;b</w:t></w:r>`,
+			"ab", "[a] [b]"},
+		{"field result text inside an open field",
+			`<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>x&lt;y&gt;z</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`,
+			string(BarrierBoundary) + string(BarrierBoundary) + "xz" + string(BarrierBoundary), ""},
+		{"bookmark pair inside a hyperlink goes",
+			`<w:r><w:t>a&lt;</w:t></w:r><w:hyperlink w:anchor="x"><w:bookmarkStart w:id="4" w:name="in"/><w:r><w:t>l</w:t></w:r><w:bookmarkEnd w:id="4"/></w:hyperlink><w:r><w:t>&gt;b</w:t></w:r>`,
+			"ab", "[a] [b]"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -79,13 +98,18 @@ func TestDeleteRange(t *testing.T) {
 
 func TestDeleteRange_Refused(t *testing.T) {
 	cases := []struct{ name, inner string }{
-		{"field character", `<w:r><w:t>a&lt;</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:t>&gt;b</w:t></w:r>`},
+		{"field begin only", `<w:r><w:t>a&lt;</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:t>&gt;b</w:t></w:r>`},
+		{"field end only", `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:t>a&lt;</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t>&gt;b</w:t></w:r>`},
 		{"field instruction", `<w:r><w:t>a&lt;</w:t><w:instrText>PAGE</w:instrText><w:t>&gt;b</w:t></w:r>`},
-		{"hyperlink", `<w:r><w:t>a&lt;</w:t></w:r><w:hyperlink w:anchor="x"><w:r><w:t>l</w:t></w:r></w:hyperlink><w:r><w:t>&gt;b</w:t></w:r>`},
-		{"content control", `<w:r><w:t>a&lt;</w:t></w:r><w:sdt><w:sdtContent><w:r><w:t>s</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t>&gt;b</w:t></w:r>`},
-		{"tracked insertion", `<w:r><w:t>a&lt;</w:t></w:r><w:ins w:id="1" w:author="x"><w:r><w:t>i</w:t></w:r></w:ins><w:r><w:t>&gt;b</w:t></w:r>`},
+		{"field instruction, field begun outside",
+			`<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:t>a&lt;</w:t><w:instrText>PAGE</w:instrText><w:t>&gt;b</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`},
 		{"bookmark start only", `<w:r><w:t>a&lt;</w:t></w:r><w:bookmarkStart w:id="3" w:name="x"/><w:r><w:t>&gt;b</w:t></w:r><w:bookmarkEnd w:id="3"/>`},
 		{"bookmark end only", `<w:bookmarkStart w:id="3" w:name="x"/><w:r><w:t>a&lt;</w:t></w:r><w:bookmarkEnd w:id="3"/><w:r><w:t>&gt;b</w:t></w:r>`},
+		{"bookmark start in a hyperlink, end outside",
+			`<w:r><w:t>a&lt;</w:t></w:r><w:hyperlink w:anchor="x"><w:bookmarkStart w:id="4" w:name="in"/><w:r><w:t>l</w:t></w:r></w:hyperlink><w:r><w:t>&gt;b</w:t></w:r><w:bookmarkEnd w:id="4"/>`},
+		{"comment range start only", `<w:r><w:t>a&lt;</w:t></w:r><w:commentRangeStart w:id="1"/><w:r><w:t>&gt;b</w:t></w:r><w:commentRangeEnd w:id="1"/>`},
+		{"footnote reference", `<w:r><w:t>a&lt;</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r><w:r><w:t>&gt;b</w:t></w:r>`},
+		{"comment reference in a hyperlink", `<w:r><w:t>a&lt;</w:t></w:r><w:hyperlink w:anchor="x"><w:r><w:commentReference w:id="1"/></w:r></w:hyperlink><w:r><w:t>&gt;b</w:t></w:r>`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -111,6 +135,25 @@ func TestDeleteRange_SkippedText(t *testing.T) {
 	start, end := strings.Index(flat, "<"), strings.Index(flat, ">")+1
 	if _, ok := DeleteRange(p.Children, pieces, start, end); ok {
 		t.Error("deleted skipped text")
+	}
+}
+
+// Several ranges are removed in one pass, including two in one w:t, and
+// RemovedBookmarks names what a range takes with it.
+func TestDeleteRanges(t *testing.T) {
+	p := parseP(t, `<w:r><w:t>aXXbYYc</w:t></w:r><w:bookmarkStart w:id="2" w:name="bm"/><w:r><w:t>ZZ</w:t></w:r><w:bookmarkEnd w:id="2"/><w:r><w:t>d</w:t></w:r>`)
+	flat, pieces := Flatten(p.Children, nil)
+	x, y, z := strings.Index(flat, "XX"), strings.Index(flat, "YY"), strings.Index(flat, "ZZ")
+	zr := Range{Start: z - 1, End: z + 3} // the bookmark start, ZZ and the end
+	if got := RemovedBookmarks(p.Children, pieces, zr.Start, zr.End); len(got) != 1 || got[0] != "bm" {
+		t.Errorf("RemovedBookmarks = %v, want [bm]", got)
+	}
+	out, ok := DeleteRanges(p.Children, pieces, []Range{{x, x + 2}, zr, {y, y + 2}})
+	if !ok {
+		t.Fatal("refused")
+	}
+	if got, _ := Flatten(out, nil); got != "abcd" {
+		t.Errorf("got %q, want %q", got, "abcd")
 	}
 }
 

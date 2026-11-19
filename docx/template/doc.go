@@ -20,12 +20,14 @@
 //
 // {{#if}} and {{#unless}}, with or without {{else}}, also work inside one
 // paragraph: "Dear {{#if vip}}valued {{/if}}customer" keeps or removes the
-// text between the tags, including tabs, breaks and inline pictures, and
-// the paragraph stays. Such a range cannot cut through a field, a
-// hyperlink's edge, a content control, a tracked change or one end of a
-// bookmark (ErrSplitAcrossBoundary), and {{#each}} cannot repeat part of a
-// paragraph. A range that fills a one-cell row on its own is a row range,
-// as before: the row is kept, repeated or removed.
+// text between the tags, and the paragraph stays. The removed text may hold
+// tabs, breaks, inline pictures, whole hyperlinks, whole fields and whole
+// content controls, but not part of a field, one end of a bookmark or
+// comment, or a footnote, endnote or comment reference
+// (ErrSplitAcrossBoundary). Removing a bookmark that a cross-reference or
+// internal link points at is a warning. {{#if}} … {{/if}} with no
+// {{else}} that fills a one-cell row on its own is a row range, as before:
+// the row is kept or removed. {{#each}} cannot repeat part of a paragraph.
 //
 // A value tag can pipe its value through formatters, left to right:
 //

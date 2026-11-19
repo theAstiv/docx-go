@@ -19,10 +19,12 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - `Options.Funcs` adds formatters, or replaces built-ins other than `default` (for example, a `number` with local digit grouping). A panic in one is reported as an error.
   - New sentinels: `ErrUnknownFormatter` (fails in both modes, even in a branch the data drops) and `ErrFormat` (a value a formatter rejects: an error in Strict mode, a warning in Lenient mode). A wrong argument to a built-in is `ErrMalformedTag`.
   - `Placeholder.Formatters` lists a tag's formatter names.
-- Templating: conditions inside a paragraph. `Dear {{#if vip}}valued {{/if}}customer` and `{{#if ok}}pass{{else}}fail{{/if}}` keep or remove the text between the tags, including tabs, line breaks, inline pictures and whole bookmarks, and the paragraph stays. Inline ranges nest, and work inside paragraph and row ranges, loops and hyperlinks.
-  - A range that would remove part of a field, a hyperlink's edge, a content control, a tracked change or one end of a bookmark is `ErrSplitAcrossBoundary`, whichever branch the data selects.
+- Templating: conditions inside a paragraph. `Dear {{#if vip}}valued {{/if}}customer` and `{{#if ok}}pass{{else}}fail{{/if}}` keep or remove the text between the tags, and the paragraph stays. Inline ranges nest, and work inside paragraph and row ranges, loops and hyperlinks.
+  - The removed text may hold tabs, line breaks, inline pictures, bookmarks, and whole hyperlinks, fields, content controls and tracked changes.
+  - A range that would remove part of a field, one end of a bookmark or comment, or a footnote, endnote or comment reference is `ErrSplitAcrossBoundary`, whichever branch the data selects. Every such range is reported in one run.
+  - Removing a bookmark that a cross-reference (`REF`, `PAGEREF`, `NOTEREF`) or internal link points at is a warning: Word would show "Error! Reference source not found." there.
   - `{{#each}}` inside a paragraph is `ErrMisplacedBlock`. So is a range that opens in one paragraph and closes in another, as before.
-  - A block tag at a table row's edge that closes inside its own paragraph is now an inline range, not the start of a row range. The exception is a range that fills a one-cell row on its own, which stays a row range: `{{#each items}}- {{.}}{{/each}}` in a one-column row still repeats the row.
+  - A block tag at a table row's edge that closes inside its own paragraph is now an inline range, not the start of a row range. The exception is a range without `{{else}}` that fills a one-cell row on its own, which stays a row range: `{{#each items}}- {{.}}{{/each}}` in a one-column row still repeats the row.
   - Block tags in content controls and text boxes are still `ErrUnsupportedLocation`.
 
 ## v0.4.0: editing existing documents

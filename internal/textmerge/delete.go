@@ -1,77 +1,134 @@
 package textmerge
 
 import (
+	"sort"
+
+	"github.com/theAstiv/docx-go/internal/oxml/ns"
+	"github.com/theAstiv/docx-go/internal/oxml/raw"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
-// CanDelete reports whether DeleteRange can remove flat[start:end]. flat
+// Range is a span [Start, End) of flattened text.
+type Range struct{ Start, End int }
+
+// CanDelete reports whether DeleteRanges can remove flat[start:end]. flat
 // and pieces must come from Flatten(children, …) on the current children.
 //
-// A range can hold text, tabs, breaks, symbols, hyphens and drawings, which
-// are removed with it, and bookmarks whose start and end both lie inside.
-// It cannot hold a field character or instruction, a hyperlink, a content
-// control, a tracked change or other raw inline, text Flatten marked as
-// skipped (a table of contents), or only one end of a bookmark: removing
-// part of those would corrupt the document.
+// A range can remove text and whole elements: tabs, breaks, symbols,
+// hyphens, drawings, hyperlinks, content controls, tracked changes and
+// complete fields. It cannot leave anything broken behind, so it refuses a
+// range that holds only part of a field (a field character or instruction
+// without the rest of its field), one end of a bookmark or comment range,
+// a footnote, endnote or comment reference (the note or comment would be
+// left without its anchor), or text Flatten was told to skip.
 func CanDelete(children []wml.InlineElement, pieces []Piece, start, end int) bool {
+	var marks []wml.Mark
+	depth := 0 // field nesting among the removed run content, in order
 	for _, p := range inside(pieces, start, end) {
 		if p.Kind != PieceBarrier {
 			continue
 		}
-		if p.Content >= 0 {
-			run, _ := children[p.Inline].(*wml.CT_R)
-			if run == nil || !deletableContent(run.Children[p.Content]) {
+		if p.Content < 0 {
+			el := children[p.Inline]
+			if hasReference(el) {
 				return false
 			}
+			marks = append(marks, wml.MarksIn(el)...)
 			continue
 		}
-		if _, ok := bookmarkPartnerInside(children, pieces, p, start, end); !ok {
+		run, _ := children[p.Inline].(*wml.CT_R)
+		if run == nil {
 			return false
 		}
+		switch rc := run.Children[p.Content].(type) {
+		case *wml.CT_Text:
+			return false // text Flatten was told to skip (a table of contents)
+		case *wml.CT_FldChar:
+			marks = append(marks, wml.Mark{Kind: wml.MarkFldChar, ID: 0, FldCharType: rc.FldCharType})
+			switch rc.FldCharType {
+			case wml.FldCharBegin:
+				depth++
+			case wml.FldCharEnd:
+				depth--
+			}
+		case *wml.CT_InstrText:
+			if depth <= 0 {
+				return false // an instruction whose field begins outside the range
+			}
+		case *wml.RawRunContent:
+			if rc.E == nil || isReference(rc.E) || hasReference(&wml.RawInline{E: rc.E}) {
+				return false
+			}
+			if rc.E.QName == ns.Qn("w:instrText") && depth <= 0 {
+				return false
+			}
+			marks = append(marks, wml.MarksIn(&wml.RawInline{E: rc.E})...)
+		}
 	}
-	return true
+	return wml.FieldsBalanced(marks) && len(wml.OrphanedPartners(marks)) == 0
 }
 
-// DeleteRange removes flat[start:end] from children: the text in it, the
-// run content and bookmark pairs CanDelete allows, and runs it leaves empty.
-// Zero-length items Flatten marked as dropped are removed when they sit
-// strictly inside the range; the _GoBack bookmark is kept. It returns false,
-// and leaves children as they are, when CanDelete is false. Offsets before
-// start are unchanged, so several ranges can be deleted right to left,
-// flattening again before each.
+// DeleteRange removes flat[start:end] from children; see DeleteRanges.
 func DeleteRange(children []wml.InlineElement, pieces []Piece, start, end int) ([]wml.InlineElement, bool) {
-	if start >= end {
+	return DeleteRanges(children, pieces, []Range{{start, end}})
+}
+
+// DeleteRanges removes several disjoint ranges of flattened text from
+// children in one pass: their text, the elements CanDelete allows, and runs
+// left empty. Zero-length items Flatten marked as dropped are removed when
+// they sit strictly inside a range; the _GoBack bookmark is kept. pieces
+// must come from Flatten(children, …). It returns false, and leaves
+// children as they are, when CanDelete refuses any of the ranges.
+func DeleteRanges(children []wml.InlineElement, pieces []Piece, ranges []Range) ([]wml.InlineElement, bool) {
+	rs := make([]Range, 0, len(ranges))
+	for _, r := range ranges {
+		if r.Start < r.End {
+			rs = append(rs, r)
+		}
+	}
+	if len(rs) == 0 {
 		return children, true
 	}
-	if !CanDelete(children, pieces, start, end) {
-		return children, false
+	for _, r := range rs {
+		if !CanDelete(children, pieces, r.Start, r.End) {
+			return children, false
+		}
 	}
+	// Right to left: trimming a w:t leaves the offsets before the cut valid.
+	sort.Slice(rs, func(a, b int) bool { return rs[a].Start > rs[b].Start })
+
 	type key struct{ inline, content int }
 	dropContent := map[key]bool{}
 	dropInline := map[int]bool{}
 	touched := map[int]bool{}
-	for _, p := range inside(pieces, start, end) {
-		switch p.Kind {
-		case PieceText:
-			run, _ := children[p.Inline].(*wml.CT_R)
-			txt, _ := run.Children[p.Content].(*wml.CT_Text)
-			ls, le := max(start, p.Start)-p.Start, min(end, p.End)-p.Start
-			txt.Content = txt.Content[:ls] + txt.Content[le:]
-			PreserveSpace(txt)
-			if txt.Content == "" {
-				dropContent[key{p.Inline, p.Content}] = true
-			}
-			touched[p.Inline] = true
-		case PieceBarrier, PieceDrop:
-			if p.Content >= 0 {
-				dropContent[key{p.Inline, p.Content}] = true
+	var trimmed []*wml.CT_Text
+	for _, r := range rs {
+		for _, p := range inside(pieces, r.Start, r.End) {
+			switch p.Kind {
+			case PieceText:
+				run, _ := children[p.Inline].(*wml.CT_R)
+				txt, _ := run.Children[p.Content].(*wml.CT_Text)
+				ls, le := max(r.Start, p.Start)-p.Start, min(r.End, p.End)-p.Start
+				txt.Content = txt.Content[:ls] + txt.Content[le:]
+				trimmed = append(trimmed, txt)
+				if txt.Content == "" {
+					dropContent[key{p.Inline, p.Content}] = true
+				}
 				touched[p.Inline] = true
-			} else {
-				dropInline[p.Inline] = true
+			case PieceBarrier, PieceDrop:
+				if p.Content >= 0 {
+					dropContent[key{p.Inline, p.Content}] = true
+					touched[p.Inline] = true
+				} else {
+					dropInline[p.Inline] = true
+				}
+			case PieceMove:
+				// The _GoBack bookmark is harmless where it is.
 			}
-		case PieceMove:
-			// The _GoBack bookmark is harmless where it is.
 		}
+	}
+	for _, t := range trimmed {
+		PreserveSpace(t)
 	}
 	out := make([]wml.InlineElement, 0, len(children))
 	for i, c := range children {
@@ -87,7 +144,7 @@ func DeleteRange(children []wml.InlineElement, pieces []Piece, start, end int) (
 			}
 			run.Children = kept
 			if len(kept) == 0 {
-				continue // everything the run held was in the range
+				continue // everything the run held was in a range
 			}
 		}
 		out = append(out, c)
@@ -95,12 +152,55 @@ func DeleteRange(children []wml.InlineElement, pieces []Piece, start, end int) (
 	return out, true
 }
 
+// RemovedBookmarks returns the names of the bookmarks a deletion of
+// flat[start:end] removes, including those inside removed hyperlinks and
+// content controls. _GoBack is never removed.
+func RemovedBookmarks(children []wml.InlineElement, pieces []Piece, start, end int) []string {
+	var names []string
+	for _, p := range inside(pieces, start, end) {
+		if p.Kind != PieceBarrier || p.Content >= 0 {
+			continue
+		}
+		names = append(names, bookmarkNames(children[p.Inline])...)
+	}
+	return names
+}
+
+func bookmarkNames(el wml.InlineElement) []string {
+	switch x := el.(type) {
+	case *wml.CT_BookmarkStart:
+		return []string{x.Name}
+	case *wml.CT_Hyperlink:
+		var out []string
+		for _, c := range x.Children {
+			out = append(out, bookmarkNames(c)...)
+		}
+		return out
+	case *wml.RawInline:
+		var out []string
+		walkRaw(x.E, func(re *raw.RawElement) {
+			if re.QName == ns.Qn("w:bookmarkStart") {
+				for _, a := range re.Attrs {
+					if a.Name.Local == "name" {
+						out = append(out, a.Value)
+					}
+				}
+			}
+		})
+		return out
+	}
+	return nil
+}
+
 // inside returns the pieces a range removes: text overlapping it, barriers
 // within it, and zero-length pieces strictly inside it (one at an edge
-// belongs to the neighbouring text).
+// belongs to the neighbouring text). Pieces are in offset order, so it
+// starts at the first piece that can overlap.
 func inside(pieces []Piece, start, end int) []Piece {
+	i := sort.Search(len(pieces), func(i int) bool { return pieces[i].End >= start })
 	var out []Piece
-	for _, p := range pieces {
+	for ; i < len(pieces) && pieces[i].Start <= end; i++ {
+		p := pieces[i]
 		switch {
 		case p.Start == p.End:
 			if p.Start > start && p.Start < end {
@@ -115,45 +215,57 @@ func inside(pieces []Piece, start, end int) []Piece {
 	return out
 }
 
-// deletableContent reports whether run content may be removed with the
-// text around it.
-func deletableContent(rc wml.RunContentElement) bool {
-	switch rc.(type) {
-	case *wml.CT_Tab, *wml.CT_Br, *wml.CT_Cr, *wml.CT_NoBreakHyphen, *wml.CT_SoftHyphen, *wml.CT_Sym, *wml.CT_Drawing:
-		return true
-	}
-	return false
+// referenceNames are anchors of content held in another part; removing one
+// leaves its footnote, endnote or comment without a place in the text.
+var referenceNames = map[string]bool{
+	"footnoteReference": true, "endnoteReference": true, "commentReference": true,
 }
 
-// bookmarkPartnerInside returns, for an inline-level barrier that is a
-// bookmark start or end, the index of its partner when that also lies in
-// the range. ok is false for any other inline barrier, or a bookmark whose
-// partner is outside the range.
-func bookmarkPartnerInside(children []wml.InlineElement, pieces []Piece, p Piece, start, end int) (int, bool) {
-	var id int64
-	var wantStart bool
-	switch el := children[p.Inline].(type) {
-	case *wml.CT_BookmarkStart:
-		id, wantStart = el.ID, false
-	case *wml.CT_BookmarkEnd:
-		id, wantStart = el.ID, true
-	default:
-		return 0, false
-	}
-	for _, q := range inside(pieces, start, end) {
-		if q.Kind != PieceBarrier || q.Content >= 0 {
-			continue
-		}
-		switch el := children[q.Inline].(type) {
-		case *wml.CT_BookmarkStart:
-			if wantStart && el.ID == id {
-				return q.Inline, true
+func isReference(re *raw.RawElement) bool {
+	return re != nil && re.QName.Space == ns.W && referenceNames[re.QName.Local]
+}
+
+// hasReference reports whether an inline element holds a note or comment
+// reference anywhere inside it.
+func hasReference(el wml.InlineElement) bool {
+	found := false
+	var inlines func([]wml.InlineElement)
+	visit := func(re *raw.RawElement) {
+		walkRaw(re, func(e *raw.RawElement) {
+			if isReference(e) {
+				found = true
 			}
-		case *wml.CT_BookmarkEnd:
-			if !wantStart && el.ID == id {
-				return q.Inline, true
+		})
+	}
+	inlines = func(children []wml.InlineElement) {
+		for _, c := range children {
+			switch x := c.(type) {
+			case *wml.CT_R:
+				for _, rc := range x.Children {
+					if r, ok := rc.(*wml.RawRunContent); ok {
+						visit(r.E)
+					}
+				}
+			case *wml.CT_Hyperlink:
+				inlines(x.Children)
+			case *wml.RawInline:
+				visit(x.E)
 			}
 		}
 	}
-	return 0, false
+	inlines([]wml.InlineElement{el})
+	return found
+}
+
+// walkRaw calls fn on re and every raw element below it.
+func walkRaw(re *raw.RawElement, fn func(*raw.RawElement)) {
+	if re == nil {
+		return
+	}
+	fn(re)
+	for _, c := range re.Children {
+		if k, ok := c.(*raw.RawElement); ok {
+			walkRaw(k, fn)
+		}
+	}
 }

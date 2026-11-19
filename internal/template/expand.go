@@ -27,6 +27,9 @@ type engine struct {
 	check bool
 	// fmts resolves formatter names (Options.Funcs, then built-ins).
 	fmts formatterSet
+	// removedBookmarks are the bookmarks inline ranges removed, checked
+	// against cross-references once every story is filled.
+	removedBookmarks []removedBookmark
 }
 
 // missing reports a value tag whose key is absent: an error in Strict mode,
