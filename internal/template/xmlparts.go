@@ -107,7 +107,7 @@ func xmlPartPlaceholders(parts map[string][]byte) ([]Placeholder, []Issue) {
 				issues = append(issues, issueErr(loc, b.text, b.err, b.detail))
 			}
 			for _, t := range tags {
-				ps = append(ps, Placeholder{Kind: kindName(t), Path: t.path, Tag: t.text, Location: loc})
+				ps = append(ps, placeholderOf(t, loc))
 			}
 		})
 	}

@@ -19,6 +19,8 @@ const (
 // Options configures Execute.
 type Options struct {
 	Mode Mode
+	// Funcs adds formatters, or replaces built-in ones other than "default".
+	Funcs map[string]Formatter
 }
 
 // Story is one part's block content: the document body, a header or a
@@ -49,7 +51,10 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 	if data == nil {
 		data = map[string]any{}
 	}
-	en := &engine{opts: opts, skip: skipSet{}}
+	if _, ok := opts.Funcs[defaultName]; ok {
+		return nil, nil, errDefaultOverride
+	}
+	en := &engine{opts: opts, skip: skipSet{}, fmts: formatterSet{funcs: opts.Funcs}}
 	work := make([][]wml.BlockElement, len(stories))
 	for i, s := range stories {
 		blocks, err := cloneBlocks(*s.Blocks)
@@ -106,7 +111,8 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 // its error-severity issues; its warnings depend on that visit, not on the
 // document, and are dropped.
 func checkStructure(stories []Story, work [][]wml.BlockElement, opts Options) ([]Issue, error) {
-	ck := &engine{opts: opts, skip: skipSet{}, check: true, nextDocPr: func() int64 { return 0 }}
+	ck := &engine{opts: opts, skip: skipSet{}, check: true, nextDocPr: func() int64 { return 0 },
+		fmts: formatterSet{funcs: opts.Funcs}}
 	for i, s := range stories {
 		blocks, err := cloneBlocks(work[i])
 		if err != nil {

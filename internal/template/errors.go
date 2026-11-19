@@ -32,6 +32,13 @@ var (
 	// ErrUnsupportedLocation: a tag where the engine cannot act on it, such
 	// as a block tag inside a content control, or a tag in a footnote.
 	ErrUnsupportedLocation = errors.New("tag in an unsupported location")
+	// ErrUnknownFormatter: a tag pipes its value through a formatter that is
+	// neither built in nor in Options.Funcs. It fails in both modes.
+	ErrUnknownFormatter = errors.New("unknown formatter")
+	// ErrFormat: a formatter rejected its value (a date that does not parse,
+	// text given to number). An error in Strict mode, a warning (and empty
+	// text) in Lenient mode.
+	ErrFormat = errors.New("formatter failed")
 )
 
 // Severity says whether an Issue stops execution.

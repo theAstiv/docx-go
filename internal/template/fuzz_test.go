@@ -38,6 +38,8 @@ func FuzzTemplateExecute(f *testing.F) {
 		`<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc><w:p><w:r><w:t>{{#if t}}a</w:t></w:r></w:p></w:tc></w:tr>` +
 			`<w:tr><w:tc><w:p><w:r><w:t>{{else}}b{{/if}}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
 		`<w:p><w:r><w:t>{{else}}</w:t></w:r></w:p><w:p><w:r><w:t>{{#if t}}</w:t></w:r></w:p><w:p><w:r><w:t>{{else}}</w:t></w:r></w:p>`,
+		`<w:p><w:r><w:t>{{n | number 2 "." ","}} {{a | upper | default "—"}} {{missing | currency “€”}}</w:t></w:r></w:p>`,
+		`<w:p><w:r><w:t>{{a | date "2006"}} {{n | shout}} {{t | number 2.5}} {{a | default 'x | y'}}</w:t></w:r></w:p>`,
 	}
 	for _, s := range seeds {
 		f.Add(s, false)

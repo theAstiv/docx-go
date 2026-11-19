@@ -12,6 +12,13 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 ### Added
 
 - Templating: `{{else}}` in `{{#if}}`, `{{#unless}}` and `{{#each}}`. It goes alone in a paragraph, or at the start of a row's first cell in a row range, where it begins the rows of the else branch. In `{{#each}}`, the else branch shows once, with the outer data, when the list is empty, `null` or missing; without an `{{else}}`, a missing list is still a missing key. `Placeholders` reports it with kind `"else"`.
+- Templating: formatters. A value tag pipes its value through them, left to right: `{{total | currency "€" 2}}`, `{{due | date "2 Jan 2006"}}`, `{{name | upper | default "—"}}`.
+  - Built in: `upper`, `lower`, `default "x"` (for a missing key, `null` or `""`), `number N ["thousands" "decimal"]`, `currency "symbol" [N ["thousands" "decimal"]]` and `date "layout"` (RFC 3339 input, Go layout).
+  - Arguments are quoted strings or numbers. Word's curly quotes count as quotes.
+  - `number` and `currency` round half away from zero on the decimal value, so `2.675` gives `2.68`.
+  - `Options.Funcs` adds formatters, or replaces built-ins other than `default` (for example, a `number` with local digit grouping). A panic in one is reported as an error.
+  - New sentinels: `ErrUnknownFormatter` (fails in both modes, even in a branch the data drops) and `ErrFormat` (a value a formatter rejects: an error in Strict mode, a warning in Lenient mode). A wrong argument to a built-in is `ErrMalformedTag`.
+  - `Placeholder.Formatters` lists a tag's formatter names.
 
 ## v0.4.0: editing existing documents
 

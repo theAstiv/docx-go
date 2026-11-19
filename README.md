@@ -59,6 +59,7 @@ warnings, err := template.Execute(doc, data, template.Options{Mode: template.Str
 | `{{#if flag}}` … `{{/if}}` | Keep the block when `flag` is truthy (not missing, `false`, `""`, `0`, empty or `null`) |
 | `{{#unless flag}}` … `{{/unless}}` | Keep the block when `flag` is falsy |
 | `{{#if flag}}` … `{{else}}` … `{{/if}}` | Show the else branch when the block is dropped. In `{{#each}}`, the else branch shows once when the list is empty, `null` or missing |
+| `{{total \| currency "€" 2}}` | Pipe a value through formatters, left to right: `upper`, `lower`, `default "—"`, `number 2 ["," "."]`, `currency "€" 2`, `date "2 Jan 2006"`. Add your own with `Options.Funcs` |
 
 Block tags go **alone in their own paragraph** (the paragraphs and tables between the two tags repeat or disappear) or **at the edges of table rows**: `{{#each rows}}` at the start of a row's first cell and `{{/each}}` at the end of the last cell of the same or a later row repeats those rows. In a row range, `{{else}}` goes at the start of a later row's first cell and begins the rows of the else branch.
 

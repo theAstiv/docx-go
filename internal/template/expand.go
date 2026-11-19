@@ -25,6 +25,8 @@ type engine struct {
 	// check makes the engine a data-free structure check (checkStructure):
 	// every branch is visited once and no value is looked up.
 	check bool
+	// fmts resolves formatter names (Options.Funcs, then built-ins).
+	fmts formatterSet
 }
 
 // missing reports a value tag whose key is absent: an error in Strict mode,
@@ -123,22 +125,70 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 	return w.done()
 }
 
-// value resolves a value tag to its text.
+// value resolves a value tag to its text: lookup, then the tag's
+// formatters in order, then the text form.
 func (en *engine) value(t tag, sc *scope, loc Location) string {
-	if en.check {
+	// Formatter names and built-in arguments are template errors: checked
+	// on every tag, rendered or not (the structure check visits them all).
+	fns := make([]Formatter, len(t.calls))
+	bad := false
+	for i, c := range t.calls {
+		f, check, ok := en.fmts.lookup(c.name)
+		if !ok {
+			en.fail(loc, t, ErrUnknownFormatter, quote(c.name)+" (built in: currency, date, default, lower, number, upper)")
+			bad = true
+			continue
+		}
+		if check != nil {
+			if detail := check(c.args); detail != "" {
+				en.fail(loc, t, ErrMalformedTag, detail)
+				bad = true
+				continue
+			}
+		}
+		fns[i] = f
+	}
+	if bad || en.check {
 		return ""
 	}
 	r := sc.lookup(t.path)
-	if !r.found {
+	v, found := r.value, r.found
+	for i, c := range t.calls {
+		if !found {
+			// Only default turns a missing value into a present one; the
+			// other formatters never see it.
+			if c.name == defaultName {
+				v, found = c.args[0], true
+			}
+			continue
+		}
+		out, err := callFormatter(fns[i], v, c.args)
+		if err != nil {
+			en.formatFailed(loc, t, c.name+": "+err.Error())
+			return ""
+		}
+		v = out
+	}
+	if !found {
 		en.missing(loc, t, r.detail)
 		return ""
 	}
-	s, ok := format(r.value)
+	s, ok := format(v)
 	if !ok {
 		en.fail(loc, t, ErrUnsupportedValue, "a list or object cannot be written as text; use {{#each}} or a dotted path")
 		return ""
 	}
 	return s
+}
+
+// formatFailed reports a formatter that rejected its value: an error in
+// Strict mode, a warning (and empty text) in Lenient mode.
+func (en *engine) formatFailed(loc Location, t tag, detail string) {
+	is := issueErr(loc, t.text, ErrFormat, detail)
+	if en.opts.Mode == Lenient {
+		is.Severity = SeverityWarning
+	}
+	en.issues = append(en.issues, is)
 }
 
 // textWriter builds run content from text, turning line breaks and tabs in

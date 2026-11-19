@@ -1,7 +1,10 @@
 package template
 
 import (
+	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/theAstiv/docx-go/internal/textmerge"
 )
@@ -39,6 +42,9 @@ type tag struct {
 	block string
 	// path is the data path: "client.name", ".field" or ".".
 	path string
+	// calls are the formatters a value tag pipes its value through, in
+	// order: {{total | number 2 | default "—"}}.
+	calls []call
 	// start and end are byte offsets of "{{" and just past "}}".
 	start, end int
 	// text is the tag as written.
@@ -122,6 +128,9 @@ func parseTagBody(body string) (tag, string) {
 		if rest == "" {
 			return t, "#" + word + " needs a path"
 		}
+		if strings.Contains(rest, "|") {
+			return t, formattersOnlyInValues
+		}
 		if !validPath(rest) {
 			return t, "invalid path " + quote(rest)
 		}
@@ -141,18 +150,144 @@ func parseTagBody(body string) (tag, string) {
 		}
 		if rest, ok := strings.CutPrefix(b, "image "); ok {
 			rest = strings.TrimSpace(rest)
+			if strings.Contains(rest, "|") {
+				return t, formattersOnlyInValues
+			}
 			if !validPath(rest) {
 				return t, "invalid path " + quote(rest)
 			}
 			t.kind, t.path = tagImage, rest
 			return t, ""
 		}
-		if !validPath(b) {
-			return t, "invalid path " + quote(b)
+		path, calls, detail := parseValueBody(b)
+		if detail != "" {
+			return t, detail
 		}
-		t.kind, t.path = tagValue, b
+		t.kind, t.path, t.calls = tagValue, path, calls
 	}
 	return t, ""
+}
+
+const formattersOnlyInValues = "formatters are only allowed in value tags"
+
+// call is one formatter in a value tag's pipe: a name and its arguments,
+// each a string or a float64.
+type call struct {
+	name string
+	args []any
+}
+
+// closingQuote maps each opening quote to the quote that closes it. Word
+// turns typed straight quotes into curly ones, so both count.
+var closingQuote = map[rune]rune{'"': '"', '\'': '\'', '“': '”', '‘': '’'}
+
+// parseValueBody parses "path | name arg … | name arg …". It returns a
+// non-empty detail when the body is invalid.
+func parseValueBody(b string) (path string, calls []call, detail string) {
+	segs, detail := splitPipes(b)
+	if detail != "" {
+		return "", nil, detail
+	}
+	path = strings.TrimSpace(segs[0])
+	if !validPath(path) {
+		return "", nil, "invalid path " + quote(path)
+	}
+	for _, seg := range segs[1:] {
+		c, detail := parseCall(seg)
+		if detail != "" {
+			return "", nil, detail
+		}
+		calls = append(calls, c)
+	}
+	return path, calls, ""
+}
+
+// splitPipes splits s at every "|" outside quotes.
+func splitPipes(s string) ([]string, string) {
+	var segs []string
+	start := 0
+	var closer rune
+	for i, c := range s {
+		switch {
+		case closer != 0:
+			if c == closer {
+				closer = 0
+			}
+		case c == '|':
+			segs = append(segs, s[start:i])
+			start = i + 1
+		default:
+			if q, ok := closingQuote[c]; ok {
+				closer = q
+			}
+		}
+	}
+	if closer != 0 {
+		return nil, "unclosed quote"
+	}
+	return append(segs, s[start:]), ""
+}
+
+// parseCall parses one pipe segment: a formatter name, then arguments that
+// are quoted strings or numbers, separated by spaces.
+func parseCall(seg string) (call, string) {
+	seg = strings.TrimSpace(seg)
+	if seg == "" {
+		return call{}, `empty formatter after "|"`
+	}
+	end := strings.IndexFunc(seg, unicode.IsSpace)
+	if end < 0 {
+		end = len(seg)
+	}
+	c := call{name: seg[:end]}
+	if !validIdent(c.name) || strings.Contains(c.name, "-") {
+		return call{}, "invalid formatter name " + quote(c.name)
+	}
+	rest := seg[end:]
+	for {
+		rest = strings.TrimLeftFunc(rest, unicode.IsSpace)
+		if rest == "" {
+			return c, ""
+		}
+		open, size := utf8.DecodeRuneInString(rest)
+		if q, ok := closingQuote[open]; ok {
+			n := strings.IndexRune(rest[size:], q)
+			if n < 0 {
+				return call{}, "unclosed quote" // splitPipes rejects this first
+			}
+			c.args = append(c.args, rest[size:size+n])
+			rest = rest[size+n+utf8.RuneLen(q):]
+			if rest != "" {
+				if r, _ := utf8.DecodeRuneInString(rest); !unicode.IsSpace(r) {
+					return call{}, "arguments of " + c.name + " must be separated by spaces"
+				}
+			}
+			continue
+		}
+		n := strings.IndexFunc(rest, unicode.IsSpace)
+		if n < 0 {
+			n = len(rest)
+		}
+		word := rest[:n]
+		f, ok := parseNumber(word)
+		if !ok {
+			return call{}, "argument " + quote(word) + " of " + c.name + " must be a quoted string or a number"
+		}
+		c.args = append(c.args, f)
+		rest = rest[n:]
+	}
+}
+
+// parseNumber accepts decimal numbers such as 2, -1.5 and 1e3, and nothing
+// strconv would also read (NaN, Inf, hex).
+func parseNumber(s string) (float64, bool) {
+	for _, c := range s {
+		if !strings.ContainsRune("+-.0123456789eE", c) {
+			return 0, false
+		}
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	return f, err == nil
 }
 
 func isBlockWord(w string) bool {
