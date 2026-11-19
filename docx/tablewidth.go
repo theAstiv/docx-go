@@ -177,12 +177,7 @@ func (c *cellLoc) width() Twip {
 	if c.tbl.TblGrid == nil {
 		return 0
 	}
-	span := 1
-	if c.cell.TcPr != nil {
-		if n := c.cell.TcPr.GridSpan(); n != nil && *n > 1 {
-			span = int(*n)
-		}
-	}
+	span := gridSpanOf(c.cell)
 	var w Twip
 	for k := c.col; k < c.col+span && k < len(c.tbl.TblGrid.Cols); k++ {
 		if gc := c.tbl.TblGrid.Cols[k]; gc != nil && gc.W != nil {
@@ -225,17 +220,32 @@ func findCell(blocks []wml.BlockElement, list *[]wml.BlockElement) *cellLoc {
 				if found := findCell(cell.Children, list); found != nil {
 					return found
 				}
-				span := 1
-				if cell.TcPr != nil {
-					if n := cell.TcPr.GridSpan(); n != nil && *n > 1 {
-						span = int(*n)
-					}
-				}
-				col += span
+				col += gridSpanOf(cell)
 			}
 		}
 	}
 	return nil
+}
+
+// maxGridColumns is the most columns a Word table can have; a w:gridSpan
+// beyond it (only a broken or hostile document has one) is clamped to it.
+const maxGridColumns = 63
+
+// gridSpanOf returns how many grid columns a cell covers: its w:gridSpan,
+// at least 1 and at most maxGridColumns.
+func gridSpanOf(cell *wml.CT_Tc) int {
+	if cell.TcPr == nil {
+		return 1
+	}
+	n := cell.TcPr.GridSpan()
+	switch {
+	case n == nil || *n <= 1:
+		return 1
+	case *n >= maxGridColumns:
+		return maxGridColumns
+	default:
+		return int(*n)
+	}
 }
 
 // columnWidths returns the width of each of cols columns: the given width

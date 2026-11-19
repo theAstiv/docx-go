@@ -199,9 +199,13 @@ func (s *CT_SectPr) PgMarGutter() *int64 {
 	return rawGetInt64Attr(s.raw, ns.Qn("w:pgMar"), "gutter")
 }
 
+// maxTextColumns is the most text columns Word lets a section have.
+const maxTextColumns = 45
+
 // TextColumns describes the section's text columns (w:cols): their number
-// (1 when absent), the space between equal columns (720 twips when not
-// given), and, for unequal columns, each w:col's width (nil otherwise).
+// (1 when absent, at most maxTextColumns), the space between equal columns
+// (720 twips when not given), and, for unequal columns, each w:col's width
+// (nil otherwise).
 func (s *CT_SectPr) TextColumns() (num int, space int64, widths []int64) {
 	num, space = 1, 720
 	for _, re := range s.raw {
@@ -209,7 +213,12 @@ func (s *CT_SectPr) TextColumns() (num int, space int64, widths []int64) {
 			continue
 		}
 		if v := parseInt64Ptr(attrNS(re.Attrs, ns.W, "num")); v != nil && *v > 1 {
-			num = int(*v)
+			// Word allows at most 45 text columns; clamp a larger count
+			// (only a broken or hostile document has one).
+			num = maxTextColumns
+			if *v < maxTextColumns {
+				num = int(*v)
+			}
 		}
 		if v := parseInt64Ptr(attrNS(re.Attrs, ns.W, "space")); v != nil && *v >= 0 {
 			space = *v

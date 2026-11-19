@@ -180,6 +180,9 @@ func TestTableDefaultWidths_ColumnsAndGutter(t *testing.T) {
 		{"three columns, default space", page + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/><w:cols w:num="3"/>`, 2640},
 		{"unequal columns: the first", page + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/><w:cols w:num="2" w:space="360" w:equalWidth="0"><w:col w:w="3000" w:space="360"/><w:col w:w="6000"/></w:cols>`, 3000},
 		{"gutter", page + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="720"/>`, 8640},
+		// A hostile column count is clamped to Word's 45; with 720 between
+		// them nothing is left, so the default text width is used.
+		{"absurd column count", page + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/><w:cols w:num="9223372036854775807"/>`, 9000},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
