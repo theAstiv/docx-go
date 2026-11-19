@@ -116,8 +116,12 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 		case tagValue:
 			w.value(en.value(t, sc, loc))
 		case tagImage:
-			en.fail(loc, t, ErrUnsupportedLocation, "image placeholders are not supported yet")
-			w.text(t.text)
+			if d, ok := en.image(t, sc, loc); ok {
+				w.flush()
+				w.out = append(w.out, d)
+			} else if en.inRaw {
+				w.text(t.text)
+			}
 		case tagOpen, tagClose, tagElse:
 			// Outside raw content, expandInline has already reported the
 			// block tags that are left: they are not part of a range.
@@ -158,7 +162,7 @@ func (en *engine) value(t tag, sc *scope, loc Location) string {
 		return ""
 	}
 	r := sc.lookup(t.path)
-	v, found := r.value, r.found
+	v, found := en.adapt(r.value), r.found
 	for i, c := range t.calls {
 		if !found {
 			// Only default turns a missing value into a present one; the
@@ -181,7 +185,12 @@ func (en *engine) value(t tag, sc *scope, loc Location) string {
 	}
 	s, ok := format(v)
 	if !ok {
-		en.fail(loc, t, ErrUnsupportedValue, "a list or object cannot be written as text; use {{#each}} or a dotted path")
+		switch v.(type) {
+		case ImageValue, *ImageValue:
+			en.fail(loc, t, ErrUnsupportedValue, "an image is placed with {{image "+t.path+"}}, not a value tag")
+		default:
+			en.fail(loc, t, ErrUnsupportedValue, "a list or object cannot be written as text; use {{#each}} or a dotted path")
+		}
 		return ""
 	}
 	return s

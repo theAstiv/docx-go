@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/theAstiv/docx-go/docx"
+	"github.com/theAstiv/docx-go/docx/template"
 )
 
 // TestGenerateValidationDocs writes documents that use every Phase 3a feature
@@ -44,6 +45,58 @@ func TestGenerateValidationDocs(t *testing.T) {
 	write("gen-formatting-order.docx", formattingOrderDoc())
 	write("gen-coreprops.docx", corePropsDoc())
 	write("gen-structure.docx", structureDoc(t))
+	write("gen-template.docx", templateDoc(t))
+}
+
+// templateDoc builds a template from scratch with the v0.5.0 templating
+// features ({{else}}, formatters, inline conditions, image values in the
+// body, a header and a row loop) and fills it.
+func templateDoc(t *testing.T) *docx.Document {
+	t.Helper()
+	d := docx.New()
+	d.Styles().EnsureBuiltin(docx.StyleTableGrid)
+	b := d.Body()
+	for _, s := range []string{
+		`Client: {{client | upper}}, fee {{fee | currency "€" 2}}, due {{due | date "2 January 2006"}}.`,
+		"Dear {{#if vip}}valued {{/if}}customer, status {{#if ok}}pass{{else}}fail{{/if}}.",
+		"{{#if none}}", "Never shown.", "{{else}}", "Shown in place of an empty block.", "{{/if}}",
+		"Logo: {{image logo}}",
+	} {
+		b.AddParagraph().AddRun(s)
+	}
+	tbl := b.AddTable(3, 2, docx.TableOptions{Style: "TableGrid", ColWidth: []docx.Twip{3000, 3000}})
+	cells := [][]string{
+		{"Item", "Picture"},
+		{"{{#each items}}{{.name}}{{#if .new}} (new){{/if}}", "{{image .pic}}"},
+		{"{{else}}No items", "—{{/each}}"},
+	}
+	r := 0
+	for row := range tbl.Rows() {
+		c := 0
+		for cell := range row.Cells() {
+			cell.SetText(cells[r][c])
+			c++
+		}
+		r++
+	}
+	d.LastSection().SetHeader(docx.HeaderDefault).SetText("{{image logo}} Report")
+
+	logo := pngBytes(t, 40, 20, 0x20)
+	pic := func(shade uint8) template.Image {
+		return template.Image{Data: pngBytes(t, 8, 8, shade), Width: docx.Inches(0.5).EMU(), AltText: "item picture"}
+	}
+	data := map[string]any{
+		"client": "Acme", "fee": 1234.5, "due": "2026-12-15", "vip": true, "ok": false,
+		"logo": template.Image{Data: logo, Width: docx.Inches(1).EMU(), AltText: "Logo"},
+		"items": []any{
+			map[string]any{"name": "First", "new": true, "pic": pic(0x40)},
+			map[string]any{"name": "Second", "new": false, "pic": pic(0x80)},
+		},
+	}
+	if _, err := template.Execute(d, data, template.Options{}); err != nil {
+		t.Fatalf("template: %v", err)
+	}
+	return d
 }
 
 // structureDoc builds content and then edits it with every structural

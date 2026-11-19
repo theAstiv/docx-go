@@ -21,6 +21,12 @@ type Options struct {
 	Mode Mode
 	// Funcs adds formatters, or replaces built-in ones other than "default".
 	Funcs map[string]Formatter
+	// Adapt, when set, maps every looked-up value before it is used, so a
+	// caller's own value types (an image, rich text) reach the engine as
+	// ImageValue and the like.
+	Adapt func(any) any
+	// Hooks do what needs the package, such as storing images.
+	Hooks Hooks
 }
 
 // Story is one part's block content: the document body, a header or a

@@ -13,6 +13,7 @@ import (
 	"math"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
+	"github.com/theAstiv/docx-go/internal/parts"
 )
 
 // maxImageBytes bounds how much AddImage reads from its reader.
@@ -66,6 +67,26 @@ func (r *Run) AddImage(rd io.Reader, opts ImageOptions) (*Image, error) {
 	if err != nil {
 		return nil, fmt.Errorf("docx: read image: %w", err)
 	}
+	d, err := newPicture(r.st.pkg, r.st.src, data, opts, func() int64 {
+		id := r.st.nextDocPrID()
+		r.st.noteDocPr(id)
+		return id
+	})
+	if err != nil {
+		return nil, err
+	}
+	r.r.Children = append(r.r.Children, d)
+	return &Image{d: d, st: r.st}, nil
+}
+
+// newPicture validates and sizes image data, stores it in pkg with a
+// relationship from the part at src, and builds the inline picture. docPrID
+// is called once the image is stored, for the drawing's wp:docPr id. It is
+// shared by Run.AddImage and template image values.
+func newPicture(pkg *parts.Package, src string, data []byte, opts ImageOptions, docPrID func() int64) (*wml.CT_Drawing, error) {
+	if opts.Width < 0 || opts.Height < 0 {
+		return nil, fmt.Errorf("%w: %d x %d EMU", ErrInvalidImageSize, opts.Width, opts.Height)
+	}
 	if len(data) > maxImageBytes {
 		return nil, fmt.Errorf("%w: more than %d bytes", ErrImageTooLarge, maxImageBytes)
 	}
@@ -85,24 +106,20 @@ func (r *Run) AddImage(rd io.Reader, opts ImageOptions) (*Image, error) {
 		return nil, err
 	}
 
-	relID, fileName, err := r.st.pkg.AddImage(r.st.src, data, format)
+	relID, fileName, err := pkg.AddImage(src, data, format)
 	if err != nil {
 		return nil, fmt.Errorf("docx: add image: %w", err)
 	}
 
-	docPrID := r.st.nextDocPrID()
-	r.st.noteDocPr(docPrID)
-	d := wml.NewInlinePicture(wml.InlinePictureSpec{
+	return wml.NewInlinePicture(wml.InlinePictureSpec{
 		RID:      relID,
 		FileName: fileName,
 		CX:       cx,
 		CY:       cy,
-		DocPrID:  docPrID,
+		DocPrID:  docPrID(),
 		AltText:  opts.AltText,
 		Title:    opts.Title,
-	})
-	r.r.Children = append(r.r.Children, d)
-	return &Image{d: d, st: r.st}, nil
+	}), nil
 }
 
 // displaySize resolves the displayed size in EMU from the pixel size and the

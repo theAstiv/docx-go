@@ -7,6 +7,7 @@ import (
 
 	"github.com/theAstiv/docx-go/docx"
 	"github.com/theAstiv/docx-go/docx/internal/bridge"
+	"github.com/theAstiv/docx-go/internal/oxml/wml"
 	itemplate "github.com/theAstiv/docx-go/internal/template"
 )
 
@@ -45,6 +46,41 @@ var (
 	// Lenient mode.
 	ErrFormat = itemplate.ErrFormat
 )
+
+// Image is a data value for an {{image path}} tag: the picture is placed
+// inline where the tag is, in the tag's run. Data is PNG, JPEG or GIF.
+// Width and Height follow docx.ImageOptions: both zero shows the image at
+// its pixel size at 96 DPI, and one zero follows from the aspect ratio.
+// AltText is required; it is what screen readers read out.
+//
+// An Image (or *Image) can sit anywhere in the data, including in a list
+// that {{#each}} repeats. Use it only with {{image}}: a value tag holding an
+// image is ErrUnsupportedValue.
+type Image struct {
+	Data          []byte
+	Width, Height docx.EMU
+	AltText       string
+	// Title is an optional tooltip-style title.
+	Title string
+}
+
+// adapt maps the public value types to the engine's.
+func adapt(v any) any {
+	switch x := v.(type) {
+	case Image:
+		return imageValue(x)
+	case *Image:
+		if x == nil {
+			return nil
+		}
+		return imageValue(*x)
+	}
+	return v
+}
+
+func imageValue(i Image) itemplate.ImageValue {
+	return itemplate.ImageValue{Data: i.Data, Width: int64(i.Width), Height: int64(i.Height), AltText: i.AltText, Title: i.Title}
+}
 
 // Formatter transforms a value in a tag's pipe. {{total | money "EUR"}}
 // calls the formatter registered as "money" with total's value and the
@@ -201,8 +237,33 @@ func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, er
 			funcs[name] = itemplate.Formatter(f)
 		}
 	}
+	// Adding an image changes the package itself (a media part, a
+	// relationship, a content type), not just the story copies the engine
+	// fills. Record the package before the first such change and put it back
+	// if execution fails, so a failed Execute still leaves doc unchanged.
+	var restore func()
+	var snapErr error
+	addImage := func(part string, img itemplate.ImageValue, docPrID int64) (*wml.CT_Drawing, error) {
+		if restore == nil {
+			if restore, snapErr = bridge.Snapshot(doc); snapErr != nil {
+				return nil, fmt.Errorf("snapshot: %w", snapErr)
+			}
+		}
+		return bridge.AddImage(doc, part, img, docPrID)
+	}
 	filled, warnings, err := itemplate.ExecuteAll(bridge.Stories(doc), bridge.BoundParts(doc), data,
-		itemplate.Options{Mode: itemplate.Mode(opts.Mode), Funcs: funcs})
+		itemplate.Options{
+			Mode:  itemplate.Mode(opts.Mode),
+			Funcs: funcs,
+			Adapt: adapt,
+			Hooks: itemplate.Hooks{AddImage: addImage},
+		})
+	if err != nil && restore != nil {
+		restore()
+	}
+	if snapErr != nil {
+		return nil, fmt.Errorf("template: %w", snapErr)
+	}
 	warnings = append(warnings, itemplate.ScanUnparsed(bridge.UnparsedParts(doc))...)
 	var ie *itemplate.Error
 	if errors.As(err, &ie) {
