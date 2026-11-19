@@ -37,7 +37,21 @@ var (
 	// ErrUnsupportedLocation: a tag where it cannot be filled, such as a
 	// block tag inside a content control.
 	ErrUnsupportedLocation = itemplate.ErrUnsupportedLocation
+	// ErrUnknownFormatter: a tag pipes its value through a formatter that is
+	// neither built in nor in Options.Funcs. It fails in both modes.
+	ErrUnknownFormatter = itemplate.ErrUnknownFormatter
+	// ErrFormat: a formatter rejected its value, such as a date that does
+	// not parse. An error in Strict mode; a warning (and empty text) in
+	// Lenient mode.
+	ErrFormat = itemplate.ErrFormat
 )
+
+// Formatter transforms a value in a tag's pipe. {{total | money "EUR"}}
+// calls the formatter registered as "money" with total's value and the
+// arguments ["EUR"]. Arguments are strings or float64s. The result is
+// written as text (as a value would be), or passed to the next formatter.
+// A returned error is reported as ErrFormat.
+type Formatter func(v any, args []any) (any, error)
 
 // errTOCNeedsUpdate explains the warning for a table of contents that still
 // shows template tags.
@@ -61,6 +75,10 @@ const (
 // Options configures Execute.
 type Options struct {
 	Mode Mode
+	// Funcs adds formatters by name. An entry with the name of a built-in
+	// (upper, lower, number, currency, date) replaces it, so number can be
+	// given local digit grouping. "default" cannot be replaced.
+	Funcs map[string]Formatter
 }
 
 // Severity says whether an Issue stopped execution.
@@ -156,8 +174,11 @@ type Placeholder struct {
 	// "else" and "end".
 	Path string
 	// Tag is the tag as written.
-	Tag      string
-	Location Location
+	Tag string
+	// Formatters are the names of the formatters a value tag pipes through,
+	// in order: ["number", "default"] for {{total | number 2 | default "—"}}.
+	Formatters []string
+	Location   Location
 }
 
 // Execute fills the template doc from data, in the body, every header and
@@ -173,8 +194,15 @@ func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, er
 	if doc == nil {
 		return nil, errNilDocument
 	}
+	var funcs map[string]itemplate.Formatter
+	if len(opts.Funcs) > 0 {
+		funcs = make(map[string]itemplate.Formatter, len(opts.Funcs))
+		for name, f := range opts.Funcs {
+			funcs[name] = itemplate.Formatter(f)
+		}
+	}
 	filled, warnings, err := itemplate.ExecuteAll(bridge.Stories(doc), bridge.BoundParts(doc), data,
-		itemplate.Options{Mode: itemplate.Mode(opts.Mode)})
+		itemplate.Options{Mode: itemplate.Mode(opts.Mode), Funcs: funcs})
 	warnings = append(warnings, itemplate.ScanUnparsed(bridge.UnparsedParts(doc))...)
 	var ie *itemplate.Error
 	if errors.As(err, &ie) {
@@ -218,7 +246,7 @@ func Placeholders(doc *docx.Document) ([]Placeholder, error) {
 	}
 	out := make([]Placeholder, len(ps))
 	for i, p := range ps {
-		out[i] = Placeholder{Kind: p.Kind, Path: p.Path, Tag: p.Tag, Location: Location(p.Location)}
+		out[i] = Placeholder{Kind: p.Kind, Path: p.Path, Tag: p.Tag, Formatters: p.Formatters, Location: Location(p.Location)}
 	}
 	if len(issues) > 0 {
 		return out, &Error{Issues: convertIssues(issues)}

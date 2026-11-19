@@ -74,6 +74,18 @@ func TestLexTags_Bad(t *testing.T) {
 		{"{{{x}}}", ErrMalformedTag},
 		{"{{na" + string(barrierBreak) + "me}}", ErrMalformedTag},
 		{"{{na" + string(barrierBoundary) + "me}}", ErrSplitAcrossBoundary},
+		{`{{x | }}`, ErrMalformedTag},
+		{`{{x || upper}}`, ErrMalformedTag},
+		{`{{x | date "2006}}`, ErrMalformedTag},
+		{`{{x | date “2006}}`, ErrMalformedTag},
+		{`{{x | number two}}`, ErrMalformedTag},
+		{`{{x | number NaN}}`, ErrMalformedTag},
+		{`{{x | 9lives}}`, ErrMalformedTag},
+		{`{{x | kebab-name}}`, ErrMalformedTag},
+		{`{{x | date "a""b"}}`, ErrMalformedTag},
+		{`{{#if x | upper}}`, ErrMalformedTag},
+		{`{{image logo | upper}}`, ErrMalformedTag},
+		{`{{ | upper}}`, ErrMalformedTag},
 	}
 	for _, c := range cases {
 		tags, bad := lexTags(c.in)

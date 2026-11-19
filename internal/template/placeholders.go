@@ -16,8 +16,20 @@ type Placeholder struct {
 	// Path is the data path; empty for "else" and "end".
 	Path string
 	// Tag is the tag as written.
-	Tag      string
-	Location Location
+	Tag string
+	// Formatters are the names of the formatters a value tag pipes through,
+	// in order; nil when there are none.
+	Formatters []string
+	Location   Location
+}
+
+// placeholderOf describes one lexed tag.
+func placeholderOf(t tag, loc Location) Placeholder {
+	var names []string
+	for _, c := range t.calls {
+		names = append(names, c.name)
+	}
+	return Placeholder{Kind: kindName(t), Path: t.path, Tag: t.text, Formatters: names, Location: loc}
 }
 
 // Placeholders lists every well-formed tag in the stories, in document
@@ -74,7 +86,7 @@ func (c *collector) text(s string, loc Location) {
 	}
 	tags, _ := lexTags(s)
 	for _, t := range tags {
-		c.out = append(c.out, Placeholder{Kind: kindName(t), Path: t.path, Tag: t.text, Location: loc})
+		c.out = append(c.out, placeholderOf(t, loc))
 	}
 }
 
