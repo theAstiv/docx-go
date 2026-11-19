@@ -18,6 +18,15 @@
 // branch. "else" is a keyword: inside a loop, write {{.else}} for a field
 // with that name.
 //
+// {{#if}} and {{#unless}}, with or without {{else}}, also work inside one
+// paragraph: "Dear {{#if vip}}valued {{/if}}customer" keeps or removes the
+// text between the tags, including tabs, breaks and inline pictures, and
+// the paragraph stays. Such a range cannot cut through a field, a
+// hyperlink's edge, a content control, a tracked change or one end of a
+// bookmark (ErrSplitAcrossBoundary), and {{#each}} cannot repeat part of a
+// paragraph. A range that fills a one-cell row on its own is a row range,
+// as before: the row is kept, repeated or removed.
+//
 // A value tag can pipe its value through formatters, left to right:
 //
 //	{{name | upper}}                     UPPER CASE (lower: lower case)

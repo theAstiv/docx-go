@@ -206,10 +206,28 @@ func (en *engine) reportMisplaced(blocks []wml.BlockElement, locs []Location) {
 		if _, isMarker := marker(p); isMarker {
 			continue
 		}
-		for _, t := range paragraphBlockTags(p) {
-			en.fail(locs[i], t, ErrMisplacedBlock, misplacedDetail)
+		en.reportInlineLeftovers(paragraphBlockTags(p), locs[i])
+	}
+}
+
+// reportInlineLeftovers reports the block tags of a paragraph that are not
+// part of an inline range, and inline {{#each}} ranges.
+func (en *engine) reportInlineLeftovers(tags []tag, loc Location) {
+	roots, left := inlinePairs(tags)
+	for _, l := range left {
+		en.fail(loc, l.t, l.sentinel, l.detail)
+	}
+	var walk func([]*inlinePair)
+	walk = func(ps []*inlinePair) {
+		for _, p := range ps {
+			if tags[p.open].block == "each" {
+				en.fail(loc, tags[p.open], ErrMisplacedBlock, inlineEachDetail)
+				continue
+			}
+			walk(p.children)
 		}
 	}
+	walk(roots)
 }
 
 // reportMisplacedRows reports block tags in rows that are neither row-edge
@@ -252,9 +270,7 @@ func (en *engine) reportMisplacedRows(rows []wml.TableRowElement, rlocs []Locati
 				if p == closePara && len(tags) > 0 {
 					tags = tags[:len(tags)-1] // the row's close tag
 				}
-				for _, t := range tags {
-					en.fail(locs[i], t, ErrMisplacedBlock, misplacedDetail)
-				}
+				en.reportInlineLeftovers(tags, locs[i])
 			}
 			nc++
 		}
@@ -537,6 +553,16 @@ func (en *engine) rowOpen(row *wml.CT_Tr) (tag, bool) {
 	if _, whole := marker(p); whole && en.pairedInCell(cell, 0) {
 		return tag{}, false
 	}
+	// A tag closed inside its own paragraph is an inline range (C13),
+	// unless that paragraph is the whole row and the range spans it: then
+	// it is a one-paragraph row range, as before inline ranges existed.
+	bt := blockTagsOf(tags)
+	if partner, paired := pairedInText(bt, 0); paired {
+		end := len(strings.TrimRight(text, " \t"))
+		if p != edgeParagraph(row, false) || partner != len(bt)-1 || bt[partner].end != end {
+			return tag{}, false
+		}
+	}
 	return tags[0], true
 }
 
@@ -563,6 +589,14 @@ func (en *engine) rowClose(row *wml.CT_Tr) (tag, bool) {
 	}
 	if _, whole := marker(p); whole && en.pairedInCell(cell, last) {
 		return tag{}, false
+	}
+	// The same rule as in rowOpen.
+	bt := blockTagsOf(tags)
+	if partner, paired := pairedInText(bt, len(bt)-1); paired {
+		start := len(text) - len(strings.TrimLeft(text, " \t"))
+		if p != edgeParagraph(row, true) || partner != 0 || bt[0].start != start {
+			return tag{}, false
+		}
 	}
 	return t, true
 }

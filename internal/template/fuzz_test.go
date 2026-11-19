@@ -40,6 +40,10 @@ func FuzzTemplateExecute(f *testing.F) {
 		`<w:p><w:r><w:t>{{else}}</w:t></w:r></w:p><w:p><w:r><w:t>{{#if t}}</w:t></w:r></w:p><w:p><w:r><w:t>{{else}}</w:t></w:r></w:p>`,
 		`<w:p><w:r><w:t>{{n | number 2 "." ","}} {{a | upper | default "—"}} {{missing | currency “€”}}</w:t></w:r></w:p>`,
 		`<w:p><w:r><w:t>{{a | date "2006"}} {{n | shout}} {{t | number 2.5}} {{a | default 'x | y'}}</w:t></w:r></w:p>`,
+		`<w:p><w:r><w:t>x{{#if t}}a</w:t><w:tab/><w:t>{{else}}b{{/if}}y {{#unless t}}c{{/unless}}</w:t></w:r></w:p>`,
+		`<w:p><w:r><w:t>{{#if t}}a </w:t></w:r><w:hyperlink w:anchor="h"><w:r><w:t>l{{#if a}}k{{/if}}</w:t></w:r></w:hyperlink>` +
+			`<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:t>{{/if}}{{#each rows}}{{.k}}{{/each}}</w:t></w:r></w:p>`,
+		`<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc><w:p><w:r><w:t>{{#if t}}a{{/if}}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
 	}
 	for _, s := range seeds {
 		f.Add(s, false)
