@@ -28,6 +28,11 @@ type Hooks struct {
 	// image data is unusable and becomes an issue; any other error is an
 	// internal failure that aborts Execute.
 	AddImage func(part string, img ImageValue, docPrID int64) (*wml.CT_Drawing, error)
+	// AddLink adds an external hyperlink relationship to url on the part at
+	// path part, and returns its id and the id of the character style links
+	// use. Errors follow AddImage: ErrUnsupportedValue for a URL the caller
+	// gave that cannot be used, anything else aborts Execute.
+	AddLink func(part, url string) (relID, styleID string, err error)
 }
 
 // adapt maps a looked-up value through Options.Adapt.

@@ -58,24 +58,30 @@ func (en *engine) fillParagraph(p *wml.CT_P, sc *scope, loc Location) {
 	if !en.inRaw {
 		p.Children = en.expandInline(p.Children, sc, loc)
 	}
-	en.fillInlines(p.Children, sc, loc)
+	p.Children = en.fillInlines(p.Children, sc, loc, false, &fieldState{stack: nil})
 }
 
-func (en *engine) fillInlines(children []wml.InlineElement, sc *scope, loc Location) {
+// fillInlines fills an inline sequence and returns it: a run holding a
+// rich-text value becomes several runs and hyperlinks.
+func (en *engine) fillInlines(children []wml.InlineElement, sc *scope, loc Location, inLink bool, fs *fieldState) []wml.InlineElement {
+	out := children[:0:0]
 	for _, c := range children {
 		switch el := c.(type) {
 		case *wml.CT_R:
-			en.fillRun(el, sc, loc)
+			out = append(out, en.fillRun(el, sc, loc, inLink, fs)...)
+			continue
 		case *wml.CT_Hyperlink:
-			en.fillInlines(el.Children, sc, loc)
+			el.Children = en.fillInlines(el.Children, sc, loc, true, fs)
 		case *wml.RawInline:
 			en.fillRaw(el.E, sc, loc)
 		}
+		out = append(out, c)
 	}
+	return out
 }
 
-func (en *engine) fillRun(r *wml.CT_R, sc *scope, loc Location) {
-	var out []wml.RunContentElement
+func (en *engine) fillRun(r *wml.CT_R, sc *scope, loc Location, inLink bool, fs *fieldState) []wml.InlineElement {
+	sp := &runSplitter{en: en, orig: r, inLink: inLink, fields: fs}
 	changed := false
 	for _, rc := range r.Children {
 		switch el := rc.(type) {
@@ -83,29 +89,35 @@ func (en *engine) fillRun(r *wml.CT_R, sc *scope, loc Location) {
 			en.fillRaw(el.E, sc, loc)
 		case *wml.CT_Drawing:
 			en.fillDrawing(el, sc, loc)
+		case *wml.CT_FldChar:
+			fs.char(el.FldCharType)
+		case *wml.CT_InstrText:
+			fs.instr(el.Content)
 		}
 		txt, ok := rc.(*wml.CT_Text)
 		if !ok || en.skip[txt] || !strings.Contains(txt.Content, "{{") {
-			out = append(out, rc)
+			sp.add(rc)
 			continue
 		}
 		// Malformed tags were reported by normalize; they stay as text.
 		tags, _ := lexTags(txt.Content)
 		if len(tags) == 0 {
-			out = append(out, rc)
+			sp.add(rc)
 			continue
 		}
 		changed = true
-		out = append(out, en.fillText(txt, tags, sc, loc)...)
+		en.fillText(txt, tags, sc, loc, sp)
 	}
-	if changed {
-		r.Children = out
+	if !changed {
+		return []wml.InlineElement{r}
 	}
+	return sp.done()
 }
 
-// fillText renders one w:t with its tags replaced. A value containing line
-// breaks or tabs becomes w:t / w:br / w:tab elements.
-func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location) []wml.RunContentElement {
+// fillText renders one w:t with its tags replaced into sp. A value
+// containing line breaks or tabs becomes w:t / w:br / w:tab elements; a
+// rich-text value splits the run.
+func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location, sp *runSplitter) {
 	var w textWriter
 	w.space = txt.Space
 	pos := 0
@@ -114,7 +126,21 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 		pos = t.end
 		switch t.kind {
 		case tagValue:
-			w.value(en.value(t, sc, loc))
+			v, ok := en.resolve(t, sc, loc)
+			if !ok {
+				continue
+			}
+			if rv, isRich := richOf(v); isRich && !en.inRaw {
+				if rv.plain() == "" {
+					continue // nothing to insert: leave the run whole
+				}
+				if els, ok := en.richInlines(rv, sp.orig, sp.inLink || sp.fields.inLink(), t, loc); ok {
+					sp.add(w.take()...)
+					sp.insert(els)
+				}
+				continue
+			}
+			w.value(en.text(v, t, loc))
 		case tagImage:
 			if d, ok := en.image(t, sc, loc); ok {
 				w.flush()
@@ -132,12 +158,44 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 		}
 	}
 	w.text(txt.Content[pos:])
-	return w.done()
+	sp.add(w.done()...)
 }
 
 // value resolves a value tag to its text: lookup, then the tag's
-// formatters in order, then the text form.
+// formatters in order, then the text form. Where only text can go (content
+// controls, document properties) a rich-text value is written as its plain
+// text, with a warning.
 func (en *engine) value(t tag, sc *scope, loc Location) string {
+	v, ok := en.resolve(t, sc, loc)
+	if !ok {
+		return ""
+	}
+	return en.text(v, t, loc)
+}
+
+// text renders a resolved value as text.
+func (en *engine) text(v any, t tag, loc Location) string {
+	if rv, isRich := richOf(v); isRich {
+		en.warn(loc, t, "rich-text formatting and links are dropped here; only the text is written")
+		return rv.plain()
+	}
+	s, ok := format(v)
+	if !ok {
+		switch v.(type) {
+		case ImageValue, *ImageValue:
+			en.fail(loc, t, ErrUnsupportedValue, "an image is placed with {{image "+t.path+"}}, not a value tag")
+		default:
+			en.fail(loc, t, ErrUnsupportedValue, "a list or object cannot be written as text; use {{#each}} or a dotted path")
+		}
+		return ""
+	}
+	return s
+}
+
+// resolve looks up a value tag and runs its formatters. ok is false when
+// nothing is to be written: a problem was reported, the key is missing (in
+// Lenient mode too), or this is the structure check.
+func (en *engine) resolve(t tag, sc *scope, loc Location) (any, bool) {
 	// Formatter names and built-in arguments are template errors: checked
 	// on every tag, rendered or not (the structure check visits them all).
 	fns := make([]Formatter, len(t.calls))
@@ -159,7 +217,7 @@ func (en *engine) value(t tag, sc *scope, loc Location) string {
 		fns[i] = f
 	}
 	if bad || en.check {
-		return ""
+		return nil, false
 	}
 	r := sc.lookup(t.path)
 	v, found := en.adapt(r.value), r.found
@@ -175,25 +233,15 @@ func (en *engine) value(t tag, sc *scope, loc Location) string {
 		out, err := callFormatter(fns[i], v, c.args)
 		if err != nil {
 			en.formatFailed(loc, t, c.name+": "+err.Error())
-			return ""
+			return nil, false
 		}
 		v = out
 	}
 	if !found {
 		en.missing(loc, t, r.detail)
-		return ""
+		return nil, false
 	}
-	s, ok := format(v)
-	if !ok {
-		switch v.(type) {
-		case ImageValue, *ImageValue:
-			en.fail(loc, t, ErrUnsupportedValue, "an image is placed with {{image "+t.path+"}}, not a value tag")
-		default:
-			en.fail(loc, t, ErrUnsupportedValue, "a list or object cannot be written as text; use {{#each}} or a dotted path")
-		}
-		return ""
-	}
-	return s
+	return v, true
 }
 
 // formatFailed reports a formatter that rejected its value: an error in
@@ -246,4 +294,12 @@ func (w *textWriter) flush() {
 func (w *textWriter) done() []wml.RunContentElement {
 	w.flush()
 	return w.out
+}
+
+// take returns the content written so far and starts afresh, for a run
+// that is split at this point.
+func (w *textWriter) take() []wml.RunContentElement {
+	out := w.done()
+	w.out = nil
+	return out
 }

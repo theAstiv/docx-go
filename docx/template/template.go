@@ -64,6 +64,33 @@ type Image struct {
 	Title string
 }
 
+// Rich is a data value for a value tag that writes formatted text: runs
+// with their own bold, italic, underline, colour and link, in place of the
+// tag. Each run starts from the formatting of the run holding the tag's
+// "{{"; a nil switch keeps that formatting. Text may hold \n and \t, which
+// become line breaks and tabs.
+//
+// It is a typed value, not markup, so data cannot inject document content.
+// Where only text can go (content controls, text boxes, document
+// properties) the runs' plain text is written, with a warning. A run with
+// a Link cannot be placed in a tag that is already inside a hyperlink.
+type Rich struct {
+	Runs []RichRun
+}
+
+// RichRun is one run of a Rich value.
+type RichRun struct {
+	Text string
+	// Bold, Italic and Underline are tri-state: nil keeps the tag run's
+	// setting, docx.On() or docx.Off() sets it. Underline is single.
+	Bold, Italic, Underline *bool
+	// Color is a hex colour, RRGGBB; "" keeps the tag run's colour.
+	Color string
+	// Link, when set, makes the run an external hyperlink to this URL. It
+	// must be absolute with a safe scheme, as for Paragraph.AddHyperlink.
+	Link string
+}
+
 // adapt maps the public value types to the engine's.
 func adapt(v any) any {
 	switch x := v.(type) {
@@ -74,8 +101,23 @@ func adapt(v any) any {
 			return (*itemplate.ImageValue)(nil) // reported as a nil image
 		}
 		return imageValue(*x)
+	case Rich:
+		return richValue(x)
+	case *Rich:
+		if x == nil {
+			return nil
+		}
+		return richValue(*x)
 	}
 	return v
+}
+
+func richValue(r Rich) itemplate.RichValue {
+	runs := make([]itemplate.RichRun, len(r.Runs))
+	for i, rr := range r.Runs {
+		runs[i] = itemplate.RichRun(rr)
+	}
+	return itemplate.RichValue{Runs: runs}
 }
 
 func imageValue(i Image) itemplate.ImageValue {
@@ -237,26 +279,39 @@ func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, er
 			funcs[name] = itemplate.Formatter(f)
 		}
 	}
-	// Adding an image changes the package itself (a media part, a
-	// relationship, a content type), not just the story copies the engine
-	// fills. Record the package before the first such change and put it back
-	// if execution fails, so a failed Execute still leaves doc unchanged.
+	// Adding an image or a link changes the package itself (a media part, a
+	// relationship, a content type, the Hyperlink style), not just the story
+	// copies the engine fills. Record the package before the first such
+	// change and put it back if execution fails, so a failed Execute still
+	// leaves doc unchanged.
 	var restore func()
 	var snapErr error
-	addImage := func(part string, img itemplate.ImageValue, docPrID int64) (*wml.CT_Drawing, error) {
+	snapshot := func() error {
 		if restore == nil {
 			if restore, snapErr = bridge.Snapshot(doc); snapErr != nil {
-				return nil, fmt.Errorf("snapshot: %w", snapErr)
+				return fmt.Errorf("snapshot: %w", snapErr)
 			}
 		}
+		return nil
+	}
+	addImage := func(part string, img itemplate.ImageValue, docPrID int64) (*wml.CT_Drawing, error) {
+		if err := snapshot(); err != nil {
+			return nil, err
+		}
 		return bridge.AddImage(doc, part, img, docPrID)
+	}
+	addLink := func(part, url string) (string, string, error) {
+		if err := snapshot(); err != nil {
+			return "", "", err
+		}
+		return bridge.AddHyperlink(doc, part, url)
 	}
 	filled, warnings, err := itemplate.ExecuteAll(bridge.Stories(doc), bridge.BoundParts(doc), data,
 		itemplate.Options{
 			Mode:  itemplate.Mode(opts.Mode),
 			Funcs: funcs,
 			Adapt: adapt,
-			Hooks: itemplate.Hooks{AddImage: addImage},
+			Hooks: itemplate.Hooks{AddImage: addImage, AddLink: addLink},
 		})
 	if err != nil && restore != nil {
 		restore()

@@ -1,6 +1,8 @@
 package wml_test
 
 import (
+	"encoding/xml"
+	"strings"
 	"testing"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
@@ -77,5 +79,24 @@ func TestCT_RPr_StyleID_Accessors(t *testing.T) {
 	r.SetStyleID("Strong")
 	if got := r.StyleID(); got != "Strong" {
 		t.Errorf("StyleID() = %q, want %q", got, "Strong")
+	}
+}
+
+// Setting a colour removes a theme colour, which Word would show instead.
+func TestCT_RPr_SetColorVal_DropsThemeColor(t *testing.T) {
+	var r wml.CT_RPr
+	src := `<w:rPr xmlns:w="` + ns.W + `"><w:color w:val="1F3864" w:themeColor="accent1" w:themeShade="BF" w:themeTint="99"/><w:rPrChange w:id="3"><w:rPr/></w:rPrChange></w:rPr>`
+	if err := xml.Unmarshal([]byte(src), &r); err != nil {
+		t.Fatal(err)
+	}
+	r.SetColorVal("FF0000")
+	r.RemoveRevision()
+	out, err := xml.Marshal(&r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if strings.Contains(s, "theme") || strings.Contains(s, "rPrChange") || !strings.Contains(s, `val="FF0000"`) {
+		t.Errorf("got %s", s)
 	}
 }

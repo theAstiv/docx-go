@@ -34,6 +34,18 @@ the header tag; the third replaced and restored a letter inside `logo`,
 JSON cannot express, so `TestWordTemplates_Images` builds the data in Go and
 writes `filled-template_images.docx` for `generate-docs.sh`.
 
+`word/template_rich.docx` (P3c.9) was made the same way. The first session
+typed rich-value tags: one per paragraph, two in one run (`{{owner}}`,
+`{{ref}}`), one inside the display text of a hyperlink Word made
+(`{{link_text}}`), one in the last cell of a `{{#each mitigations}}` row
+(`{{.state}}`) and one in the default header (`{{doc_title}}`). The second
+made `{{status}}` italic, `{{sum` bold, `{{.state}}` navy and `{{doc_` bold,
+so the rich runs have formatting to start from; the third replaced and
+restored a letter inside `status`, `owner`, `link_text`, `.control` and
+`doc_title`. Rich values cannot come from JSON, so `TestWordTemplates_Rich`
+builds the data in Go and writes `filled-template_rich.docx` for
+`generate-docs.sh`.
+
 Files under `python-docx/` are from the [python-docx](https://github.com/python-openxml/python-docx) project,
 licensed under the **MIT License**. Copyright © python-docx contributors.
 

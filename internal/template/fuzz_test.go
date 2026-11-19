@@ -15,11 +15,17 @@ var fuzzData = map[string]any{
 	"t":    true,
 	"text": "line\nbreak\tand tab",
 	"obj":  map[string]any{"k": "v", "list": []any{"p", "q"}},
+	"rich": RichValue{Runs: []RichRun{{Text: "bo\nld", Bold: &fuzzTrue}, {Text: " x", Color: "FF0000"}}},
+	// A link needs the AddLink hook, which the fuzzer does not set: it must
+	// fail cleanly and leave the content as it was.
+	"link": &RichValue{Runs: []RichRun{{Text: "l", Link: "https://example.com"}}},
 	"rows": []any{
 		map[string]any{"k": "1", "on": true, "sub": []any{"s"}},
 		map[string]any{"k": "2", "on": false, "sub": []any{}},
 	},
 }
+
+var fuzzTrue = true
 
 // FuzzTemplateExecute runs arbitrary body content through the whole engine.
 // It must not panic; on success the result must marshal and parse again;
@@ -44,6 +50,8 @@ func FuzzTemplateExecute(f *testing.F) {
 		`<w:p><w:r><w:t>{{#if t}}a </w:t></w:r><w:hyperlink w:anchor="h"><w:r><w:t>l{{#if a}}k{{/if}}</w:t></w:r></w:hyperlink>` +
 			`<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:t>{{/if}}{{#each rows}}{{.k}}{{/each}}</w:t></w:r></w:p>`,
 		`<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc><w:p><w:r><w:t>{{#if t}}a{{/if}}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
+		`<w:p><w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">a {{rich}} b {{rich}}</w:t><w:tab/><w:t>{{a}}</w:t></w:r></w:p>`,
+		`<w:p><w:hyperlink w:anchor="h"><w:r><w:t>{{rich}}{{link}}</w:t></w:r></w:hyperlink><w:r><w:t>{{link}}</w:t></w:r></w:p>`,
 	}
 	for _, s := range seeds {
 		f.Add(s, false)

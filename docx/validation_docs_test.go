@@ -61,6 +61,7 @@ func templateDoc(t *testing.T) *docx.Document {
 		"Dear {{#if vip}}valued {{/if}}customer, status {{#if ok}}pass{{else}}fail{{/if}}.",
 		"{{#if none}}", "Never shown.", "{{else}}", "Shown in place of an empty block.", "{{/if}}",
 		"Logo: {{image logo}}",
+		"Risk: {{risk}}; see {{site}}.",
 	} {
 		b.AddParagraph().AddRun(s)
 	}
@@ -88,6 +89,10 @@ func templateDoc(t *testing.T) *docx.Document {
 	data := map[string]any{
 		"client": "Acme", "fee": 1234.5, "due": "2026-12-15", "vip": true, "ok": false,
 		"logo": template.Image{Data: logo, Width: docx.Inches(1).EMU(), AltText: "Logo"},
+		"risk": template.Rich{Runs: []template.RichRun{
+			{Text: "High", Bold: docx.On(), Color: "C00000"}, {Text: " (review\nby Friday)", Italic: docx.On(), Underline: docx.On()},
+		}},
+		"site": template.Rich{Runs: []template.RichRun{{Text: "the "}, {Text: "portal", Link: "https://example.com/portal"}}},
 		"items": []any{
 			map[string]any{"name": "First", "new": true, "pic": pic(0x40)},
 			map[string]any{"name": "Second", "new": false, "pic": pic(0x80)},

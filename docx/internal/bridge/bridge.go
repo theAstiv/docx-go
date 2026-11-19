@@ -27,6 +27,12 @@ var SetPart func(doc any, path string, data []byte)
 // wp:docPr id. Set by package docx in init.
 var AddImage func(doc any, part string, img itemplate.ImageValue, docPrID int64) (*wml.CT_Drawing, error)
 
+// AddHyperlink adds an external hyperlink relationship to url on the part
+// at path part of doc, making sure the Hyperlink character style exists,
+// and returns the relationship id and the style id to use. Set by package
+// docx in init.
+var AddHyperlink func(doc any, part, url string) (relID, styleID string, err error)
+
 // Snapshot records the state of doc's package that adding images and links
 // changes, and returns the function that restores it. Set by package docx
 // in init.
