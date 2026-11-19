@@ -57,6 +57,14 @@ func TestWordTemplates(t *testing.T) {
 			"Spoofing", "Tampering", "Repudiation", "High", "MFA for admins", "Audit logging", "Done",
 			"Dec 2026", "S. Assessor", "Reviewed on site",
 		}, nil},
+		// Formatters typed in Word: curly-quoted arguments (one split across
+		// runs by an edit), a tag bold from the key to the formatter name,
+		// defaults for missing keys, and formatters inside a row loop.
+		{"template_formatters", []string{
+			"Client: ACME HEALTH & CO", "Contact: not given", "Score: 58.0 of 100",
+			"Fee: €1.234.567,89", "Due: 15 December 2026", "Owner: data protection office",
+			"Reviewer: —", "MFA for admins", "IT", "₹125,000", "Audit logging", "SECURITY", "₹40,001",
+		}, []string{"{{", "“", "‘"}},
 		{"template_cover_sdt", []string{
 			"DPDPA Gap Assessment", "Acme Health & Co", "A. Author", "18 October 2026",
 		}, nil},
