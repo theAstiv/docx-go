@@ -4,6 +4,10 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 
 ## Unreleased
 
+### Fixed
+
+- `RunFont.SetColor` removes a theme colour (`w:themeColor`, `themeTint`, `themeShade`) from the run. Word shows a theme colour in place of the hex value, so a colour set on a run Word had given a theme colour did not show in Word.
+
 ### Breaking
 
 - Templating: `{{else}}` is now a keyword. A data key named `else` can no longer be written as `{{else}}`; inside a loop, `{{.else}}` still reads it.
@@ -33,7 +37,10 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - `Execute` stays atomic. Adding an image changes the package itself (media part, relationship, content type), so `Execute` records the package before the first image and restores it if execution fails.
 - Templating: rich-text values. A value tag whose value is a `template.Rich{Runs: []template.RichRun{…}}` writes formatted runs in place of the tag. Each `RichRun` has `Text` (with `\n` and `\t`), tri-state `Bold`, `Italic` and `Underline`, a `Color` (`RRGGBB`) and a `Link`.
   - Each run starts from the formatting of the run holding the tag, and its own settings apply on top. The text before and after the tag keeps the tag run's formatting.
-  - A `Link` becomes an external hyperlink with the document's Hyperlink style. The URL is checked as for `Paragraph.AddHyperlink`, and the relationship goes on the part holding the tag, headers and footers included. A link where the tag already sits inside a hyperlink is `ErrUnsupportedLocation`; rich runs without links work there.
+  - A `Link` becomes an external hyperlink with the document's Hyperlink style. The URL is checked as for `Paragraph.AddHyperlink`, and the relationship goes on the part holding the tag, headers and footers included.
+  - A linked run drops the tag run's direct colour and underline, unless the `RichRun` sets them, so it looks like a link. The Hyperlink style replaces any character style the tag had, with a warning.
+  - A link where the tag already sits inside a hyperlink, or in the result of a `HYPERLINK` field, is `ErrUnsupportedLocation`; rich runs without links work there.
+  - An empty rich value inserts nothing and leaves the tag's run whole. New runs do not copy the tag run's tracked formatting change, whose id must stay unique.
   - A bad colour or an unsafe or relative URL is `ErrUnsupportedValue`. Formatters other than `default` reject a rich value (`ErrFormat`).
   - It is a typed value, not markup, so data cannot inject document content. In content controls, text boxes and document properties the plain text is written, with a warning.
   - A failed `Execute` also undoes links: the relationship and the Hyperlink style it added are removed.

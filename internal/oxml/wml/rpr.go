@@ -182,13 +182,27 @@ func (r *CT_RPr) ColorVal() string {
 	return rawGetAttrOnElement(r.raw, ns.Qn("w:color"), "val")
 }
 
-// SetColorVal sets w:color/@w:val. An empty string removes the element.
+// SetColorVal sets w:color/@w:val and removes any theme colour
+// (themeColor, themeTint, themeShade), which would otherwise win. An empty
+// string removes the element.
 func (r *CT_RPr) SetColorVal(hex string) {
 	if hex == "" {
 		rawRemoveChild(&r.raw, ns.Qn("w:color"))
 		return
 	}
 	rawSetAttrOnElement(&r.raw, ns.Qn("w:color"), ns.Qn("w:val"), hex)
+	// A theme colour overrides w:val (ECMA-376 17.3.2.6), so a colour set
+	// here would not show in Word while one is left.
+	for _, a := range []string{"themeColor", "themeTint", "themeShade"} {
+		rawRemoveAttrFromElement(&r.raw, ns.Qn("w:color"), a)
+	}
+}
+
+// RemoveRevision removes the tracked formatting change (w:rPrChange), whose
+// w:id must be unique in the document: a copy of these properties put on
+// new content must not repeat it.
+func (r *CT_RPr) RemoveRevision() {
+	rawRemoveChild(&r.raw, ns.Qn("w:rPrChange"))
 }
 
 // ---------------------------------------------------------------------------

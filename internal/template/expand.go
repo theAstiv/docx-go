@@ -58,20 +58,20 @@ func (en *engine) fillParagraph(p *wml.CT_P, sc *scope, loc Location) {
 	if !en.inRaw {
 		p.Children = en.expandInline(p.Children, sc, loc)
 	}
-	p.Children = en.fillInlines(p.Children, sc, loc, false)
+	p.Children = en.fillInlines(p.Children, sc, loc, false, &fieldState{stack: nil})
 }
 
 // fillInlines fills an inline sequence and returns it: a run holding a
 // rich-text value becomes several runs and hyperlinks.
-func (en *engine) fillInlines(children []wml.InlineElement, sc *scope, loc Location, inLink bool) []wml.InlineElement {
+func (en *engine) fillInlines(children []wml.InlineElement, sc *scope, loc Location, inLink bool, fs *fieldState) []wml.InlineElement {
 	out := children[:0:0]
 	for _, c := range children {
 		switch el := c.(type) {
 		case *wml.CT_R:
-			out = append(out, en.fillRun(el, sc, loc, inLink)...)
+			out = append(out, en.fillRun(el, sc, loc, inLink, fs)...)
 			continue
 		case *wml.CT_Hyperlink:
-			el.Children = en.fillInlines(el.Children, sc, loc, true)
+			el.Children = en.fillInlines(el.Children, sc, loc, true, fs)
 		case *wml.RawInline:
 			en.fillRaw(el.E, sc, loc)
 		}
@@ -80,8 +80,8 @@ func (en *engine) fillInlines(children []wml.InlineElement, sc *scope, loc Locat
 	return out
 }
 
-func (en *engine) fillRun(r *wml.CT_R, sc *scope, loc Location, inLink bool) []wml.InlineElement {
-	sp := &runSplitter{en: en, orig: r, inLink: inLink}
+func (en *engine) fillRun(r *wml.CT_R, sc *scope, loc Location, inLink bool, fs *fieldState) []wml.InlineElement {
+	sp := &runSplitter{en: en, orig: r, inLink: inLink, fields: fs}
 	changed := false
 	for _, rc := range r.Children {
 		switch el := rc.(type) {
@@ -89,6 +89,10 @@ func (en *engine) fillRun(r *wml.CT_R, sc *scope, loc Location, inLink bool) []w
 			en.fillRaw(el.E, sc, loc)
 		case *wml.CT_Drawing:
 			en.fillDrawing(el, sc, loc)
+		case *wml.CT_FldChar:
+			fs.char(el.FldCharType)
+		case *wml.CT_InstrText:
+			fs.instr(el.Content)
 		}
 		txt, ok := rc.(*wml.CT_Text)
 		if !ok || en.skip[txt] || !strings.Contains(txt.Content, "{{") {
@@ -127,7 +131,10 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 				continue
 			}
 			if rv, isRich := richOf(v); isRich && !en.inRaw {
-				if els, ok := en.richInlines(rv, sp.orig, sp.inLink, t, loc); ok {
+				if rv.plain() == "" {
+					continue // nothing to insert: leave the run whole
+				}
+				if els, ok := en.richInlines(rv, sp.orig, sp.inLink || sp.fields.inLink(), t, loc); ok {
 					sp.add(w.take()...)
 					sp.insert(els)
 				}

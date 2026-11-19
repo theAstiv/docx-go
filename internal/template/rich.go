@@ -88,6 +88,19 @@ func (en *engine) richInlines(rv RichValue, tagRun *wml.CT_R, inLink bool, t tag
 			en.abort(fmt.Errorf("add link for %s: %w", t.text, err))
 			return nil, false
 		}
+		// A link looks like a link: the Hyperlink style's colour and
+		// underline, not the tag run's, unless the RichRun sets its own.
+		// A run has one character style, so the Hyperlink style replaces
+		// any the tag run had.
+		if rr.Color == "" {
+			r.RPr.SetColorVal("")
+		}
+		if rr.Underline == nil {
+			r.RPr.SetUnderlineStyle("")
+		}
+		if old := r.RPr.StyleID(); styleID != "" && old != "" && old != styleID {
+			en.warn(loc, t, fmt.Sprintf("the linked text uses the %q style in place of the tag's %q character style", styleID, old))
+		}
 		if styleID != "" {
 			r.RPr.SetStyleID(styleID)
 		}
@@ -109,6 +122,9 @@ func (en *engine) richRun(tagRun *wml.CT_R, rr RichRun) (*wml.CT_R, error) {
 			return nil, fmt.Errorf("copy run properties: %w", err)
 		}
 		r.RPr = rpr
+		// The tag run's tracked formatting change belongs to it alone; its
+		// w:id must stay unique.
+		r.RPr.RemoveRevision()
 	} else {
 		r.RPr = new(wml.CT_RPr)
 	}
@@ -153,13 +169,58 @@ func isHexColor(s string) bool {
 	return true
 }
 
+// fieldState follows the complex fields of a paragraph as its runs are
+// filled, so a tag in the result of a HYPERLINK field counts as being in a
+// link, as one inside a w:hyperlink does.
+type fieldState struct {
+	stack []*fieldFrame
+}
+
+type fieldFrame struct {
+	instr  strings.Builder
+	result bool // past the separate character: in the field's result
+}
+
+func (fs *fieldState) char(fldCharType string) {
+	switch fldCharType {
+	case wml.FldCharBegin:
+		fs.stack = append(fs.stack, &fieldFrame{instr: strings.Builder{}, result: false})
+	case wml.FldCharSeparate:
+		if n := len(fs.stack); n > 0 {
+			fs.stack[n-1].result = true
+		}
+	case wml.FldCharEnd:
+		if n := len(fs.stack); n > 0 {
+			fs.stack = fs.stack[:n-1]
+		}
+	}
+}
+
+func (fs *fieldState) instr(s string) {
+	if n := len(fs.stack); n > 0 && !fs.stack[n-1].result {
+		fs.stack[n-1].instr.WriteString(s)
+	}
+}
+
+// inLink reports whether the current position is in a HYPERLINK field's
+// result.
+func (fs *fieldState) inLink() bool {
+	for _, f := range fs.stack {
+		if f.result && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(f.instr.String())), "HYPERLINK") {
+			return true
+		}
+	}
+	return false
+}
+
 // runSplitter collects the content of a run being filled. Until a rich
 // value splits it, the run keeps its identity; after, its content is spread
 // over copies of the run around the inserted runs.
 type runSplitter struct {
 	en     *engine
 	orig   *wml.CT_R
-	inLink bool
+	inLink bool        // the run is inside a w:hyperlink
+	fields *fieldState // the paragraph's complex fields
 	cur    []wml.RunContentElement
 	out    []wml.InlineElement
 	split  bool
@@ -215,6 +276,9 @@ func cloneRunShell(r *wml.CT_R) (*wml.CT_R, error) {
 		if err != nil {
 			return nil, fmt.Errorf("copy run properties: %w", err)
 		}
+		// The original run keeps the tracked change; a copy repeating its
+		// w:id would make the ids non-unique.
+		rpr.RemoveRevision()
 		c.RPr = rpr
 	}
 	return c, nil
