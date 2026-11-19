@@ -73,6 +73,10 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 	}
 	en.nextDocPr = scan.DocPrAllocator()
 
+	structural, err := checkStructure(stories, work, opts)
+	if err != nil {
+		return nil, nil, err
+	}
 	root := &scope{root: data}
 	for i, s := range stories {
 		work[i] = en.expandBlocks(work[i], root, Location{Part: s.Part})
@@ -82,7 +86,7 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 		return nil, nil, fmt.Errorf("template: %w", en.err)
 	}
 
-	warnings, errs := split(en.issues)
+	warnings, errs := split(dedupe(append(en.issues, structural...)))
 	if len(errs) > 0 {
 		return nil, warnings, &Error{Issues: errs}
 	}
@@ -90,6 +94,57 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 		*s.Blocks = work[i]
 	}
 	return filled, warnings, nil
+}
+
+// checkStructure reports the template errors that do not depend on the
+// data: unbalanced and misplaced block tags, section breaks in blocks,
+// malformed tags in raw content. Execution only looks at the branches the
+// data selects, so without this a broken branch (most often the side of an
+// {{else}} the test data never takes) would pass and fail later in
+// production. It runs a data-free engine over a copy of the normalized
+// stories that visits every branch once and looks up no values, and returns
+// its error-severity issues; its warnings depend on that visit, not on the
+// document, and are dropped.
+func checkStructure(stories []Story, work [][]wml.BlockElement, opts Options) ([]Issue, error) {
+	ck := &engine{opts: opts, skip: skipSet{}, check: true, nextDocPr: func() int64 { return 0 }}
+	for i, s := range stories {
+		blocks, err := cloneBlocks(work[i])
+		if err != nil {
+			return nil, fmt.Errorf("template: copy %s: %w", s.Part, err)
+		}
+		// The skip set holds text elements by identity, so the copy needs
+		// its own.
+		for t := range tocSkips(blocks) {
+			ck.skip[t] = true
+		}
+		ck.expandBlocks(blocks, &scope{root: map[string]any{}}, Location{Part: s.Part})
+	}
+	if ck.err != nil {
+		return nil, fmt.Errorf("template: %w", ck.err)
+	}
+	_, errs := split(ck.issues)
+	return errs, nil
+}
+
+// dedupe drops repeated issues, keeping the first. The structure check
+// repeats what execution finds in the branches it renders, and execution
+// repeats a template error once per {{#each}} copy.
+func dedupe(issues []Issue) []Issue {
+	type key struct {
+		sev           Severity
+		loc, tag, msg string
+	}
+	seen := make(map[key]bool, len(issues))
+	out := issues[:0:0]
+	for _, is := range issues {
+		k := key{is.Severity, is.Location.String(), is.Tag, is.Err.Error()}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, is)
+	}
+	return out
 }
 
 func cloneBlocks(blocks []wml.BlockElement) ([]wml.BlockElement, error) {

@@ -28,6 +28,8 @@ const (
 	tagClose
 	// tagImage is {{image path}}.
 	tagImage
+	// tagElse is {{else}}: the start of a block's other branch.
+	tagElse
 )
 
 // tag is one well-formed tag found in flattened text.
@@ -131,6 +133,12 @@ func parseTagBody(body string) (tag, string) {
 		}
 		t.kind, t.block = tagClose, word
 	default:
+		// "else" is a keyword: {{else}} never names a data key ({{.else}}
+		// still does inside a loop).
+		if b == "else" {
+			t.kind = tagElse
+			return t, ""
+		}
 		if rest, ok := strings.CutPrefix(b, "image "); ok {
 			rest = strings.TrimSpace(rest)
 			if !validPath(rest) {

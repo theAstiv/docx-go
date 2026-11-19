@@ -33,6 +33,11 @@ func FuzzTemplateExecute(f *testing.F) {
 		`<w:p><w:r><w:t>{{#if t}}</w:t></w:r></w:p><w:p><w:r><w:t>{{text}}</w:t></w:r></w:p><w:p><w:r><w:t>{{/if}}</w:t></w:r></w:p>`,
 		`<w:sdt><w:sdtContent><w:p><w:r><w:t>{{a}}{{</w:t></w:r></w:p></w:sdtContent></w:sdt>`,
 		`<w:p><w:r><w:t>{{#each obj.list}}</w:t></w:r></w:p><w:p><w:r><w:t>{{.}}</w:t></w:r></w:p>`,
+		`<w:p><w:r><w:t>{{#each none}}</w:t></w:r></w:p><w:p><w:r><w:t>{{.}}</w:t></w:r></w:p>` +
+			`<w:p><w:r><w:t>{{else}}</w:t></w:r></w:p><w:p><w:r><w:t>empty</w:t></w:r></w:p><w:p><w:r><w:t>{{/each}}</w:t></w:r></w:p>`,
+		`<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc><w:p><w:r><w:t>{{#if t}}a</w:t></w:r></w:p></w:tc></w:tr>` +
+			`<w:tr><w:tc><w:p><w:r><w:t>{{else}}b{{/if}}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
+		`<w:p><w:r><w:t>{{else}}</w:t></w:r></w:p><w:p><w:r><w:t>{{#if t}}</w:t></w:r></w:p><w:p><w:r><w:t>{{else}}</w:t></w:r></w:p>`,
 	}
 	for _, s := range seeds {
 		f.Add(s, false)
