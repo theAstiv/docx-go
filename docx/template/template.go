@@ -71,7 +71,7 @@ func adapt(v any) any {
 		return imageValue(x)
 	case *Image:
 		if x == nil {
-			return nil
+			return (*itemplate.ImageValue)(nil) // reported as a nil image
 		}
 		return imageValue(*x)
 	}

@@ -54,7 +54,12 @@ func templateImage(d any, part string, img itemplate.ImageValue, docPrID int64) 
 		return nil, errors.New("docx: no document to add the image to")
 	}
 	opts := ImageOptions{Width: EMU(img.Width), Height: EMU(img.Height), AltText: img.AltText, Title: img.Title}
-	return newPicture(doc.pkg, part, img.Data, opts, func() int64 { return docPrID })
+	pic, err := newPicture(doc.pkg, part, img.Data, opts, func() int64 { return docPrID })
+	if err != nil && (errors.Is(err, ErrUnsupportedImage) || errors.Is(err, ErrInvalidImageSize) || errors.Is(err, ErrImageTooLarge)) {
+		// The caller's image data is unusable: an issue, not a failure.
+		return nil, fmt.Errorf("%w: %w", itemplate.ErrUnsupportedValue, err)
+	}
+	return pic, err
 }
 
 // templateStories hands docx/template the document's stories: the body,

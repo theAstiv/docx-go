@@ -283,3 +283,52 @@ func TestImage_DroppedBranch(t *testing.T) {
 		}
 	}
 }
+
+// Objects a caller holds (a style, its formatting, a header) still belong
+// to the document after a failed Execute restored the package: edits made
+// through them afterwards are saved.
+func TestImage_HeldObjectsSurviveFailedExecute(t *testing.T) {
+	doc := docx.New()
+	style := doc.Styles().EnsureBuiltin(docx.StyleHeading1)
+	font := style.Font()
+	hdr := doc.LastSection().SetHeader(docx.HeaderDefault)
+	paras(doc, "{{image logo}}", "{{missing}}")
+	_, err := template.Execute(doc, map[string]any{"logo": template.Image{Data: pngBytes(t, 2, 2, color.Black), AltText: "x"}}, template.Options{})
+	if !errors.Is(err, template.ErrMissingKey) {
+		t.Fatalf("err = %v, want ErrMissingKey", err)
+	}
+	style.SetNext("Normal")
+	font.SetItalic(docx.On())
+	hdr.SetText("after the failed run")
+
+	re := reopen(t, doc)
+	s := re.Styles().ByID(style.ID())
+	if s == nil || s.Next() != "Normal" {
+		t.Errorf("style edit lost: %+v", s)
+	} else if it := s.Font().Italic(); it == nil || !*it {
+		t.Error("font edit through a held RunFont lost")
+	}
+	if got := re.LastSection().Header(docx.HeaderDefault).Text(); !strings.Contains(got, "after the failed run") {
+		t.Errorf("header edit lost: %q", got)
+	}
+}
+
+func TestImage_ErrorMessages(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		v    any
+		want string
+	}{
+		{"nil pointer", (*template.Image)(nil), "nil"},
+		{"blank alt text", template.Image{Data: pngBytes(t, 2, 2, color.Black), AltText: "  \t"}, "AltText"},
+		{"bad data", template.Image{Data: []byte("nope"), AltText: "x"}, "unsupported image format"},
+	} {
+		doc := docx.New()
+		paras(doc, "{{image p}}")
+		_, err := template.Execute(doc, map[string]any{"p": tt.v}, template.Options{})
+		var te *template.Error
+		if !errors.As(err, &te) || !errors.Is(err, template.ErrUnsupportedValue) || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: err = %v, want a *template.Error with ErrUnsupportedValue mentioning %q", tt.name, err, tt.want)
+		}
+	}
+}

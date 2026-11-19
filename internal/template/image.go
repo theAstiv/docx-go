@@ -1,7 +1,9 @@
 package template
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
@@ -22,7 +24,9 @@ type ImageValue struct {
 type Hooks struct {
 	// AddImage stores img in the package, with its relationship on the part
 	// at path part, and returns the inline picture to place, using docPrID
-	// as its wp:docPr id.
+	// as its wp:docPr id. An error wrapping ErrUnsupportedValue means the
+	// image data is unusable and becomes an issue; any other error is an
+	// internal failure that aborts Execute.
 	AddImage func(part string, img ImageValue, docPrID int64) (*wml.CT_Drawing, error)
 }
 
@@ -64,7 +68,7 @@ func (en *engine) image(t tag, sc *scope, loc Location) (*wml.CT_Drawing, bool) 
 		en.fail(loc, t, ErrUnsupportedValue, fmt.Sprintf("{{image}} needs a template.Image value, got %T", r.value))
 		return nil, false
 	}
-	if img.AltText == "" {
+	if strings.TrimSpace(img.AltText) == "" {
 		en.fail(loc, t, ErrUnsupportedValue, "an image needs AltText, which screen readers read out")
 		return nil, false
 	}
@@ -73,9 +77,18 @@ func (en *engine) image(t tag, sc *scope, loc Location) (*wml.CT_Drawing, bool) 
 		return nil, false
 	}
 	d, err := en.opts.Hooks.AddImage(loc.Part, img, en.nextDocPr())
-	if err != nil {
-		en.fail(loc, t, ErrUnsupportedValue, err.Error())
-		return nil, false
+	switch {
+	case err == nil:
+		return d, true
+	case errors.Is(err, ErrUnsupportedValue):
+		// The image data itself is wrong (format, size): the caller's data.
+		en.issues = append(en.issues, Issue{Severity: SeverityError, Location: loc, Tag: t.text, Err: err})
+	default:
+		// The package could not take the image: not a data problem, so
+		// it aborts Execute instead of becoming an issue.
+		if en.err == nil {
+			en.err = fmt.Errorf("add image for %s: %w", t.text, err)
+		}
 	}
-	return d, true
+	return nil, false
 }

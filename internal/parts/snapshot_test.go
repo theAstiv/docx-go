@@ -70,3 +70,25 @@ func TestSnapshotRestore(t *testing.T) {
 		t.Errorf("%d image relationships, want 2", n)
 	}
 }
+
+// A style object that existed at the snapshot is the same object after a
+// restore, with its old contents; styles added since are gone.
+func TestSnapshotRestore_StyleIdentity(t *testing.T) {
+	p := New()
+	kept := &wml.CT_Style{}
+	p.StyPart.Styles().Styles = append(p.StyPart.Styles().Styles, kept)
+	s, err := p.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.StyPart.Styles().Styles = append(p.StyPart.Styles().Styles, &wml.CT_Style{})
+	kept.PPr = &wml.CT_PPr{}
+	p.Restore(s)
+	got := p.StyPart.Styles().Styles
+	if len(got) != 1 || got[0] != kept {
+		t.Fatalf("styles after restore = %v, want just the original object", got)
+	}
+	if kept.PPr != nil {
+		t.Error("the style's contents were not put back")
+	}
+}
