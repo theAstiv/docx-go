@@ -42,7 +42,7 @@ mkdir -p "${OUT}"
 shopt -s nullglob
 files=("${OUT}"/*.docx)
 # Guard against a generator that silently wrote nothing (a vacuous pass).
-expected=15
+expected=16
 if [[ ${#files[@]} -ne ${expected} ]]; then
   echo "expected ${expected} generated documents, found ${#files[@]}: ${files[*]:-none}" >&2
   exit 1

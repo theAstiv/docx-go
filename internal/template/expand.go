@@ -27,6 +27,9 @@ type engine struct {
 	check bool
 	// fmts resolves formatter names (Options.Funcs, then built-ins).
 	fmts formatterSet
+	// removedBookmarks are the bookmarks inline ranges removed, checked
+	// against cross-references once every story is filled.
+	removedBookmarks []removedBookmark
 }
 
 // missing reports a value tag whose key is absent: an error in Strict mode,
@@ -49,9 +52,12 @@ func (en *engine) warn(loc Location, t tag, msg string) {
 	en.issues = append(en.issues, Issue{Severity: SeverityWarning, Location: loc, Tag: t.text, Err: errors.New(msg)})
 }
 
-// fillParagraph replaces the value tags of a normalized paragraph, where
-// every well-formed tag sits inside one w:t.
+// fillParagraph expands the inline ranges of a normalized paragraph, where
+// every well-formed tag sits inside one w:t, and replaces its value tags.
 func (en *engine) fillParagraph(p *wml.CT_P, sc *scope, loc Location) {
+	if !en.inRaw {
+		p.Children = en.expandInline(p.Children, sc, loc)
+	}
 	en.fillInlines(p.Children, sc, loc)
 }
 
@@ -113,10 +119,10 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 			en.fail(loc, t, ErrUnsupportedLocation, "image placeholders are not supported yet")
 			w.text(t.text)
 		case tagOpen, tagClose, tagElse:
+			// Outside raw content, expandInline has already reported the
+			// block tags that are left: they are not part of a range.
 			if en.inRaw {
 				en.fail(loc, t, ErrUnsupportedLocation, "block tags are not supported "+rawLocation)
-			} else {
-				en.fail(loc, t, ErrMisplacedBlock, misplacedDetail)
 			}
 			w.text(t.text)
 		}

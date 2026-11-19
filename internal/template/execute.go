@@ -86,6 +86,7 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 	for i, s := range stories {
 		work[i] = en.expandBlocks(work[i], root, Location{Part: s.Part})
 	}
+	en.warnRemovedReferences(work)
 	filled := en.fillXMLParts(boundParts, root)
 	if en.err != nil {
 		return nil, nil, fmt.Errorf("template: %w", en.err)

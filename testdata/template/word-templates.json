@@ -39,6 +39,7 @@
   ],
   "fees": { "totl": 1234567.891, "due": "2026-12-15" },
   "show_totals": true,
+  "vip": true,
   "total": 3,
   "mitigations": [
     { "control": "MFA for admins", "owner": "IT", "staus": "Open", "due_date": "Dec 2026", "cost": 125000 },

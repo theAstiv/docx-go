@@ -16,6 +16,14 @@ and `'` with smart quotes on turned the formatter arguments into curly quotes
 the formatter name; the third replaced and restored a letter inside `“not
 given”`, `January` and `lower`, so Word split those into separate runs.
 
+`word/template_inline_if.docx` (P3c.10) was made the same way. The first
+session typed inline `{{#if}}`/`{{#unless}}` ranges with and without
+`{{else}}`, a nested range, a tab and a line break inside branches, a range
+in a hyperlink's display text and ranges inside a `{{#each}}` row. The second
+bolded `vip}}val` and `ndings{{else}}no` and italicised a letter run inside the
+kept text of a row range; the third replaced and restored a letter inside
+`show_totals`, `{{/unless}}`, `asessor` and `{{/if}}`.
+
 Files under `python-docx/` are from the [python-docx](https://github.com/python-openxml/python-docx) project,
 licensed under the **MIT License**. Copyright © python-docx contributors.
 
