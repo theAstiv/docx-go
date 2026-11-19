@@ -3,6 +3,7 @@ package canon
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -20,6 +21,13 @@ import (
 //   - Redundant namespace declarations (already declared by a parent) are dropped.
 //   - Text-node content (xml.CharData) is preserved byte-for-byte.
 //   - Whitespace between elements is NOT normalised.
+//
+// Two namespace defects are errors (ErrNamespace), not differences to be
+// canonicalised away: an undeclared prefix on an element or attribute (a
+// lost declaration), and a declaration binding a prefix to the URI "xmlns"
+// (the xmlns:_xmlns="xmlns" junk encoding/xml writes when it is asked to
+// encode a stored namespace declaration). Comparing only after dropping every
+// declaration made both invisible to the round-trip tests.
 //
 // This is intentionally NOT XML C14N / C14N11.  The goal is structural
 // equivalence, not byte-identical w3c canonical form.
@@ -58,12 +66,21 @@ func XML(src []byte) ([]byte, error) {
 			// Rewrite element name to canonical prefix.
 			t.Name = canonName(t.Name)
 
+			if undeclared(t.Name) {
+				return nil, fmt.Errorf("%w: element %s:%s uses an undeclared prefix", ErrNamespace, t.Name.Space, t.Name.Local)
+			}
 			// Rewrite and filter attributes.
 			var attrs []xml.Attr
 			for _, a := range t.Attr {
 				// Skip stored namespace declarations (handled via Name.Space).
 				if a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns") {
+					if a.Value == "xmlns" {
+						return nil, fmt.Errorf("%w: %v binds a prefix to the URI \"xmlns\"", ErrNamespace, t.Name)
+					}
 					continue
+				}
+				if undeclared(a.Name) {
+					return nil, fmt.Errorf("%w: attribute %s:%s on %v uses an undeclared prefix", ErrNamespace, a.Name.Space, a.Name.Local, t.Name)
 				}
 				a.Name = canonName(a.Name)
 				attrs = append(attrs, a)
@@ -135,6 +152,17 @@ func Equal(a, b []byte) (bool, error) {
 		return false, fmt.Errorf("canon: canonicalise b: %w", err)
 	}
 	return bytes.Equal(ca, cb), nil
+}
+
+// ErrNamespace is returned (wrapped) by XML and Equal for namespace defects
+// in the input: an undeclared prefix, or a prefix bound to "xmlns".
+var ErrNamespace = errors.New("canon: namespace defect")
+
+// undeclared reports whether n kept an unresolved prefix: encoding/xml leaves
+// an undeclared prefix as the name's Space, while a declared namespace is an
+// absolute URI, which always contains ':' (the xml namespace too).
+func undeclared(n xml.Name) bool {
+	return n.Space != "" && !strings.Contains(n.Space, ":")
 }
 
 // canonName rewrites an xml.Name so its Space field holds a URI recognised by

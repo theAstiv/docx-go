@@ -15,7 +15,9 @@ import (
 // matching on Local alone is correct for well-formed documents.
 func wAttr(attrs []xml.Attr, localName string) string {
 	for _, a := range attrs {
-		if a.Name.Local == localName {
+		// A namespace declaration is not an attribute: xmlns:w on a
+		// w:gridCol would otherwise be read as its w:w width.
+		if a.Name.Local == localName && !isNSDecl(a) {
 			return a.Value
 		}
 	}
