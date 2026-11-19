@@ -3,6 +3,7 @@ package template
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
@@ -271,8 +272,29 @@ func (en *engine) reportMisplacedRows(rows []wml.TableRowElement, rlocs []Locati
 					tags = tags[:len(tags)-1] // the row's close tag
 				}
 				en.reportInlineLeftovers(tags, locs[i])
+				en.reportRawBlockTags(p, locs[i])
 			}
 			nc++
+		}
+	}
+}
+
+// reportRawBlockTags reports block tags held in p's inline content other than
+// runs and hyperlinks (tracked insertions, content controls). They are not
+// reported by the fill path when the rows are left unfilled because they do
+// not pair, and a row-edge tag held there is the usual reason they do not.
+func (en *engine) reportRawBlockTags(p *wml.CT_P, loc Location) {
+	for _, c := range p.Children {
+		switch c.(type) {
+		case *wml.CT_R, *wml.CT_Hyperlink:
+			continue
+		}
+		text := (&wml.CT_P{PPr: nil, Children: []wml.InlineElement{c}, Attrs: nil}).Text()
+		tags, _ := lexTags(text)
+		for _, t := range tags {
+			if isBlockTag(t) {
+				en.fail(loc, t, ErrUnsupportedLocation, "block and image tags are not supported "+rawLocation)
+			}
 		}
 	}
 }
@@ -545,7 +567,7 @@ func (en *engine) rowOpen(row *wml.CT_Tr) (tag, bool) {
 	if !ok {
 		return tag{}, false
 	}
-	text := strings.TrimLeft(p.Text(), " \t")
+	text := strings.TrimLeft(edgeText(p, true), " \t")
 	tags, _ := lexTags(text)
 	if len(tags) == 0 || tags[0].start != 0 || tags[0].kind != tagOpen {
 		return tag{}, false
@@ -571,7 +593,7 @@ func (en *engine) rowClose(row *wml.CT_Tr) (tag, bool) {
 	if !ok {
 		return tag{}, false
 	}
-	text := strings.TrimRight(p.Text(), " \t")
+	text := strings.TrimRight(edgeText(p, false), " \t")
 	tags, _ := lexTags(text)
 	if len(tags) == 0 {
 		return tag{}, false
@@ -621,12 +643,43 @@ func rowElse(row *wml.CT_Tr) (tag, bool) {
 	if !ok {
 		return tag{}, false
 	}
-	text := strings.TrimLeft(p.Text(), " \t")
+	text := strings.TrimLeft(edgeText(p, true), " \t")
 	tags, _ := lexTags(text)
 	if len(tags) == 0 || tags[0].start != 0 || tags[0].kind != tagElse {
 		return tag{}, false
 	}
 	return tags[0], true
+}
+
+// edgeText returns the text at the start (first) or end of p that
+// stripRowEdge can edit: the text of the runs and hyperlinks up to the first
+// other element that shows text (a tracked insertion, a content control, a
+// field result in raw content). Row-edge tags are looked for in this text
+// only. Looking in p.Text() found tags that stripRowEdge could not remove, so
+// every copy of the row re-opened the range and expansion never ended.
+func edgeText(p *wml.CT_P, first bool) string {
+	n := len(p.Children)
+	parts := make([]string, 0, n)
+	for k := range n {
+		i := k
+		if !first {
+			i = n - 1 - k
+		}
+		c := p.Children[i]
+		text := (&wml.CT_P{PPr: nil, Children: []wml.InlineElement{c}, Attrs: nil}).Text()
+		switch c.(type) {
+		case *wml.CT_R, *wml.CT_Hyperlink:
+			parts = append(parts, text)
+			continue
+		}
+		if text != "" {
+			break
+		}
+	}
+	if !first {
+		slices.Reverse(parts)
+	}
+	return strings.Join(parts, "")
 }
 
 // edgeCell returns a row's first or last typed cell.
