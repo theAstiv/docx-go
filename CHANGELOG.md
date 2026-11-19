@@ -2,6 +2,16 @@
 
 docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the public API may change between minor versions.** Requires Go ≥ 1.23.
 
+## Unreleased
+
+### Breaking
+
+- Templating: `{{else}}` is now a keyword. A data key named `else` can no longer be written as `{{else}}`; inside a loop, `{{.else}}` still reads it.
+
+### Added
+
+- Templating: `{{else}}` in `{{#if}}`, `{{#unless}}` and `{{#each}}`. It goes alone in a paragraph, or at the start of a row's first cell in a row range, where it begins the rows of the else branch. In `{{#each}}`, the else branch shows once, with the outer data, when the list is empty, `null` or missing; without an `{{else}}`, a missing list is still a missing key. `Placeholders` reports it with kind `"else"`.
+
 ## v0.4.0: editing existing documents
 
 Open a document, then remove and insert content, find and replace text, read its plain text and set its properties. Templates can be filled without writing Go, using the new `docxfill` command.

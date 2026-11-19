@@ -58,8 +58,9 @@ warnings, err := template.Execute(doc, data, template.Options{Mode: template.Str
 | `{{#each items}}` … `{{/each}}` | Repeat once per item. Inside, `{{.field}}` is a field of the item and `{{.}}` the item itself |
 | `{{#if flag}}` … `{{/if}}` | Keep the block when `flag` is truthy (not missing, `false`, `""`, `0`, empty or `null`) |
 | `{{#unless flag}}` … `{{/unless}}` | Keep the block when `flag` is falsy |
+| `{{#if flag}}` … `{{else}}` … `{{/if}}` | Show the else branch when the block is dropped. In `{{#each}}`, the else branch shows once when the list is empty, `null` or missing |
 
-Block tags go **alone in their own paragraph** (the paragraphs and tables between the two tags repeat or disappear) or **at the edges of table rows**: `{{#each rows}}` at the start of a row's first cell and `{{/each}}` at the end of the last cell of the same or a later row repeats those rows.
+Block tags go **alone in their own paragraph** (the paragraphs and tables between the two tags repeat or disappear) or **at the edges of table rows**: `{{#each rows}}` at the start of a row's first cell and `{{/each}}` at the end of the last cell of the same or a later row repeats those rows. In a row range, `{{else}}` goes at the start of a later row's first cell and begins the rows of the else branch.
 
 - Placeholders work in the body, tables, headers and footers, and (values only) in content controls and text boxes, such as Word's built-in cover pages. Tags Word split across runs (spell-check marks, formatting changes) are rejoined; the formatting of the run holding `{{` is used.
 - Data-bound content controls (a cover page's Title, Subtitle, Date) show values stored in the document properties or custom XML; those are filled too, so Word shows the filled value when it opens the file.

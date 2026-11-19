@@ -11,9 +11,9 @@ import (
 
 // Placeholder is one tag found in a template.
 type Placeholder struct {
-	// Kind is "value", "each", "if", "unless", "end" or "image".
+	// Kind is "value", "each", "if", "unless", "else", "end" or "image".
 	Kind string
-	// Path is the data path; empty for "end".
+	// Path is the data path; empty for "else" and "end".
 	Path string
 	// Tag is the tag as written.
 	Tag      string
@@ -183,6 +183,8 @@ func kindName(t tag) string {
 		return "end"
 	case tagImage:
 		return "image"
+	case tagElse:
+		return "else"
 	}
 	return "value"
 }

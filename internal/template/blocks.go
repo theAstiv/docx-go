@@ -29,46 +29,77 @@ type mark struct {
 	loc Location
 }
 
-// pair matches open and close marks. It returns the outermost ranges (open
-// index → close index) and false, after reporting, if the level is not
+// span is one outermost range found by pair: the indexes of its {{else}}
+// (-1 when it has none) and of its close tag.
+type span struct {
+	els, close int
+}
+
+// hasElse reports whether the range has an {{else}} branch.
+func (s span) hasElse() bool { return s.els >= 0 }
+
+// pair matches open, else and close marks. It returns the outermost ranges
+// (open index → span) and false, after reporting, if the level is not
 // balanced. With report false it only computes the ranges.
-func (en *engine) pair(marks []mark, report bool) (map[int]int, bool) {
-	ranges := map[int]int{}
+func (en *engine) pair(marks []mark, report bool) (map[int]span, bool) {
+	ranges := map[int]span{}
 	ok := true
-	fail := func(m mark, detail string) {
+	fail := func(m mark, sentinel error, detail string) {
 		ok = false
 		if report {
-			en.fail(m.loc, m.t, ErrUnbalancedBlock, detail)
+			en.fail(m.loc, m.t, sentinel, detail)
 		}
 	}
-	var stack []mark
+	type openMark struct {
+		m   mark
+		els int
+	}
+	var stack []openMark
 	for _, m := range marks {
-		if m.t.kind == tagOpen {
-			stack = append(stack, m)
+		switch m.t.kind {
+		case tagOpen:
+			stack = append(stack, openMark{m: m, els: -1})
+			continue
+		case tagElse:
+			if len(stack) == 0 {
+				fail(m, ErrMisplacedBlock, "no {{#if}}, {{#unless}} or {{#each}} open before it in the same paragraph list or table")
+				continue
+			}
+			top := &stack[len(stack)-1]
+			if top.els >= 0 {
+				fail(m, ErrUnbalancedBlock, "a second {{else}} for "+top.m.t.text+", opened at "+top.m.loc.String())
+				continue
+			}
+			top.els = m.idx
 			continue
 		}
 		if len(stack) == 0 {
-			fail(m, "no matching {{#"+m.t.block+"}} before it in the same paragraph list or table")
+			fail(m, ErrUnbalancedBlock, "no matching {{#"+m.t.block+"}} before it in the same paragraph list or table")
 			continue
 		}
 		open := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		if open.t.block != m.t.block {
-			fail(m, fmt.Sprintf("closes %s, opened at %s", open.t.text, open.loc))
+		if open.m.t.block != m.t.block {
+			fail(m, ErrUnbalancedBlock, fmt.Sprintf("closes %s, opened at %s", open.m.t.text, open.m.loc))
 			continue
 		}
 		if len(stack) == 0 {
-			ranges[open.idx] = m.idx
+			ranges[open.m.idx] = span{els: open.els, close: m.idx}
 		}
 	}
-	for _, m := range stack {
-		fail(m, "no matching {{/"+m.t.block+"}} after it in the same paragraph list or table")
+	for _, o := range stack {
+		fail(o.m, ErrUnbalancedBlock, "no matching {{/"+o.m.t.block+"}} after it in the same paragraph list or table")
 	}
 	return ranges, ok
 }
 
+// isBlockTag reports whether t is an open, else or close tag.
+func isBlockTag(t tag) bool {
+	return t.kind == tagOpen || t.kind == tagClose || t.kind == tagElse
+}
+
 // marker returns the block tag that p consists of, if p's whole text is one
-// open or close tag.
+// open, else or close tag.
 func marker(p *wml.CT_P) (tag, bool) {
 	text := strings.TrimSpace(p.Text())
 	if !strings.HasPrefix(text, "{{") {
@@ -79,7 +110,7 @@ func marker(p *wml.CT_P) (tag, bool) {
 		return tag{}, false
 	}
 	t := tags[0]
-	if t.start != 0 || t.end != len(text) || (t.kind != tagOpen && t.kind != tagClose) {
+	if t.start != 0 || t.end != len(text) || !isBlockTag(t) {
 		return tag{}, false
 	}
 	return t, true
@@ -141,9 +172,9 @@ func (en *engine) expandRange(blocks []wml.BlockElement, locs []Location, sc *sc
 	}
 	out := make([]wml.BlockElement, 0, len(blocks))
 	for i := 0; i < len(blocks); i++ {
-		if j, isOpen := ranges[i]; isOpen {
-			out = append(out, en.expandBlockRange(blocks, locs, i, j, opens[i], sc)...)
-			i = j
+		if sp, isOpen := ranges[i]; isOpen {
+			out = append(out, en.expandBlockRange(blocks, locs, i, sp, opens[i], sc)...)
+			i = sp.close
 			continue
 		}
 		switch el := blocks[i].(type) {
@@ -193,6 +224,8 @@ func (en *engine) reportMisplacedRows(rows []wml.TableRowElement, rlocs []Locati
 		var openPara, closePara *wml.CT_P
 		if _, ok := en.rowOpen(row); ok {
 			openPara = edgeParagraph(row, true)
+		} else if _, ok := rowElse(row); ok {
+			openPara = edgeParagraph(row, true)
 		}
 		if _, ok := en.rowClose(row); ok {
 			closePara = edgeParagraph(row, false)
@@ -214,7 +247,7 @@ func (en *engine) reportMisplacedRows(rows []wml.TableRowElement, rlocs []Locati
 				}
 				tags := paragraphBlockTags(p)
 				if p == openPara && len(tags) > 0 {
-					tags = tags[1:] // the row's open tag
+					tags = tags[1:] // the row's open or else tag
 				}
 				if p == closePara && len(tags) > 0 {
 					tags = tags[:len(tags)-1] // the row's close tag
@@ -249,7 +282,7 @@ func paragraphBlockTags(p *wml.CT_P) []tag {
 	for _, txt := range paragraphTexts(p.Children) {
 		tags, _ := lexTags(txt.Content)
 		for _, t := range tags {
-			if t.kind == tagOpen || t.kind == tagClose {
+			if isBlockTag(t) {
 				out = append(out, t)
 			}
 		}
@@ -260,25 +293,40 @@ func paragraphBlockTags(p *wml.CT_P) []tag {
 // misplacedDetail explains where block tags may go.
 const misplacedDetail = "a block tag must be alone in its paragraph, or at the start of a row's first cell or the end of its last cell"
 
-// expandBlockRange handles blocks[i..j], whose first and last blocks are the
-// marker paragraphs of open.
-func (en *engine) expandBlockRange(blocks []wml.BlockElement, locs []Location, i, j int, open tag, sc *scope) []wml.BlockElement {
+// expandBlockRange handles blocks[i..sp.close], whose first and last blocks
+// (and the block at sp.els, if any) are the marker paragraphs of open.
+func (en *engine) expandBlockRange(blocks []wml.BlockElement, locs []Location, i int, sp span, open tag, sc *scope) []wml.BlockElement {
+	j := sp.close
 	for k := i; k <= j; k++ {
 		if p, ok := blocks[k].(*wml.CT_P); ok && p.PPr != nil && p.PPr.SectPr != nil {
 			en.fail(locs[k], open, ErrSectionBreakInBlock, "move the section break outside "+open.text+" … {{/"+open.block+"}}")
 			return nil
 		}
 	}
-	body, bodyLocs := blocks[i+1:j], locs[i+1:j]
+	// The then branch runs to the {{else}} marker; the else branch follows it.
+	thenEnd := j
+	if sp.hasElse() {
+		thenEnd = sp.els
+	}
+	body, bodyLocs := blocks[i+1:thenEnd], locs[i+1:thenEnd]
+	elseBranch := func() []wml.BlockElement {
+		if !sp.hasElse() {
+			return nil
+		}
+		return en.expandRange(blocks[sp.els+1:j], locs[sp.els+1:j], sc)
+	}
 	if open.block != "each" {
 		if !en.condition(open, sc) {
-			return nil
+			return elseBranch()
 		}
 		return en.expandRange(body, bodyLocs, sc)
 	}
-	list, ok := en.list(open, sc, locs[i])
+	list, ok := en.list(open, sc, locs[i], sp.hasElse())
 	if !ok {
 		return nil
+	}
+	if len(list) == 0 {
+		return elseBranch()
 	}
 	copies := copiesOf(en, body, len(list), open, locs[i])
 	var out []wml.BlockElement
@@ -327,6 +375,8 @@ func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *s
 		if t, ok := en.rowOpen(row); ok {
 			marks = append(marks, mark{idx: k, t: t, loc: rlocs[k]})
 			opens[k] = t
+		} else if t, ok := rowElse(row); ok {
+			marks = append(marks, mark{idx: k, t: t, loc: rlocs[k]})
 		}
 		if t, ok := en.rowClose(row); ok {
 			marks = append(marks, mark{idx: k, t: t, loc: rlocs[k]})
@@ -342,9 +392,9 @@ func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *s
 	}
 	out := make([]wml.TableRowElement, 0, len(rows))
 	for k := 0; k < len(rows); k++ {
-		if j, isOpen := ranges[k]; isOpen {
-			out = append(out, en.expandRowRange(rows, rlocs, k, j, opens[k], sc)...)
-			k = j
+		if sp, isOpen := ranges[k]; isOpen {
+			out = append(out, en.expandRowRange(rows, rlocs, k, sp, opens[k], sc)...)
+			k = sp.close
 			continue
 		}
 		switch row := rows[k].(type) {
@@ -358,25 +408,50 @@ func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *s
 	return out
 }
 
-// expandRowRange handles rows[k..j], whose edge cells hold open and its
-// close tag.
-func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k, j int, open tag, sc *scope) []wml.TableRowElement {
+// expandRowRange handles rows[k..sp.close], whose edge cells hold open and
+// its close tag. With an {{else}}, the row starting with it begins the else
+// branch: rows k..sp.els-1 are the then branch, sp.els..sp.close the else
+// branch.
+func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k int, sp span, open tag, sc *scope) []wml.TableRowElement {
+	j := sp.close
 	first, _ := rows[k].(*wml.CT_Tr)
 	last, _ := rows[j].(*wml.CT_Tr)
+	// The close tag is found before any tag is stripped: stripping the else
+	// tag from a one-cell row could otherwise change what rowClose sees.
+	closeTag, hasClose := en.rowClose(last)
 	stripRowEdge(first, open, true)
-	if closeTag, ok := en.rowClose(last); ok {
+	if sp.hasElse() {
+		elseRow, _ := rows[sp.els].(*wml.CT_Tr)
+		if t, ok := rowElse(elseRow); ok {
+			stripRowEdge(elseRow, t, true)
+		}
+	}
+	if hasClose {
 		stripRowEdge(last, closeTag, false)
 	}
-	body, bodyLocs := rows[k:j+1], rlocs[k:j+1]
+	thenEnd := j + 1
+	if sp.hasElse() {
+		thenEnd = sp.els
+	}
+	body, bodyLocs := rows[k:thenEnd], rlocs[k:thenEnd]
+	elseBranch := func() []wml.TableRowElement {
+		if !sp.hasElse() {
+			return nil
+		}
+		return en.expandRows(rows[sp.els:j+1], rlocs[sp.els:j+1], sc)
+	}
 	if open.block != "each" {
 		if !en.condition(open, sc) {
-			return nil
+			return elseBranch()
 		}
 		return en.expandRows(body, bodyLocs, sc)
 	}
-	list, ok := en.list(open, sc, rlocs[k])
+	list, ok := en.list(open, sc, rlocs[k], sp.hasElse())
 	if !ok {
 		return nil
+	}
+	if len(list) == 0 {
+		return elseBranch()
 	}
 	copies := copiesOf(en, body, len(list), open, rlocs[k])
 	var out []wml.TableRowElement
@@ -484,12 +559,32 @@ func (en *engine) pairedInCell(cell *wml.CT_Tc, idx int) bool {
 		}
 	}
 	ranges, _ := en.pair(marks, false)
-	for open, closeIdx := range ranges {
-		if open == idx || closeIdx == idx {
+	for open, sp := range ranges {
+		if open == idx || sp.close == idx || sp.els == idx {
 			return true
 		}
 	}
 	return false
+}
+
+// rowElse returns the {{else}} at the start of a row's first cell. An else
+// there can never belong to a paragraph range of that cell: such a range
+// would need its open tag before the else, in the same cell.
+func rowElse(row *wml.CT_Tr) (tag, bool) {
+	cell := edgeCell(row, true)
+	if cell == nil || len(cell.Children) == 0 {
+		return tag{}, false
+	}
+	p, ok := cell.Children[0].(*wml.CT_P)
+	if !ok {
+		return tag{}, false
+	}
+	text := strings.TrimLeft(p.Text(), " \t")
+	tags, _ := lexTags(text)
+	if len(tags) == 0 || tags[0].start != 0 || tags[0].kind != tagElse {
+		return tag{}, false
+	}
+	return tags[0], true
 }
 
 // edgeCell returns a row's first or last typed cell.
@@ -575,9 +670,15 @@ func (en *engine) condition(open tag, sc *scope) bool {
 
 // list resolves an {{#each}} path. A missing list is a missing key (a typo
 // in a list name must not silently produce nothing); null is an empty list.
-func (en *engine) list(open tag, sc *scope, loc Location) ([]any, bool) {
+// With an {{else}} branch (missingOK), a missing list is empty instead, as
+// a missing key is false in {{#if}}: the else branch is the template's
+// answer to "no items".
+func (en *engine) list(open tag, sc *scope, loc Location, missingOK bool) ([]any, bool) {
 	r := sc.lookup(open.path)
 	if !r.found {
+		if missingOK {
+			return nil, true
+		}
 		en.missing(loc, open, r.detail)
 		return nil, false
 	}

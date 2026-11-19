@@ -107,7 +107,7 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 		case tagImage:
 			en.fail(loc, t, ErrUnsupportedLocation, "image placeholders are not supported yet")
 			w.text(t.text)
-		case tagOpen, tagClose:
+		case tagOpen, tagClose, tagElse:
 			if en.inRaw {
 				en.fail(loc, t, ErrUnsupportedLocation, "block tags are not supported "+rawLocation)
 			} else {
