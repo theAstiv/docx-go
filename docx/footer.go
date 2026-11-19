@@ -84,7 +84,7 @@ func (f *Footer) AddTable(rows, cols int, opts TableOptions) *Table {
 	if cols < 1 {
 		cols = 1
 	}
-	tbl := buildTable(rows, cols, opts)
+	tbl := buildTable(rows, cols, opts, f.story().textWidthAt(&f.ct.Children, len(f.ct.Children)))
 	appendBlock(&f.ct.Children, tbl)
 	return &Table{tbl: tbl, st: f.story(), parent: &f.ct.Children}
 }

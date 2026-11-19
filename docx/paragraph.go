@@ -4,6 +4,7 @@ import (
 	"iter"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
+	"github.com/theAstiv/docx-go/internal/parts"
 )
 
 // Paragraph is a proxy for the w:p element.
@@ -79,20 +80,28 @@ func (p *Paragraph) SectionBreak() *Section {
 	if p.p.PPr == nil || p.p.PPr.SectPr == nil {
 		return nil
 	}
-	return &Section{sectPr: p.p.PPr.SectPr, pkg: nil}
+	return &Section{sectPr: p.p.PPr.SectPr, pkg: p.pkg()}
 }
 
 // AddSectionBreak ensures this paragraph carries an embedded w:sectPr and
 // returns a Section proxy backed by it.  If the paragraph already has a
 // section break the existing one is returned unchanged.
-// The returned Section supports page geometry setters but not header/footer
-// operations (no package reference); use Document.LastSection() for those.
+// The returned Section supports page geometry and, for a paragraph that
+// belongs to a document, headers and footers of its own.
 func (p *Paragraph) AddSectionBreak() *Section {
 	ppr := p.Format().ppr()
 	if ppr.SectPr == nil {
 		ppr.SectPr = wml.DefaultSectPr()
 	}
-	return &Section{sectPr: ppr.SectPr, pkg: nil}
+	return &Section{sectPr: ppr.SectPr, pkg: p.pkg()}
+}
+
+// pkg returns the package the paragraph belongs to, or nil.
+func (p *Paragraph) pkg() *parts.Package {
+	if p.st == nil {
+		return nil
+	}
+	return p.st.pkg
 }
 
 // ---------------------------------------------------------------------------

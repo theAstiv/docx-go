@@ -2,6 +2,7 @@ package docx_test
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -11,7 +12,9 @@ import (
 func tw(v int64) *docx.Twip { t := docx.Twip(v); return &t }
 
 // ColWidth is written on every cell of the column, not only on the grid:
-// Word collapses an autofit table of empty cells that has no w:tcW.
+// Word collapses an autofit table of empty cells that has no w:tcW. A
+// column without one shares the rest of the text width (9000 twips on
+// New()'s page: 12240 less margins of 1800 and 1440).
 func TestTable_ColWidthOnCells(t *testing.T) {
 	d := docx.New()
 	tbl := d.Body().AddTable(2, 3, docx.TableOptions{ColWidth: []docx.Twip{1000, 2000}})
@@ -26,8 +29,8 @@ func TestTable_ColWidthOnCells(t *testing.T) {
 					t.Errorf("cell %d width = %+v ok=%v, want %d twips", i, w, ok, want)
 				}
 			default:
-				if ok {
-					t.Errorf("cell %d without a column width has width %+v", i, w)
+				if !ok || w.Kind() != docx.WidthKindTwips || w.Twips() != 6000 {
+					t.Errorf("cell %d without a column width has width %+v ok=%v, want the remaining 6000 twips", i, w, ok)
 				}
 			}
 			i++
@@ -163,10 +166,12 @@ func TestTable_ClearingDoesNotCreateProperties(t *testing.T) {
 	c.SetShading("")
 
 	xml := string(partXML(t, d, "word/document.xml"))
-	for _, name := range []string{"<trPr", "<tcPr"} {
-		if strings.Contains(xml, name) {
-			t.Errorf("clearing unset properties created %s: %s", name, xml)
-		}
+	if strings.Contains(xml, "<trPr") {
+		t.Errorf("clearing unset properties created <trPr: %s", xml)
+	}
+	// A new cell's properties hold its width (w:tcW) and nothing else.
+	if !regexp.MustCompile(`<tcPr><tcW[^>]*></tcW></tcPr>`).MatchString(xml) {
+		t.Errorf("clearing unset properties added to <tcPr: %s", xml)
 	}
 	// w:tblPr is required by the schema, so a new table always has one; it
 	// must stay empty.

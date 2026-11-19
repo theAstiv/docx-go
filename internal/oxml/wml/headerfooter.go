@@ -3,6 +3,7 @@ package wml
 import (
 	"encoding/xml"
 	"fmt"
+	"math"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/raw"
@@ -192,6 +193,50 @@ func (s *CT_SectPr) PgMarLeft() *int64 {
 // PgMarRight returns the right margin in twips, or nil.
 func (s *CT_SectPr) PgMarRight() *int64 {
 	return rawGetInt64Attr(s.raw, ns.Qn("w:pgMar"), "right")
+}
+
+// PgMarGutter returns the gutter (binding) margin in twips, or nil.
+func (s *CT_SectPr) PgMarGutter() *int64 {
+	return rawGetInt64Attr(s.raw, ns.Qn("w:pgMar"), "gutter")
+}
+
+// maxTextColumns is the most text columns Word lets a section have.
+const maxTextColumns = 45
+
+// TextColumns describes the section's text columns (w:cols): their number
+// (1 when absent, at most maxTextColumns), the space between equal columns
+// (720 twips when not given), and, for unequal columns, each w:col's width
+// (nil otherwise).
+func (s *CT_SectPr) TextColumns() (num int, space int64, widths []int64) {
+	num, space = 1, 720
+	for _, re := range s.raw {
+		if re.QName != ns.Qn("w:cols") {
+			continue
+		}
+		if p := parseInt64Ptr(attrNS(re.Attrs, ns.W, "num")); p != nil {
+			// Word allows at most 45 text columns; clamp a larger count
+			// (only a broken or hostile document has one).
+			switch v := *p; {
+			case v >= maxTextColumns:
+				num = maxTextColumns
+			// The int32 range check is implied by the case above, but it is
+			// the bound CodeQL's integer-conversion query recognises.
+			case v > 1 && v <= math.MaxInt32 && v >= math.MinInt32:
+				num = int(int32(v))
+			}
+		}
+		if v := parseInt64Ptr(attrNS(re.Attrs, ns.W, "space")); v != nil && *v >= 0 {
+			space = *v
+		}
+		for _, c := range rawKids(re) {
+			if c.QName == ns.Qn("w:col") {
+				if w := parseInt64Ptr(attrNS(c.Attrs, ns.W, "w")); w != nil {
+					widths = append(widths, *w)
+				}
+			}
+		}
+	}
+	return num, space, widths
 }
 
 // SetPgMargins sets all margins on w:pgMar in twips.

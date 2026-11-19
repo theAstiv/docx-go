@@ -14,8 +14,11 @@ type TableOptions struct {
 	// Empty string leaves the table unstyled.
 	Style string
 	// ColWidth specifies the width of each column in twips. It is written
-	// on the table grid and on every cell of the column.
-	// If nil or shorter than cols, remaining columns get no explicit width.
+	// on the table grid and on every cell of the column. Columns it leaves
+	// out (nil, shorter than cols, or a zero entry) share the rest of the
+	// text width evenly, as Word sizes an inserted table: the page width
+	// less the left and right margins of the section holding the table, or
+	// a fixed-width cell's width less its margins for a table in a cell.
 	ColWidth []Twip
 }
 
@@ -304,8 +307,10 @@ func (c *Cell) tcpr() *wml.CT_TcPr {
 
 // ── Body.AddTable ─────────────────────────────────────────────────────────
 
-// addTable is called from body.go to create and append a CT_Tbl.
-func buildTable(rows, cols int, opts TableOptions) *wml.CT_Tbl {
+// buildTable creates a CT_Tbl. width is the text width the table may fill
+// (story.textWidthAt); columns without a width in opts share what is left
+// of it (columnWidths).
+func buildTable(rows, cols int, opts TableOptions, width Twip) *wml.CT_Tbl {
 	tbl := new(wml.CT_Tbl)
 	// Table properties. w:tblPr is required (it precedes w:tblGrid), even
 	// when empty.
@@ -313,15 +318,14 @@ func buildTable(rows, cols int, opts TableOptions) *wml.CT_Tbl {
 	if opts.Style != "" {
 		tbl.TblPr.SetStyleID(opts.Style)
 	}
+	widths := columnWidths(cols, opts.ColWidth, width)
 	// Column grid.
 	if cols > 0 {
 		grid := new(wml.CT_TblGrid)
 		for i := range cols {
 			col := new(wml.CT_GridCol)
-			if i < len(opts.ColWidth) && opts.ColWidth[i] > 0 {
-				w := int64(opts.ColWidth[i])
-				col.W = &w
-			}
+			w := int64(widths[i])
+			col.W = &w
 			grid.Cols = append(grid.Cols, col)
 		}
 		tbl.TblGrid = grid
@@ -333,10 +337,8 @@ func buildTable(rows, cols int, opts TableOptions) *wml.CT_Tbl {
 		tr := new(wml.CT_Tr)
 		for i := range cols {
 			tc := new(wml.CT_Tc)
-			if i < len(opts.ColWidth) && opts.ColWidth[i] > 0 {
-				tc.TcPr = new(wml.CT_TcPr)
-				tc.TcPr.SetWidth(int64(opts.ColWidth[i]))
-			}
+			tc.TcPr = new(wml.CT_TcPr)
+			tc.TcPr.SetWidth(int64(widths[i]))
 			tc.Children = []wml.BlockElement{new(wml.CT_P)}
 			tr.Children = append(tr.Children, tc)
 		}
