@@ -68,12 +68,12 @@ func (d *Document) Replace(old, new string, opts ReplaceOptions) ReplaceResult {
 		}
 	}
 	if !opts.SkipHeaders {
-		for _, h := range d.pkg.Headers {
+		for _, h := range d.pkg.UniqueHeaders() {
 			r.story(h.Part.CT().Children, h.Path())
 		}
 	}
 	if !opts.SkipFooters {
-		for _, f := range d.pkg.Footers {
+		for _, f := range d.pkg.UniqueFooters() {
 			r.story(f.Part.CT().Children, f.Path())
 		}
 	}

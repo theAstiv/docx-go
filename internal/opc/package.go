@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // Package is an OPC package: a ZIP archive containing parts, a
@@ -110,6 +111,21 @@ func (p *Package) Save(w io.Writer) error {
 // Part returns the raw bytes for a part by its path, or nil if absent.
 func (p *Package) Part(path string) []byte {
 	return p.parts[path]
+}
+
+// FindPart returns the stored name of the part whose name equals name
+// ignoring ASCII case, as OPC part names compare (ECMA-376 Part 2, 9.1.1.1),
+// and whether there is one. An exact match wins over a case variant.
+func (p *Package) FindPart(name string) (string, bool) {
+	if _, ok := p.parts[name]; ok {
+		return name, true
+	}
+	for stored := range p.parts {
+		if strings.EqualFold(stored, name) {
+			return stored, true
+		}
+	}
+	return "", false
 }
 
 // SetPart stores raw bytes for a part.

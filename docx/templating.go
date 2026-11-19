@@ -6,7 +6,6 @@ import (
 
 	"github.com/theAstiv/docx-go/docx/internal/bridge"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
-	"github.com/theAstiv/docx-go/internal/parts"
 	itemplate "github.com/theAstiv/docx-go/internal/template"
 )
 
@@ -98,13 +97,13 @@ func templateStories(d any) []itemplate.Story {
 	var out []itemplate.Story
 	if doc.pkg.DocPart != nil {
 		if body := doc.pkg.DocPart.Body(); body != nil {
-			out = append(out, itemplate.Story{Part: parts.PathDocument, Blocks: &body.Children})
+			out = append(out, itemplate.Story{Part: doc.pkg.DocPath(), Blocks: &body.Children})
 		}
 	}
-	for _, h := range doc.pkg.Headers {
+	for _, h := range doc.pkg.UniqueHeaders() {
 		out = append(out, itemplate.Story{Part: h.Path(), Blocks: &h.Part.CT().Children})
 	}
-	for _, f := range doc.pkg.Footers {
+	for _, f := range doc.pkg.UniqueFooters() {
 		out = append(out, itemplate.Story{Part: f.Path(), Blocks: &f.Part.CT().Children})
 	}
 	return out
