@@ -37,6 +37,13 @@
 // changes the package, so Execute records it first and puts it back if
 // execution fails: a failed Execute still leaves the document unchanged.
 //
+// A value tag whose value is a template.Rich writes formatted runs in its
+// place: each RichRun's text with its own bold, italic, underline, colour
+// or link, on top of the formatting of the run holding the tag. It is a
+// typed value, not markup, so data cannot inject document content. Where
+// only text can go (content controls, text boxes, document properties) its
+// plain text is written, with a warning.
+//
 // A value tag can pipe its value through formatters, left to right:
 //
 //	{{name | upper}}                     UPPER CASE (lower: lower case)

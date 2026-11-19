@@ -32,6 +32,7 @@ func init() {
 		}
 	}
 	bridge.AddImage = templateImage
+	bridge.AddHyperlink = templateHyperlink
 	bridge.Snapshot = func(d any) (func(), error) {
 		doc, ok := d.(*Document)
 		if !ok || doc == nil || doc.pkg == nil {
@@ -43,6 +44,28 @@ func init() {
 		}
 		return func() { doc.pkg.Restore(s) }, nil
 	}
+}
+
+// templateHyperlink adds a link for a template rich-text run, with the
+// rules Paragraph.AddHyperlink applies: a safe absolute URL, the
+// relationship on the part holding the link, the document's own Hyperlink
+// style.
+func templateHyperlink(d any, part, url string) (relID, styleID string, err error) {
+	doc, ok := d.(*Document)
+	if !ok || doc == nil || doc.pkg == nil {
+		return "", "", errors.New("docx: no document to add the link to")
+	}
+	if err := validateHyperlinkURL(url); err != nil {
+		return "", "", fmt.Errorf("%w: %w", itemplate.ErrUnsupportedValue, err)
+	}
+	relID = doc.pkg.AddExternalHyperlink(part, url)
+	styleID = string(StyleHyperlink)
+	if doc.pkg.StyPart != nil {
+		if s := (&Styles{st: doc.pkg.StyPart.Styles()}).EnsureBuiltin(StyleHyperlink); s != nil {
+			styleID = s.ID()
+		}
+	}
+	return relID, styleID, nil
 }
 
 // templateImage places a template image value: the same validation, sizing
