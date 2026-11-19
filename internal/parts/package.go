@@ -47,6 +47,12 @@ type Package struct {
 	// contents and invalidation.
 	IDCache *wml.IDScan
 
+	// StructGen counts edits that can detach a block list from the document
+	// (removing a paragraph, table or row, replacing a container's content,
+	// templating). The docx layer owns it: proxies record it with their
+	// parent hint and trust the hint only while it is unchanged.
+	StructGen uint64
+
 	// core is the parsed docProps/core.xml, loaded on first use (coreprops.go).
 	core *corePropsState
 

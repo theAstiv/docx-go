@@ -94,6 +94,8 @@ func templateStories(d any) []itemplate.Story {
 	// Execution hands out writable trees and may add bookmarks and drawings,
 	// so the cached id scan can no longer be trusted.
 	doc.pkg.IDCache = nil
+	// It also replaces story contents, so hints recorded before it are stale.
+	doc.pkg.StructGen++
 	var out []itemplate.Story
 	if doc.pkg.DocPart != nil {
 		if body := doc.pkg.DocPart.Body(); body != nil {

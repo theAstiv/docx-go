@@ -19,7 +19,9 @@ func setBlocksText(children *[]wml.BlockElement, text string, st *story) *Paragr
 	}
 	p.Children = nil
 	*children = []wml.BlockElement{p}
-	para := &Paragraph{p: p, st: st, parent: children}
+	// The blocks dropped here may hold lists other proxies hint at.
+	st.detach()
+	para := &Paragraph{p: p, st: st, parent: children, gen: st.stamp()}
 	if text != "" {
 		para.AddRun(text)
 	}

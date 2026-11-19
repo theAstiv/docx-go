@@ -2,6 +2,7 @@ package docx
 
 import (
 	"iter"
+	"slices"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 	"github.com/theAstiv/docx-go/internal/parts"
@@ -26,12 +27,12 @@ func (b *Body) Paragraphs() iter.Seq[*Paragraph] {
 		if body == nil {
 			return
 		}
-		for _, child := range body.Children {
+		for _, child := range slices.Clone(body.Children) {
 			p, ok := child.(*wml.CT_P)
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p, st: b.st, parent: &body.Children}) {
+			if !yield(&Paragraph{p: p, st: b.st, parent: &body.Children, gen: b.st.stamp()}) {
 				return
 			}
 		}
@@ -59,7 +60,7 @@ func (b *Body) AddParagraph() *Paragraph {
 	// Insert before the trailing sectPr (which is not a child but a field),
 	// so we simply append to Children.
 	body.Children = append(body.Children, p)
-	return &Paragraph{p: p, st: b.st, parent: &body.Children}
+	return &Paragraph{p: p, st: b.st, parent: &body.Children, gen: b.st.stamp()}
 }
 
 // Tables returns an iterator over all top-level tables in the body.
@@ -70,12 +71,12 @@ func (b *Body) Tables() iter.Seq[*Table] {
 		if body == nil {
 			return
 		}
-		for _, child := range body.Children {
+		for _, child := range slices.Clone(body.Children) {
 			tbl, ok := child.(*wml.CT_Tbl)
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl, st: b.st, parent: &body.Children}) {
+			if !yield(&Table{tbl: tbl, st: b.st, parent: &body.Children, gen: b.st.stamp()}) {
 				return
 			}
 		}
@@ -94,5 +95,5 @@ func (b *Body) AddTable(rows, cols int, opts TableOptions) *Table {
 	body := b.ctBody()
 	tbl := buildTable(rows, cols, opts, b.st.textWidthAt(&body.Children, len(body.Children)))
 	body.Children = append(body.Children, tbl)
-	return &Table{tbl: tbl, st: b.st, parent: &body.Children}
+	return &Table{tbl: tbl, st: b.st, parent: &body.Children, gen: b.st.stamp()}
 }

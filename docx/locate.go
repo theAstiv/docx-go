@@ -7,6 +7,57 @@ import "github.com/theAstiv/docx-go/internal/oxml/wml"
 // (the slice they were found in) and the functions below confirm it by
 // identity, falling back to a walk over every story. A stale hint (the
 // element was moved or removed) is never trusted.
+//
+// Finding the element in the hinted slice does not prove the slice is still
+// in the document: after Table.Remove, a proxy for a paragraph of one of its
+// cells still finds itself in that cell. So proxies also record the
+// package's structure generation (stamp) with the hint, and offer it (hint
+// methods) only while no removal has happened since; otherwise the walk
+// decides. Iterators create each proxy when they yield it, so a loop that
+// removes what it visits still uses fresh hints and stays linear.
+
+// stamp returns the value a proxy records with its parent hint: the
+// package's structure generation plus one, so that the zero value of an
+// unstamped proxy never matches. It is 0 without a package, where there is
+// nothing to walk and the hint is all there is.
+func (s *story) stamp() uint64 {
+	if s == nil || s.pkg == nil {
+		return 0
+	}
+	return s.pkg.StructGen + 1
+}
+
+// detach records an edit that can detach block lists, making every hint
+// recorded before it stale.
+func (s *story) detach() {
+	if s != nil && s.pkg != nil {
+		s.pkg.StructGen++
+	}
+}
+
+// hint returns the paragraph's parent hint while it is current, else nil.
+func (p *Paragraph) hint() *[]wml.BlockElement {
+	if p.gen != p.st.stamp() {
+		return nil
+	}
+	return p.parent
+}
+
+// hint returns the table's parent hint while it is current, else nil.
+func (t *Table) hint() *[]wml.BlockElement {
+	if t.gen != t.st.stamp() {
+		return nil
+	}
+	return t.parent
+}
+
+// hint returns the run's parent hint while it is current, else nil.
+func (r *Run) hint() *[]wml.InlineElement {
+	if r.gen != r.st.stamp() {
+		return nil
+	}
+	return r.parent
+}
 
 // roots returns the top-level block lists of every story: the body, then
 // each header and footer.
