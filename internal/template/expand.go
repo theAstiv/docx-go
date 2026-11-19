@@ -22,6 +22,9 @@ type engine struct {
 	// inRaw is set while filling raw content (content controls, text
 	// boxes), where block tags are not supported.
 	inRaw bool
+	// check makes the engine a data-free structure check (checkStructure):
+	// every branch is visited once and no value is looked up.
+	check bool
 }
 
 // missing reports a value tag whose key is absent: an error in Strict mode,
@@ -122,6 +125,9 @@ func (en *engine) fillText(txt *wml.CT_Text, tags []tag, sc *scope, loc Location
 
 // value resolves a value tag to its text.
 func (en *engine) value(t tag, sc *scope, loc Location) string {
+	if en.check {
+		return ""
+	}
 	r := sc.lookup(t.path)
 	if !r.found {
 		en.missing(loc, t, r.detail)

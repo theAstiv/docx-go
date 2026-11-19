@@ -315,6 +315,17 @@ func (en *engine) expandBlockRange(blocks []wml.BlockElement, locs []Location, i
 		}
 		return en.expandRange(blocks[sp.els+1:j], locs[sp.els+1:j], sc)
 	}
+	if en.check {
+		// Visit both branches; a loop body once, in the loop's scope so
+		// ".field" tags are not reported as outside a loop.
+		inner := sc
+		if open.block == "each" {
+			inner = sc.push(nil, open.path+"[]")
+		}
+		en.expandRange(body, bodyLocs, inner)
+		elseBranch()
+		return nil
+	}
 	if open.block != "each" {
 		if !en.condition(open, sc) {
 			return elseBranch()
@@ -439,6 +450,15 @@ func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k
 			return nil
 		}
 		return en.expandRows(rows[sp.els:j+1], rlocs[sp.els:j+1], sc)
+	}
+	if en.check {
+		inner := sc
+		if open.block == "each" {
+			inner = sc.push(nil, open.path+"[]")
+		}
+		en.expandRows(body, bodyLocs, inner)
+		elseBranch()
+		return nil
 	}
 	if open.block != "each" {
 		if !en.condition(open, sc) {

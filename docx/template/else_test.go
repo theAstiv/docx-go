@@ -2,6 +2,7 @@ package template_test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -200,25 +201,63 @@ func TestElse_Errors(t *testing.T) {
 		{"second else", []string{"{{#if x}}", "a", "{{else}}", "b", "{{else}}", "c", "{{/if}}"}, template.ErrUnbalancedBlock},
 		{"else inside text", []string{"{{#if x}}", "a {{else}} b", "{{/if}}"}, template.ErrMisplacedBlock},
 		{"else after close", []string{"{{#if x}}", "a", "{{/if}}", "{{else}}"}, template.ErrMisplacedBlock},
+		{"misplaced else in else branch", []string{"{{#if x}}", "a", "{{else}}", "c {{else}} d", "{{/if}}"}, template.ErrMisplacedBlock},
+		{"misplaced open in else branch", []string{"{{#if x}}", "a", "{{else}}", "c {{#if y}} d", "{{/if}}"}, template.ErrMisplacedBlock},
+		{"unbalanced in loop body", []string{"{{#each items}}", "{{#if y}}", "{{/each}}"}, template.ErrUnbalancedBlock},
 	}
+	// Template errors must not depend on which branch the data selects.
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			doc := docx.New()
-			paras(doc, tt.paras...)
-			if _, err := template.Execute(doc, map[string]any{"x": true}, template.Options{}); !errors.Is(err, tt.want) {
-				t.Errorf("err = %v, want %v", err, tt.want)
+		for _, x := range []bool{true, false} {
+			for _, items := range []any{[]any{}, []any{"i"}} {
+				t.Run(fmt.Sprintf("%s/x=%v/items=%d", tt.name, x, len(items.([]any))), func(t *testing.T) {
+					doc := docx.New()
+					paras(doc, tt.paras...)
+					data := map[string]any{"x": x, "items": items}
+					if _, err := template.Execute(doc, data, template.Options{}); !errors.Is(err, tt.want) {
+						t.Errorf("err = %v, want %v", err, tt.want)
+					}
+				})
 			}
-		})
+		}
 	}
 }
 
 // An else in the row that opens a row range is in the middle of the row's
-// text, so it is misplaced.
+// text, so it is misplaced, whichever branch the data selects.
 func TestElse_RowElseInOpenRow(t *testing.T) {
+	for _, x := range []bool{true, false} {
+		doc := docx.New()
+		table(doc, [][]string{{"{{#if x}}a", "{{else}}b{{/if}}"}})
+		if _, err := template.Execute(doc, map[string]any{"x": x}, template.Options{}); !errors.Is(err, template.ErrMisplacedBlock) {
+			t.Errorf("x=%v: err = %v, want ErrMisplacedBlock", x, err)
+		}
+	}
+}
+
+// Each structural error is reported once, even when the branch holding it
+// is also rendered (the structure check and execution both see it) or
+// repeated by a loop.
+func TestElse_ErrorsReportedOnce(t *testing.T) {
 	doc := docx.New()
-	table(doc, [][]string{{"{{#if x}}a", "{{else}}b{{/if}}"}})
-	if _, err := template.Execute(doc, map[string]any{"x": true}, template.Options{}); !errors.Is(err, template.ErrMisplacedBlock) {
-		t.Errorf("err = %v, want ErrMisplacedBlock", err)
+	paras(doc, "{{#each items}}", "a {{else}} b", "{{/each}}")
+	_, err := template.Execute(doc, map[string]any{"items": []any{1, 2, 3}}, template.Options{})
+	var te *template.Error
+	if !errors.As(err, &te) {
+		t.Fatalf("err = %v, want *template.Error", err)
+	}
+	if len(te.Issues) != 1 {
+		t.Errorf("got %d issues, want 1:\n%v", len(te.Issues), err)
+	}
+}
+
+// The structure check looks up no data: a value tag in an untaken branch
+// is not a missing key, in Strict mode too.
+func TestElse_UntakenBranchValuesNotRequired(t *testing.T) {
+	doc := docx.New()
+	paras(doc, "{{#if x}}", "{{only_when_x}}", "{{else}}", "{{only_when_not_x}}", "{{/if}}")
+	mustExecute(t, doc, map[string]any{"x": false, "only_when_not_x": "ok"})
+	if got := bodyText(t, doc); got != "ok" {
+		t.Errorf("got %q, want %q", got, "ok")
 	}
 }
 

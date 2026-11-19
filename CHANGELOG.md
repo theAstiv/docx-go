@@ -7,6 +7,7 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 ### Breaking
 
 - Templating: `{{else}}` is now a keyword. A data key named `else` can no longer be written as `{{else}}`; inside a loop, `{{.else}}` still reads it.
+- Templating: template errors no longer depend on the data. `Execute` now checks every branch for unbalanced or misplaced block tags, section breaks inside blocks and malformed tags in content controls, including blocks the data drops and loops over empty lists. A template with such an error in a dropped block used to succeed; it now fails in both modes. Values in branches that are not rendered are still not required. An error repeated by a loop is reported once.
 
 ### Added
 
