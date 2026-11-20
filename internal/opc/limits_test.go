@@ -45,7 +45,11 @@ func TestReadZipLimits(t *testing.T) {
 		{"xml too deep", map[string]string{"word/document.xml": nested(6)}, true},
 		{"rels too deep", map[string]string{"_rels/.rels": nested(6)}, true},
 		{"upper-case xml name too deep", map[string]string{"Word/Document.XML": nested(6)}, true},
-		{"deep non-xml part is not scanned", map[string]string{"a.bin": nested(6)}, false},
+		// The relationships choose which part is parsed, not its name: a main
+		// part called word/doc.dat bypassed a name-based scan.
+		{"xml under another name too deep", map[string]string{"word/doc.dat": nested(6)}, true},
+		{"xml after a BOM and whitespace too deep", map[string]string{"a.bin": "\xEF\xBB\xBF \n" + nested(6)}, true},
+		{"binary part is not scanned", map[string]string{"a.png": "\x89PNG" + nested(6)}, false},
 		{"malformed xml is left to the parser", map[string]string{"a.xml": "<a><b></a>"}, false},
 	}
 	for _, tt := range tests {

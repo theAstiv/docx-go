@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"strings"
 )
 
 // Resource limits applied when a package is read. A .docx is untrusted input:
@@ -44,11 +43,16 @@ var defaultLimits = limits{entries: MaxEntries, entry: MaxEntrySize, total: MaxT
 // of the resource limits.
 var ErrLimitExceeded = errors.New("opc: resource limit exceeded")
 
-// isXMLName reports whether a part name looks like an XML part (parsed by a
-// later layer), compared case-insensitively.
-func isXMLName(name string) bool {
-	n := strings.ToLower(name)
-	return strings.HasSuffix(n, ".xml") || strings.HasSuffix(n, ".rels")
+// looksLikeXML reports whether data may be parsed as XML by a later layer:
+// after an optional UTF-8 byte-order mark and whitespace, it starts with '<'.
+// The part name cannot decide this: the officeDocument relationship and the
+// content types choose which part is parsed, so the main part may be called
+// word/doc.dat. Binary parts (images) never start with '<'; an SVG image
+// does, and is scanned too, which is harmless.
+func looksLikeXML(data []byte) bool {
+	data = bytes.TrimPrefix(data, []byte("\xEF\xBB\xBF"))
+	data = bytes.TrimLeft(data, " \t\r\n")
+	return len(data) > 0 && data[0] == '<'
 }
 
 // checkXMLDepth reports an ErrLimitExceeded error when data nests elements

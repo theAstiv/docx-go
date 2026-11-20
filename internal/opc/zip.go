@@ -64,7 +64,7 @@ func readZip(r io.ReaderAt, size int64, lim limits) (map[string][]byte, error) {
 		if closeErr != nil {
 			return nil, fmt.Errorf("opc/zip: close %s: %w", f.Name, closeErr)
 		}
-		if isXMLName(f.Name) {
+		if looksLikeXML(data) {
 			if err := checkXMLDepth(f.Name, data, lim.depth); err != nil {
 				return nil, err
 			}
