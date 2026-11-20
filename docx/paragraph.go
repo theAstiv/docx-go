@@ -2,6 +2,7 @@ package docx
 
 import (
 	"iter"
+	"slices"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 	"github.com/theAstiv/docx-go/internal/parts"
@@ -14,6 +15,8 @@ type Paragraph struct {
 	// parent is the block list the paragraph was found in or added to: a
 	// hint for Remove and the Insert methods, checked before use (locate.go).
 	parent *[]wml.BlockElement
+	// gen is story.stamp() when parent was recorded (locate.go).
+	gen uint64
 }
 
 // Format returns a ParagraphFormat proxy for reading and writing paragraph
@@ -27,12 +30,12 @@ func (p *Paragraph) Format() *ParagraphFormat {
 // Hyperlinks and other inline containers are not visited; use for simple text access.
 func (p *Paragraph) Runs() iter.Seq[*Run] {
 	return func(yield func(*Run) bool) {
-		for _, child := range p.p.Children {
+		for _, child := range slices.Clone(p.p.Children) {
 			r, ok := child.(*wml.CT_R)
 			if !ok {
 				continue
 			}
-			if !yield(&Run{r: r, st: p.st, parent: &p.p.Children}) {
+			if !yield(&Run{r: r, st: p.st, parent: &p.p.Children, gen: p.st.stamp()}) {
 				return
 			}
 		}
@@ -50,7 +53,7 @@ func (p *Paragraph) AddRun(text string) *Run {
 		r.Children = append(r.Children, t)
 	}
 	p.p.Children = append(p.p.Children, r)
-	return &Run{r: r, st: p.st, parent: &p.p.Children}
+	return &Run{r: r, st: p.st, parent: &p.p.Children, gen: p.st.stamp()}
 }
 
 // Text returns the visible text of the paragraph by walking all w:t descendants

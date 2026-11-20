@@ -2,6 +2,7 @@ package docx
 
 import (
 	"iter"
+	"slices"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
@@ -60,17 +61,19 @@ type Table struct {
 	// parent is the block list the table was found in or added to: a hint
 	// for Remove and the Insert methods, checked before use (locate.go).
 	parent *[]wml.BlockElement
+	// gen is story.stamp() when parent was recorded (locate.go).
+	gen uint64
 }
 
 // Rows returns an iterator over all CT_Tr rows in the table (skipping raw passthrough elements).
 func (t *Table) Rows() iter.Seq[*Row] {
 	return func(yield func(*Row) bool) {
-		for _, child := range t.tbl.Children {
+		for _, child := range slices.Clone(t.tbl.Children) {
 			tr, ok := child.(*wml.CT_Tr)
 			if !ok {
 				continue
 			}
-			if !yield(&Row{tr: tr, st: t.st, tbl: t.tbl}) {
+			if !yield(&Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.st.stamp()}) {
 				return
 			}
 		}
@@ -92,7 +95,7 @@ func (t *Table) AddRowWithOptions(opts RowOptions) *Row {
 		tr.TrPr = trpr
 	}
 	t.tbl.Children = append(t.tbl.Children, tr)
-	return &Row{tr: tr, st: t.st, tbl: t.tbl}
+	return &Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.st.stamp()}
 }
 
 // Style returns the table style ID, or "" if none.
@@ -119,12 +122,15 @@ type Row struct {
 	st *story
 	// tbl is the table the row belongs to.
 	tbl *wml.CT_Tbl
+	// gen is story.stamp() when the row was found or added; while it is
+	// current, tbl is known to be in the document (locate.go).
+	gen uint64
 }
 
 // Cells returns an iterator over all CT_Tc cells in the row.
 func (r *Row) Cells() iter.Seq[*Cell] {
 	return func(yield func(*Cell) bool) {
-		for _, child := range r.tr.Children {
+		for _, child := range slices.Clone(r.tr.Children) {
 			tc, ok := child.(*wml.CT_Tc)
 			if !ok {
 				continue
@@ -181,12 +187,12 @@ type Cell struct {
 // Paragraphs returns an iterator over paragraph children of the cell.
 func (c *Cell) Paragraphs() iter.Seq[*Paragraph] {
 	return func(yield func(*Paragraph) bool) {
-		for _, child := range c.tc.Children {
+		for _, child := range slices.Clone(c.tc.Children) {
 			p, ok := child.(*wml.CT_P)
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p, st: c.st, parent: &c.tc.Children}) {
+			if !yield(&Paragraph{p: p, st: c.st, parent: &c.tc.Children, gen: c.st.stamp()}) {
 				return
 			}
 		}
@@ -196,12 +202,12 @@ func (c *Cell) Paragraphs() iter.Seq[*Paragraph] {
 // Tables returns an iterator over nested table children of the cell.
 func (c *Cell) Tables() iter.Seq[*Table] {
 	return func(yield func(*Table) bool) {
-		for _, child := range c.tc.Children {
+		for _, child := range slices.Clone(c.tc.Children) {
 			tbl, ok := child.(*wml.CT_Tbl)
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl, st: c.st, parent: &c.tc.Children}) {
+			if !yield(&Table{tbl: tbl, st: c.st, parent: &c.tc.Children, gen: c.st.stamp()}) {
 				return
 			}
 		}
@@ -214,7 +220,7 @@ func (c *Cell) Tables() iter.Seq[*Table] {
 func (c *Cell) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
 	c.tc.Children = append(c.tc.Children, p)
-	return &Paragraph{p: p, st: c.st, parent: &c.tc.Children}
+	return &Paragraph{p: p, st: c.st, parent: &c.tc.Children, gen: c.st.stamp()}
 }
 
 // SetText replaces the cell's content with one paragraph holding text and

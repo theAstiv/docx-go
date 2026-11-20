@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/theAstiv/docx-go/internal/nsfix"
+	"github.com/theAstiv/docx-go/internal/opc"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -30,17 +31,12 @@ func NewFooterPart() *FooterPart {
 // Parse reads raw XML bytes and populates the FooterPart.
 func (fp *FooterPart) Parse(data []byte) error {
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return fmt.Errorf("parts: footer: read root token: %w", err)
-		}
-		start, ok := tok.(xml.StartElement)
-		if ok {
-			fp.ct = new(wml.CT_Ftr)
-			return fp.ct.UnmarshalXML(dec, start)
-		}
+	start, err := opc.RootElement(dec)
+	if err != nil {
+		return fmt.Errorf("parts: footer: %w", err)
 	}
+	fp.ct = new(wml.CT_Ftr)
+	return fp.ct.UnmarshalXML(dec, start)
 }
 
 // CT returns the underlying CT_Ftr for direct oxml access.

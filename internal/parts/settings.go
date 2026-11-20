@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/theAstiv/docx-go/internal/nsfix"
+	"github.com/theAstiv/docx-go/internal/opc"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -31,17 +32,12 @@ func NewSettingsPart() *SettingsPart {
 // Parse reads raw XML bytes and populates the SettingsPart.
 func (sp *SettingsPart) Parse(data []byte) error {
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return fmt.Errorf("parts: settings: read root token: %w", err)
-		}
-		start, ok := tok.(xml.StartElement)
-		if ok {
-			sp.ct = new(wml.CT_Settings)
-			return sp.ct.UnmarshalXML(dec, start)
-		}
+	start, err := opc.RootElement(dec)
+	if err != nil {
+		return fmt.Errorf("parts: settings: %w", err)
 	}
+	sp.ct = new(wml.CT_Settings)
+	return sp.ct.UnmarshalXML(dec, start)
 }
 
 // CT returns the underlying CT_Settings for direct oxml access.

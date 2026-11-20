@@ -25,6 +25,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 )
@@ -59,7 +60,7 @@ func Fix(src []byte) ([]byte, error) {
 	var out bytes.Buffer
 	out.Grow(len(src) + 512)
 	out.Write(src[:rootStart])
-	buildTag(&out, se)
+	buildTag(&out, se, src[rootEnd+1:])
 
 	// Strip redundant default-namespace re-declarations from child elements.
 	// encoding/xml repeats xmlns="ROOT_NS" on every child element in that
@@ -119,7 +120,7 @@ func findTagEnd(src []byte, start int) int {
 // The element name is kept unprefixed (matching encoding/xml's closing tag)
 // and the root namespace is declared as the XML default namespace (xmlns="...").
 // All other namespace declarations are emitted with canonical prefixes.
-func buildTag(w *bytes.Buffer, se xml.StartElement) {
+func buildTag(w *bytes.Buffer, se xml.StartElement, rest []byte) {
 	// Build uri → canonical-prefix for non-root namespaces.
 	// The root element's own namespace is declared as the default namespace
 	// (xmlns="...") so that it matches the encoding/xml-generated closing tag
@@ -165,6 +166,30 @@ func buildTag(w *bytes.Buffer, se xml.StartElement) {
 	for uri, pfx := range uriToPrefix {
 		decls = append(decls, pair{pfx, uri})
 	}
+	// Every prefix declared on the input root stays declared with its URI,
+	// alongside the canonical one. Two cases need it: the encoder declares a
+	// generated prefix (xmlns:main="W" when the root carries a W attribute)
+	// on the root and uses it, undeclared again, in every child below
+	// (<jc main:val="...">); and attribute values name prefixes as the source
+	// wrote them (mc:Ignorable="x14" with xmlns:x14 renamed to w14). Two
+	// prefixes for one URI are valid XML.
+	declared := make(map[string]string, len(uriToPrefix)+8)
+	for _, d := range decls {
+		declared[d.pfx] = d.uri
+	}
+	for _, a := range se.Attr {
+		if a.Name.Space != "xmlns" || a.Value == "" || a.Value == "xmlns" || a.Name.Local == "xml" {
+			continue
+		}
+		if _, taken := declared[a.Name.Local]; taken {
+			continue // same prefix already declared (for this URI or the canonical one)
+		}
+		if !prefixUsed(a.Name.Local, se, rest) {
+			continue // an encoder throw-away prefix nothing refers to
+		}
+		declared[a.Name.Local] = a.Value
+		decls = append(decls, pair{a.Name.Local, a.Value})
+	}
 	sort.Slice(decls, func(i, j int) bool { return decls[i].pfx < decls[j].pfx })
 	for _, d := range decls {
 		writeNSDecl(w, d.pfx, d.uri)
@@ -187,10 +212,11 @@ func buildTag(w *bytes.Buffer, se xml.StartElement) {
 			if !ok {
 				// Namespace not yet declared — determine prefix and add declaration.
 				pfx = ns.Prefix(a.Name.Space)
-				if pfx == "" {
+				if uri, taken := declared[pfx]; pfx == "" || (taken && uri != a.Name.Space) {
 					pfx = fmt.Sprintf("ns%d", len(uriToPrefix))
 				}
 				uriToPrefix[a.Name.Space] = pfx
+				declared[pfx] = a.Name.Space
 				writeNSDecl(w, pfx, a.Name.Space)
 			}
 			name = pfx + ":" + a.Name.Local
@@ -205,6 +231,31 @@ func buildTag(w *bytes.Buffer, se xml.StartElement) {
 	}
 
 	w.WriteByte('>')
+}
+
+// prefixUsed reports whether pfx is referred to after the root's own
+// declarations: as the prefix of a name in the child bytes, or as a
+// whitespace-separated token of a root attribute value (mc:Ignorable,
+// mc:ProcessContent and mc:MustUnderstand list prefixes). A match in text
+// content only keeps a declaration, which is harmless.
+func prefixUsed(pfx string, se xml.StartElement, rest []byte) bool {
+	p := []byte(pfx + ":")
+	for _, lead := range []string{"<", "</", " "} {
+		if bytes.Contains(rest, append([]byte(lead), p...)) {
+			return true
+		}
+	}
+	for _, a := range se.Attr {
+		if a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns") {
+			continue
+		}
+		for _, f := range strings.Fields(a.Value) {
+			if f == pfx || strings.HasPrefix(f, pfx+":") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // stripRedundantRootNS removes xmlns="rootNS" from child-element start tags,

@@ -253,6 +253,10 @@ type CT_FldChar struct {
 	// FldCharType: "begin", "separate", or "end".
 	FldCharType string
 	rawRest     []*raw.RawElement
+	// attrs holds the attributes other than w:fldCharType: w:dirty (Word
+	// refreshes the field on open, e.g. a TOC) and w:fldLock (a locked
+	// field is never updated).
+	attrs []xml.Attr
 }
 
 func (*CT_FldChar) isRunContent() {}
@@ -262,6 +266,7 @@ func (f *CT_FldChar) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if f.FldCharType != "" {
 		start.Attr = append(start.Attr, xml.Attr{Name: ns.Qn("w:fldCharType"), Value: f.FldCharType})
 	}
+	start.Attr = append(start.Attr, f.attrs...)
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
@@ -273,6 +278,7 @@ func (f *CT_FldChar) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 func (f *CT_FldChar) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	f.FldCharType = wAttr(start.Attr, "fldCharType")
+	f.attrs = otherAttrs(start.Attr, "fldCharType")
 	var err error
 	f.rawRest, err = rawUnmarshalChildren(d)
 	return err

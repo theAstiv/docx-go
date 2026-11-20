@@ -17,7 +17,7 @@ type story struct {
 
 // docStory returns the story of the main document part.
 func docStory(pkg *parts.Package) *story {
-	return &story{pkg: pkg, src: parts.PathDocument}
+	return &story{pkg: pkg, src: pkg.DocPath()}
 }
 
 // scan collects the document-wide identifiers (drawing ids, bookmarks) from
@@ -61,10 +61,12 @@ func (s *story) freshScan() *wml.IDScan {
 			wml.ScanBlocks(body.Children, scan)
 		}
 	}
-	for _, h := range s.pkg.Headers {
+	// One visit per part: a header two relationships share would otherwise
+	// report each of its bookmarks twice.
+	for _, h := range s.pkg.UniqueHeaders() {
 		wml.ScanBlocks(h.Part.CT().Children, scan)
 	}
-	for _, f := range s.pkg.Footers {
+	for _, f := range s.pkg.UniqueFooters() {
 		wml.ScanBlocks(f.Part.CT().Children, scan)
 	}
 	return scan

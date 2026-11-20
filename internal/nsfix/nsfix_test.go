@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/theAstiv/docx-go/internal/canon"
 	"github.com/theAstiv/docx-go/internal/nsfix"
 )
 
@@ -226,5 +227,45 @@ func TestFix_ProcInstPreserved(t *testing.T) {
 	mustParse(t, got)
 	if !bytes.HasPrefix(got, []byte(`<?xml`)) {
 		t.Fatalf("XML declaration stripped; got %s", got)
+	}
+}
+
+// A root with an attribute in its own namespace makes the encoder declare a
+// generated prefix on the root (xmlns:main) and use it in every child below.
+// Rebuilding the root must keep that prefix declared (review 2026-11-19: a
+// w:document with w:conformance was saved with an undeclared main:val).
+func TestFix_RootPrefixUsedByChildren(t *testing.T) {
+	const w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+	src := []byte(`<document xmlns="` + w + `" xmlns:main="` + w + `" main:conformance="transitional">` +
+		`<body><p><pPr><jc main:val="center"></jc></pPr></p></body></document>`)
+	got, err := nsfix.Fix(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canon.XML(got); err != nil {
+		t.Fatalf("output has a namespace defect: %v\n%s", err, got)
+	}
+}
+
+// Attribute values name prefixes as the source wrote them; a source prefix
+// that differs from the canonical one must stay declared, and an encoder
+// throw-away prefix nothing refers to must not.
+func TestFix_IgnorableKeepsSourcePrefix(t *testing.T) {
+	const (
+		w   = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+		mc  = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+		w14 = "http://schemas.microsoft.com/office/word/2010/wordml"
+	)
+	src := []byte(`<document xmlns:_xmlns="xmlns" _xmlns:x14="` + w14 + `" _xmlns:mc="` + mc + `" xmlns="` + w +
+		`" xmlns:_mc="` + mc + `" _mc:Ignorable="x14"><body></body></document>`)
+	got, err := nsfix.Fix(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), `xmlns:x14="`+w14+`"`) {
+		t.Fatalf("x14, named by mc:Ignorable, is not declared:\n%s", got)
+	}
+	if strings.Contains(string(got), `_mc`) {
+		t.Fatalf("throw-away prefix kept:\n%s", got)
 	}
 }

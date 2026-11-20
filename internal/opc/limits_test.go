@@ -1,0 +1,96 @@
+package opc
+
+import (
+	"archive/zip"
+	"bytes"
+	"errors"
+	"strings"
+	"testing"
+)
+
+func zipOf(t *testing.T, entries map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for name, data := range entries {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(data)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func nested(depth int) string {
+	return strings.Repeat("<a>", depth) + strings.Repeat("</a>", depth)
+}
+
+func TestReadZipLimits(t *testing.T) {
+	lim := limits{entries: 3, entry: 100, total: 150, depth: 5}
+	tests := []struct {
+		name    string
+		entries map[string]string
+		wantErr bool
+	}{
+		{"within limits", map[string]string{"a.xml": nested(5), "b.bin": strings.Repeat("x", 100)}, false},
+		{"too many entries", map[string]string{"a": "", "b": "", "c": "", "d": ""}, true},
+		{"entry too large", map[string]string{"a.bin": strings.Repeat("x", 101)}, true},
+		{"total too large", map[string]string{"a.bin": strings.Repeat("x", 80), "b.bin": strings.Repeat("x", 80)}, true},
+		{"xml too deep", map[string]string{"word/document.xml": nested(6)}, true},
+		{"rels too deep", map[string]string{"_rels/.rels": nested(6)}, true},
+		{"upper-case xml name too deep", map[string]string{"Word/Document.XML": nested(6)}, true},
+		// The relationships choose which part is parsed, not its name: a main
+		// part called word/doc.dat bypassed a name-based scan.
+		{"xml under another name too deep", map[string]string{"word/doc.dat": nested(6)}, true},
+		{"xml after a BOM and whitespace too deep", map[string]string{"a.bin": "\xEF\xBB\xBF \n" + nested(6)}, true},
+		// The part parsers skip every token before the root, text included,
+		// so a part need not start with '<' to be parsed.
+		{"xml after text too deep", map[string]string{"word/document.xml": "a" + nested(6)}, true},
+		{"xml after a no-break space too deep", map[string]string{"word/document.xml": " " + nested(6)}, true},
+		{"xml after an ideographic space too deep", map[string]string{"word/document.xml": "　" + nested(6)}, true},
+		// Invalid UTF-8 ends the scan; the parsers stop at the same byte.
+		{"binary part stops the scan", map[string]string{"a.png": "\x89PNG" + nested(6)}, false},
+		{"malformed xml is left to the parser", map[string]string{"a.xml": "<a><b></a>"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := zipOf(t, tt.entries)
+			_, err := readZip(bytes.NewReader(data), int64(len(data)), lim)
+			if tt.wantErr {
+				if !errors.Is(err, ErrLimitExceeded) {
+					t.Fatalf("err = %v, want ErrLimitExceeded", err)
+				}
+			} else if err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+		})
+	}
+}
+
+// TestReadZipLyingSize checks that an entry whose header understates its
+// size cannot read past the limit.
+func TestReadZipLyingSize(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.CreateRaw(&zip.FileHeader{Name: "a.bin", Method: zip.Store, CompressedSize64: 200, UncompressedSize64: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(bytes.Repeat([]byte("x"), 200)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data := buf.Bytes()
+	parts, err := readZip(bytes.NewReader(data), int64(len(data)), limits{entries: 10, entry: 100, total: 100, depth: 10})
+	if err == nil && len(parts["a.bin"]) > 100 {
+		t.Fatalf("read %d bytes past the 100-byte limit", len(parts["a.bin"]))
+	}
+}

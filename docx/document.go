@@ -26,7 +26,23 @@ func New() *Document {
 	return &Document{pkg: parts.New()}
 }
 
+// ErrLimitExceeded is returned (wrapped) by Open when the file exceeds a
+// resource limit: more than 10,000 ZIP entries, an entry over 512 MiB or a
+// total over 1 GiB uncompressed, or XML nested more than 20,000 elements deep.
+// The limits protect a process that opens untrusted files.
+var ErrLimitExceeded = parts.ErrLimitExceeded
+
+// ErrMalformedPart is returned (wrapped) by Open when an XML part of the file
+// holds anything but the XML declaration, processing instructions, comments
+// and whitespace before its root element: text, or a DOCTYPE declaration
+// (Open Packaging Conventions forbid DTDs). Such a part is not well-formed
+// XML; Word does not write one.
+var ErrMalformedPart = parts.ErrMalformedPart
+
 // Open reads a .docx from r and returns a Document proxy.
+//
+// Open applies resource limits (see ErrLimitExceeded), so a hostile file
+// cannot exhaust memory or the stack.
 func Open(r io.ReaderAt, size int64) (*Document, error) {
 	pkg, err := parts.Open(r, size)
 	if err != nil {

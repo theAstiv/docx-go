@@ -38,17 +38,17 @@ var (
 // as Word requires.
 func (p *Paragraph) Remove() error {
 	if p.p.PPr != nil && p.p.PPr.SectPr != nil {
-		if _, _, ok := p.st.locateBlock(p.p, p.parent); ok {
+		if _, _, ok := p.st.locateBlock(p.p, p.hint()); ok {
 			return ErrSectionBreak
 		}
 	}
-	return p.st.removeBlock(p.p, p.parent)
+	return p.st.removeBlock(p.p, p.hint())
 }
 
 // Remove deletes the table from its container, with the same rules as
 // Paragraph.Remove (except section breaks, which a table cannot hold).
 func (t *Table) Remove() error {
-	return t.st.removeBlock(t.tbl, t.parent)
+	return t.st.removeBlock(t.tbl, t.hint())
 }
 
 // removeBlock removes el from the block list holding it.
@@ -65,6 +65,7 @@ func (s *story) removeBlock(el wml.BlockElement, hint *[]wml.BlockElement) error
 	if !s.isBody(list) {
 		ensureTrailingParagraph(list)
 	}
+	s.detach()
 	s.afterRemoval(marks)
 	return nil
 }
@@ -99,7 +100,9 @@ func ensureTrailingParagraph(list *[]wml.BlockElement) {
 // when the run holds part of a complex field (a field character without
 // its partners).
 func (r *Run) Remove() error {
-	list, i, ok := r.st.locateInline(r.r, r.parent)
+	// Removing a run detaches no list a hint can name, so it does not bump
+	// the structure generation.
+	list, i, ok := r.st.locateInline(r.r, r.hint())
 	if !ok {
 		return ErrNotInDocument
 	}
@@ -122,6 +125,13 @@ func (r *Row) Remove() error {
 	if r.tbl == nil {
 		return ErrNotInDocument
 	}
+	// The row is in r.tbl, but r.tbl may have been removed since the proxy
+	// was made (Table.Remove, or the row of an enclosing table).
+	if r.gen != r.st.stamp() {
+		if _, _, ok := r.st.locateBlock(r.tbl, nil); !ok {
+			return ErrNotInDocument
+		}
+	}
 	idx := slices.IndexFunc(r.tbl.Children, func(e wml.TableRowElement) bool { return e == r.tr })
 	if idx < 0 {
 		return ErrNotInDocument
@@ -137,6 +147,7 @@ func (r *Row) Remove() error {
 		passMergeStart(r.tr, next)
 	}
 	r.tbl.Children = slices.Delete(r.tbl.Children, idx, idx+1)
+	r.st.detach()
 	r.st.afterRemoval(marks)
 	return nil
 }
@@ -221,26 +232,26 @@ func passMergeStart(removed, next *wml.CT_Tr) {
 // Format().SetStyle if wanted. If p is no longer in the document, the new
 // paragraph is not attached either.
 func (p *Paragraph) InsertParagraphBefore(text string) *Paragraph {
-	return insertParagraph(p.st, p.p, p.parent, 0, text)
+	return insertParagraph(p.st, p.p, p.hint(), 0, text)
 }
 
 // InsertParagraphAfter inserts a new paragraph holding text just after p,
 // like InsertParagraphBefore. Inserted after a paragraph that carries a
 // section break, the new paragraph starts the next section.
 func (p *Paragraph) InsertParagraphAfter(text string) *Paragraph {
-	return insertParagraph(p.st, p.p, p.parent, 1, text)
+	return insertParagraph(p.st, p.p, p.hint(), 1, text)
 }
 
 // InsertParagraphBefore inserts a new paragraph holding text just before
 // the table, like Paragraph.InsertParagraphBefore.
 func (t *Table) InsertParagraphBefore(text string) *Paragraph {
-	return insertParagraph(t.st, t.tbl, t.parent, 0, text)
+	return insertParagraph(t.st, t.tbl, t.hint(), 0, text)
 }
 
 // InsertParagraphAfter inserts a new paragraph holding text just after the
 // table, like Paragraph.InsertParagraphAfter.
 func (t *Table) InsertParagraphAfter(text string) *Paragraph {
-	return insertParagraph(t.st, t.tbl, t.parent, 1, text)
+	return insertParagraph(t.st, t.tbl, t.hint(), 1, text)
 }
 
 func insertParagraph(st *story, el wml.BlockElement, hint *[]wml.BlockElement, offset int, text string) *Paragraph {
@@ -254,7 +265,7 @@ func insertParagraph(st *story, el wml.BlockElement, hint *[]wml.BlockElement, o
 		return para
 	}
 	*list = slices.Insert(*list, i+offset, wml.BlockElement(np))
-	para.parent = list
+	para.parent, para.gen = list, st.stamp()
 	return para
 }
 
@@ -263,7 +274,7 @@ func insertParagraph(st *story, el wml.BlockElement, hint *[]wml.BlockElement, o
 // empty paragraph follows the table when it would otherwise end the
 // container. If p is no longer in the document, the table is not attached.
 func (p *Paragraph) InsertTableAfter(rows, cols int, opts TableOptions) *Table {
-	list, i, ok := p.st.locateBlock(p.p, p.parent)
+	list, i, ok := p.st.locateBlock(p.p, p.hint())
 	tbl := buildTable(max(rows, 1), max(cols, 1), opts, p.st.textWidthAt(list, i+1))
 	t := &Table{tbl: tbl, st: p.st, parent: nil}
 	if !ok {
@@ -273,7 +284,7 @@ func (p *Paragraph) InsertTableAfter(rows, cols int, opts TableOptions) *Table {
 	if !p.st.isBody(list) {
 		ensureTrailingParagraph(list)
 	}
-	t.parent = list
+	t.parent, t.gen = list, p.st.stamp()
 	return t
 }
 
@@ -302,7 +313,7 @@ func (t *Table) InsertRow(i int, opts RowOptions) *Row {
 	}
 	tr := newRowLike(ref, below, t.tbl, opts)
 	t.tbl.Children = slices.Insert(t.tbl.Children, pos, wml.TableRowElement(tr))
-	return &Row{tr: tr, st: t.st, tbl: t.tbl}
+	return &Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.st.stamp()}
 }
 
 // newRowLike builds an empty row shaped like ref (or, without ref, one cell

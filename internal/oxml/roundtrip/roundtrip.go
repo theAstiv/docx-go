@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/theAstiv/docx-go/internal/canon"
+	"github.com/theAstiv/docx-go/internal/nsfix"
 )
 
 // Element is the interface every oxml type must satisfy.
@@ -82,7 +83,33 @@ func marshalElement(v Element, name xml.Name) ([]byte, error) {
 	if err := enc.Flush(); err != nil {
 		return nil, fmt.Errorf("flush: %w", err)
 	}
-	return buf.Bytes(), nil
+	// Every part's Marshal applies nsfix to the encoder's output, so the
+	// oracle checks what is written, not the raw encoder output: canon
+	// rejects the namespace junk nsfix exists to remove. A type that writes
+	// literal prefixed names (docprops) bypasses nsfix in its part too; its
+	// root tag starts "<prefix:", which an encoder-built root never does.
+	if isPrefixedRoot(buf.Bytes()) {
+		return buf.Bytes(), nil
+	}
+	out, err := nsfix.Fix(buf.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("nsfix: %w", err)
+	}
+	return out, nil
+}
+
+// isPrefixedRoot reports whether the first element tag of data has a
+// prefixed name.
+func isPrefixedRoot(data []byte) bool {
+	i := bytes.IndexByte(data, '<')
+	if i < 0 {
+		return false
+	}
+	end := bytes.IndexAny(data[i:], " \t\r\n/>")
+	if end < 0 {
+		return false
+	}
+	return bytes.IndexByte(data[i:i+end], ':') >= 0
 }
 
 // unmarshalElement allocates a fresh T, feeds it the XML, and returns it.

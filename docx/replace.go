@@ -68,12 +68,12 @@ func (d *Document) Replace(old, new string, opts ReplaceOptions) ReplaceResult {
 		}
 	}
 	if !opts.SkipHeaders {
-		for _, h := range d.pkg.Headers {
+		for _, h := range d.pkg.UniqueHeaders() {
 			r.story(h.Part.CT().Children, h.Path())
 		}
 	}
 	if !opts.SkipFooters {
-		for _, f := range d.pkg.Footers {
+		for _, f := range d.pkg.UniqueFooters() {
 			r.story(f.Part.CT().Children, f.Path())
 		}
 	}
@@ -95,7 +95,7 @@ func (p *Paragraph) Replace(old, new string, opts ReplaceOptions) ReplaceResult 
 	// A table of contents spans paragraphs, so its text is found by
 	// scanning the paragraph's whole container.
 	var skip textmerge.SkipSet
-	if list, _, ok := p.st.locateBlock(p.p, p.parent); ok {
+	if list, _, ok := p.st.locateBlock(p.p, p.hint()); ok {
 		skip = textmerge.TOCSkips(*list)
 	}
 	r.paragraph(p.p, part, skip)

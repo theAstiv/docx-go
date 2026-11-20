@@ -60,19 +60,15 @@ func (p *Package) loadCoreProps() *corePropsState {
 
 func parseCoreProps(data []byte) (*docprops.CT_CoreProperties, error) {
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return nil, fmt.Errorf("parts: core properties: read root token: %w", err)
-		}
-		if start, ok := tok.(xml.StartElement); ok {
-			ct := new(docprops.CT_CoreProperties)
-			if err := ct.UnmarshalXML(dec, start); err != nil {
-				return nil, fmt.Errorf("parts: core properties: %w", err)
-			}
-			return ct, nil
-		}
+	start, err := opc.RootElement(dec)
+	if err != nil {
+		return nil, fmt.Errorf("parts: core properties: %w", err)
 	}
+	ct := new(docprops.CT_CoreProperties)
+	if err := ct.UnmarshalXML(dec, start); err != nil {
+		return nil, fmt.Errorf("parts: core properties: %w", err)
+	}
+	return ct, nil
 }
 
 // CoreProps returns the core document properties for reading, or nil when

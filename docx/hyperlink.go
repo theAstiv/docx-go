@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"iter"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
@@ -92,7 +93,7 @@ func (p *Paragraph) AddInternalLink(bookmark string, opts HyperlinkOptions) (*Hy
 // paragraph.
 func (p *Paragraph) Hyperlinks() iter.Seq[*Hyperlink] {
 	return func(yield func(*Hyperlink) bool) {
-		for _, c := range p.p.Children {
+		for _, c := range slices.Clone(p.p.Children) {
 			if h, ok := c.(*wml.CT_Hyperlink); ok {
 				if !yield(&Hyperlink{h: h, st: p.st}) {
 					return
@@ -113,7 +114,7 @@ func (h *Hyperlink) AddRun(text string) *Run {
 		r.Children = append(r.Children, t)
 	}
 	h.h.Children = append(h.h.Children, r)
-	run := &Run{r: r, st: h.st, parent: &h.h.Children}
+	run := &Run{r: r, st: h.st, parent: &h.h.Children, gen: h.st.stamp()}
 	// Use the document's own hyperlink style id, which a localized or custom
 	// template may have under a different name than "Hyperlink".
 	styleID := string(StyleHyperlink)
@@ -129,9 +130,9 @@ func (h *Hyperlink) AddRun(text string) *Run {
 // Runs iterates over the runs directly inside the link.
 func (h *Hyperlink) Runs() iter.Seq[*Run] {
 	return func(yield func(*Run) bool) {
-		for _, c := range h.h.Children {
+		for _, c := range slices.Clone(h.h.Children) {
 			if r, ok := c.(*wml.CT_R); ok {
-				if !yield(&Run{r: r, st: h.st, parent: &h.h.Children}) {
+				if !yield(&Run{r: r, st: h.st, parent: &h.h.Children, gen: h.st.stamp()}) {
 					return
 				}
 			}

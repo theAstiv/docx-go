@@ -25,7 +25,10 @@ jobs:
           # failure; the step fails at the end if any target found a crash.
           # Crash inputs are saved to <package>/testdata/fuzz/ by go test.
           failed=0
-          fuzz() { go test -run='^$' -fuzz="^$1\$" -fuzztime=5m "$2" || failed=1; }
+          # A short -fuzzminimizetime: the default spends 60s minimizing every
+          # new input, which leaves most of the 5 minutes unused on the slower
+          # whole-package targets.
+          fuzz() { go test -run='^$' -fuzz="^$1\$" -fuzztime=5m -fuzzminimizetime=5s "$2" || failed=1; }
           # Name each fuzz function explicitly: -fuzz must match exactly one.
           fuzz FuzzCT_P ./internal/oxml/wml
           fuzz FuzzCT_R ./internal/oxml/wml
@@ -36,6 +39,9 @@ jobs:
           fuzz FuzzTemplateScan ./internal/template
           fuzz FuzzTemplateExecute ./internal/template
           fuzz FuzzCollapse ./internal/textmerge
+          fuzz FuzzDeleteRange ./internal/textmerge
+          # Whole package: hostile .docx input (resource limits, P0 review).
+          fuzz FuzzOpen ./docx
           exit "$failed"
 
       # Committed seeds are tracked; a crash input go test writes is not.

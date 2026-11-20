@@ -15,7 +15,9 @@ import (
 // matching on Local alone is correct for well-formed documents.
 func wAttr(attrs []xml.Attr, localName string) string {
 	for _, a := range attrs {
-		if a.Name.Local == localName {
+		// A namespace declaration is not an attribute: xmlns:w on a
+		// w:gridCol would otherwise be read as its w:w width.
+		if a.Name.Local == localName && !isNSDecl(a) {
 			return a.Value
 		}
 	}
@@ -298,4 +300,31 @@ func rawMarshalChildren(enc *xml.Encoder, children []*raw.RawElement) error {
 		}
 	}
 	return nil
+}
+
+// isNSDecl reports whether a is a namespace declaration. The encoder re-emits
+// these from xml.Name.Space, so storing them would double-declare on marshal
+// (xmlns:_xmlns junk).
+func isNSDecl(a xml.Attr) bool {
+	return a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns")
+}
+
+// otherAttrs returns the attributes of attrs that are neither namespace
+// declarations nor named by one of the modelled local names, for types that
+// model a few attributes and must write the rest back unchanged.
+func otherAttrs(attrs []xml.Attr, modelled ...string) []xml.Attr {
+	var out []xml.Attr
+outer:
+	for _, a := range attrs {
+		if isNSDecl(a) {
+			continue
+		}
+		for _, m := range modelled {
+			if a.Name.Local == m {
+				continue outer
+			}
+		}
+		out = append(out, a)
+	}
+	return out
 }

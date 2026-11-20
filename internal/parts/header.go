@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/theAstiv/docx-go/internal/nsfix"
+	"github.com/theAstiv/docx-go/internal/opc"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -30,17 +31,12 @@ func NewHeaderPart() *HeaderPart {
 // Parse reads raw XML bytes and populates the HeaderPart.
 func (hp *HeaderPart) Parse(data []byte) error {
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return fmt.Errorf("parts: header: read root token: %w", err)
-		}
-		start, ok := tok.(xml.StartElement)
-		if ok {
-			hp.ct = new(wml.CT_Hdr)
-			return hp.ct.UnmarshalXML(dec, start)
-		}
+	start, err := opc.RootElement(dec)
+	if err != nil {
+		return fmt.Errorf("parts: header: %w", err)
 	}
+	hp.ct = new(wml.CT_Hdr)
+	return hp.ct.UnmarshalXML(dec, start)
 }
 
 // CT returns the underlying CT_Hdr for direct oxml access.

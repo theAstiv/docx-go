@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/theAstiv/docx-go/internal/nsfix"
+	"github.com/theAstiv/docx-go/internal/opc"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -32,17 +33,12 @@ func NewStylesPart() *StylesPart {
 // It skips the XML declaration and any processing instructions before the root.
 func (sp *StylesPart) Parse(data []byte) error {
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return fmt.Errorf("parts: styles: read root token: %w", err)
-		}
-		start, ok := tok.(xml.StartElement)
-		if ok {
-			sp.styles = new(wml.CT_Styles)
-			return sp.styles.UnmarshalXML(dec, start)
-		}
+	start, err := opc.RootElement(dec)
+	if err != nil {
+		return fmt.Errorf("parts: styles: %w", err)
 	}
+	sp.styles = new(wml.CT_Styles)
+	return sp.styles.UnmarshalXML(dec, start)
 }
 
 // Styles returns the underlying CT_Styles element for direct oxml access.

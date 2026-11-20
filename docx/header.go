@@ -2,6 +2,7 @@ package docx
 
 import (
 	"iter"
+	"slices"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 	"github.com/theAstiv/docx-go/internal/parts"
@@ -26,12 +27,12 @@ func (h *Header) story() *story {
 // Paragraphs returns an iterator over all paragraph children of the header.
 func (h *Header) Paragraphs() iter.Seq[*Paragraph] {
 	return func(yield func(*Paragraph) bool) {
-		for _, child := range h.ct.Children {
+		for _, child := range slices.Clone(h.ct.Children) {
 			p, ok := child.(*wml.CT_P)
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p, st: h.story(), parent: &h.ct.Children}) {
+			if !yield(&Paragraph{p: p, st: h.story(), parent: &h.ct.Children, gen: h.story().stamp()}) {
 				return
 			}
 		}
@@ -41,12 +42,12 @@ func (h *Header) Paragraphs() iter.Seq[*Paragraph] {
 // Tables returns an iterator over all table children of the header.
 func (h *Header) Tables() iter.Seq[*Table] {
 	return func(yield func(*Table) bool) {
-		for _, child := range h.ct.Children {
+		for _, child := range slices.Clone(h.ct.Children) {
 			tbl, ok := child.(*wml.CT_Tbl)
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl, st: h.story(), parent: &h.ct.Children}) {
+			if !yield(&Table{tbl: tbl, st: h.story(), parent: &h.ct.Children, gen: h.story().stamp()}) {
 				return
 			}
 		}
@@ -59,7 +60,7 @@ func (h *Header) Tables() iter.Seq[*Table] {
 func (h *Header) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
 	h.ct.Children = append(h.ct.Children, p)
-	return &Paragraph{p: p, st: h.story(), parent: &h.ct.Children}
+	return &Paragraph{p: p, st: h.story(), parent: &h.ct.Children, gen: h.story().stamp()}
 }
 
 // Text returns the plain text of the header, laid out as described at
@@ -86,5 +87,5 @@ func (h *Header) AddTable(rows, cols int, opts TableOptions) *Table {
 	}
 	tbl := buildTable(rows, cols, opts, h.story().textWidthAt(&h.ct.Children, len(h.ct.Children)))
 	appendBlock(&h.ct.Children, tbl)
-	return &Table{tbl: tbl, st: h.story(), parent: &h.ct.Children}
+	return &Table{tbl: tbl, st: h.story(), parent: &h.ct.Children, gen: h.story().stamp()}
 }

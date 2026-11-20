@@ -148,13 +148,16 @@ type CT_AbstractNum struct {
 	rawMeta       []*raw.RawElement // nsid, multiLevelType, tmpl, name, styleLink, numStyleLink
 	Lvls          []*CT_Lvl         // up to 9 levels (indexed by ilvl)
 	rawPost       []*raw.RawElement // unknown elements appearing after lvl children (mc:AlternateContent, etc.)
+	// attrs holds the attributes other than w:abstractNumId (Word writes
+	// w15:restartNumberingAfterBreak and w16cid:durableId on most lists).
+	attrs []xml.Attr
 }
 
 // MarshalXML encodes w:abstractNum.
 func (a *CT_AbstractNum) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 	start := xml.StartElement{
 		Name: ns.Qn("w:abstractNum"),
-		Attr: []xml.Attr{{Name: ns.Qn("w:abstractNumId"), Value: strconv.FormatInt(a.AbstractNumID, 10)}},
+		Attr: append([]xml.Attr{{Name: ns.Qn("w:abstractNumId"), Value: strconv.FormatInt(a.AbstractNumID, 10)}}, a.attrs...),
 	}
 	if err := e.EncodeToken(start); err != nil {
 		return err
@@ -176,6 +179,7 @@ func (a *CT_AbstractNum) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 // UnmarshalXML decodes a w:abstractNum element.
 func (a *CT_AbstractNum) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	a.AbstractNumID = 0
+	a.attrs = otherAttrs(start.Attr, "abstractNumId")
 	for _, attr := range start.Attr {
 		if attr.Name.Local == "abstractNumId" {
 			id, err := strconv.ParseInt(attr.Value, 10, 64)
@@ -264,7 +268,9 @@ func (l *CT_Lvl) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 				l.ILvl = id
 			}
 		default:
-			l.extraAttrs = append(l.extraAttrs, attr)
+			if !isNSDecl(attr) {
+				l.extraAttrs = append(l.extraAttrs, attr)
+			}
 		}
 	}
 	children, err := rawUnmarshalChildren(d)
@@ -350,13 +356,17 @@ type CT_Num struct {
 	NumID         int64
 	AbstractNumID int64
 	LvlOverrides  []*CT_LvlOverride
+	// attrs holds the attributes other than w:numId (w16cid:durableId).
+	attrs []xml.Attr
+	// rawPost holds unknown children, written after the overrides.
+	rawPost []*raw.RawElement
 }
 
 // MarshalXML encodes a w:num element.
 func (n *CT_Num) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 	start := xml.StartElement{
 		Name: ns.Qn("w:num"),
-		Attr: []xml.Attr{{Name: ns.Qn("w:numId"), Value: strconv.FormatInt(n.NumID, 10)}},
+		Attr: append([]xml.Attr{{Name: ns.Qn("w:numId"), Value: strconv.FormatInt(n.NumID, 10)}}, n.attrs...),
 	}
 	if err := e.EncodeToken(start); err != nil {
 		return err
@@ -377,6 +387,9 @@ func (n *CT_Num) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 			return err
 		}
 	}
+	if err := rawMarshalChildren(e, n.rawPost); err != nil {
+		return err
+	}
 	return e.EncodeToken(xml.EndElement{Name: ns.Qn("w:num")})
 }
 
@@ -385,6 +398,8 @@ func (n *CT_Num) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	n.NumID = 0
 	n.AbstractNumID = 0
 	n.LvlOverrides = n.LvlOverrides[:0]
+	n.attrs = otherAttrs(start.Attr, "numId")
+	n.rawPost = nil
 	for _, attr := range start.Attr {
 		if attr.Name.Local == "numId" {
 			id, err := strconv.ParseInt(attr.Value, 10, 64)
@@ -422,9 +437,11 @@ func (n *CT_Num) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 				}
 				n.LvlOverrides = append(n.LvlOverrides, ov)
 			default:
-				if err := d.Skip(); err != nil {
-					return fmt.Errorf("CT_Num skip %v: %w", t.Name, err)
+				r := new(raw.RawElement) //nolint:exhaustruct_v5 // zero-value decode target; UnmarshalXML populates all fields
+				if err := r.UnmarshalXML(d, t); err != nil {
+					return err
 				}
+				n.rawPost = append(n.rawPost, r)
 			}
 		}
 	}
@@ -437,13 +454,17 @@ type CT_LvlOverride struct {
 	ILvl          int64
 	StartOverride *int64
 	Lvl           *CT_Lvl
+	// attrs holds the attributes other than w:ilvl.
+	attrs []xml.Attr
+	// rawPost holds unknown children, written after w:lvl.
+	rawPost []*raw.RawElement
 }
 
 // MarshalXML encodes a w:lvlOverride element.
 func (o *CT_LvlOverride) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 	start := xml.StartElement{
 		Name: ns.Qn("w:lvlOverride"),
-		Attr: []xml.Attr{{Name: ns.Qn("w:ilvl"), Value: strconv.FormatInt(o.ILvl, 10)}},
+		Attr: append([]xml.Attr{{Name: ns.Qn("w:ilvl"), Value: strconv.FormatInt(o.ILvl, 10)}}, o.attrs...),
 	}
 	if err := e.EncodeToken(start); err != nil {
 		return err
@@ -465,6 +486,9 @@ func (o *CT_LvlOverride) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 			return err
 		}
 	}
+	if err := rawMarshalChildren(e, o.rawPost); err != nil {
+		return err
+	}
 	return e.EncodeToken(xml.EndElement{Name: ns.Qn("w:lvlOverride")})
 }
 
@@ -473,6 +497,8 @@ func (o *CT_LvlOverride) UnmarshalXML(d *xml.Decoder, start xml.StartElement) er
 	o.ILvl = 0
 	o.StartOverride = nil
 	o.Lvl = nil
+	o.attrs = otherAttrs(start.Attr, "ilvl")
+	o.rawPost = nil
 	for _, attr := range start.Attr {
 		if attr.Name.Local == "ilvl" {
 			id, err := strconv.ParseInt(attr.Value, 10, 64)
@@ -509,9 +535,11 @@ func (o *CT_LvlOverride) UnmarshalXML(d *xml.Decoder, start xml.StartElement) er
 					return err
 				}
 			default:
-				if err := d.Skip(); err != nil {
-					return fmt.Errorf("CT_LvlOverride skip %v: %w", t.Name, err)
+				r := new(raw.RawElement) //nolint:exhaustruct_v5 // zero-value decode target; UnmarshalXML populates all fields
+				if err := r.UnmarshalXML(d, t); err != nil {
+					return err
 				}
+				o.rawPost = append(o.rawPost, r)
 			}
 		}
 	}
