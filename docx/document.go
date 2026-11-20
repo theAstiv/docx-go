@@ -32,6 +32,13 @@ func New() *Document {
 // The limits protect a process that opens untrusted files.
 var ErrLimitExceeded = parts.ErrLimitExceeded
 
+// ErrMalformedPart is returned (wrapped) by Open when an XML part of the file
+// holds anything but the XML declaration, processing instructions, comments
+// and whitespace before its root element: text, or a DOCTYPE declaration
+// (Open Packaging Conventions forbid DTDs). Such a part is not well-formed
+// XML; Word does not write one.
+var ErrMalformedPart = parts.ErrMalformedPart
+
 // Open reads a .docx from r and returns a Document proxy.
 //
 // Open applies resource limits (see ErrLimitExceeded), so a hostile file

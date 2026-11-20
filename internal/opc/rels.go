@@ -116,7 +116,12 @@ func parseRels(data []byte) (*Rels, error) {
 		Rels    []xmlRel `xml:"Relationship"`
 	}
 	var xr xmlRels
-	if err := xml.Unmarshal(data, &xr); err != nil {
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	start, err := RootElement(dec)
+	if err != nil {
+		return nil, fmt.Errorf("opc/rels: parse: %w", err)
+	}
+	if err := dec.DecodeElement(&xr, &start); err != nil {
 		return nil, fmt.Errorf("opc/rels: parse: %w", err)
 	}
 	r := &Rels{}

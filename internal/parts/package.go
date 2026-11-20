@@ -441,3 +441,7 @@ func resolveRelPath(sourcePart, target string) string {
 // resource limit: too many entries, an entry or the whole archive too large
 // uncompressed, or an XML part nested too deeply.
 var ErrLimitExceeded = opc.ErrLimitExceeded
+
+// ErrMalformedPart is returned (wrapped) by Open when an XML part holds
+// text or a DOCTYPE declaration before its root element.
+var ErrMalformedPart = opc.ErrMalformedPart

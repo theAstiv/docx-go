@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/theAstiv/docx-go/internal/nsfix"
+	"github.com/theAstiv/docx-go/internal/opc"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -31,17 +32,12 @@ func NewNumberingPart() *NumberingPart {
 // Parse reads raw XML bytes and populates the NumberingPart.
 func (np *NumberingPart) Parse(data []byte) error {
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return fmt.Errorf("parts: numbering: read root token: %w", err)
-		}
-		start, ok := tok.(xml.StartElement)
-		if ok {
-			np.ct = new(wml.CT_Numbering)
-			return np.ct.UnmarshalXML(dec, start)
-		}
+	start, err := opc.RootElement(dec)
+	if err != nil {
+		return fmt.Errorf("parts: numbering: %w", err)
 	}
+	np.ct = new(wml.CT_Numbering)
+	return np.ct.UnmarshalXML(dec, start)
 }
 
 // CT returns the underlying CT_Numbering for direct oxml access.

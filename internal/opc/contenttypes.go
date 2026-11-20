@@ -48,7 +48,12 @@ func parseContentTypes(data []byte) (*ContentTypes, error) {
 	}
 
 	var xt xmlTypes
-	if err := xml.Unmarshal(data, &xt); err != nil {
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	start, err := RootElement(dec)
+	if err != nil {
+		return nil, fmt.Errorf("opc/contenttypes: parse: %w", err)
+	}
+	if err := dec.DecodeElement(&xt, &start); err != nil {
 		return nil, fmt.Errorf("opc/contenttypes: parse: %w", err)
 	}
 	ct := &ContentTypes{}

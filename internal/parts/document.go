@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/theAstiv/docx-go/internal/nsfix"
+	"github.com/theAstiv/docx-go/internal/opc"
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
@@ -34,21 +35,16 @@ func NewDocumentPart() *DocumentPart {
 }
 
 // Parse reads raw XML bytes and populates the DocumentPart.
-// It skips the XML declaration and any processing instructions before the root.
+// It skips the XML declaration, processing instructions, comments and
+// whitespace before the root, and refuses anything else (opc.RootElement).
 func (dp *DocumentPart) Parse(data []byte) error {
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return fmt.Errorf("parts: document: read root token: %w", err)
-		}
-		start, ok := tok.(xml.StartElement)
-		if ok {
-			dp.doc = new(wml.CT_Document)
-			return dp.doc.UnmarshalXML(dec, start)
-		}
-		// Skip xml.ProcInst (<?xml...?>) and xml.Comment before the root element.
+	start, err := opc.RootElement(dec)
+	if err != nil {
+		return fmt.Errorf("parts: document: %w", err)
 	}
+	dp.doc = new(wml.CT_Document)
+	return dp.doc.UnmarshalXML(dec, start)
 }
 
 // Body returns the CT_Body element for direct oxml access.
