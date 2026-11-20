@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -84,17 +85,26 @@ func TestSave_RootAttributeInRootNamespace(t *testing.T) {
 // may have any name. A deeply nested word/doc.dat bypassed the depth check
 // when parts were picked for scanning by extension, and 6,000,000 levels (a
 // 41 KB file) killed Open with an unrecoverable stack overflow.
+//
+// Leading bytes cannot decide it either: the part parsers skip every token
+// before the root element, text included, so a part that starts with "a",
+// a no-break space or an ideographic space is still parsed. Scanning only
+// parts that start with '<' let those through the same way.
 func TestOpenDepthLimit_MainPartAnyName(t *testing.T) {
 	const depth = 6_000_000
 	doc := `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p>` +
 		strings.Repeat("<x>", depth) + strings.Repeat("</x>", depth) + `</w:p></w:body></w:document>`
-	data := zipFiles(t, map[string]string{
-		"[Content_Types].xml": contentTypes,
-		"_rels/.rels":         rels(rel("rId1", relDoc, "word/doc.dat")),
-		"word/doc.dat":        doc,
-	})
-	if _, err := docx.OpenBytes(data); !errors.Is(err, docx.ErrLimitExceeded) {
-		t.Fatalf("err = %v, want ErrLimitExceeded", err)
+	for _, lead := range []string{"", "a", " ", "　"} {
+		t.Run(fmt.Sprintf("lead %q", lead), func(t *testing.T) {
+			data := zipFiles(t, map[string]string{
+				"[Content_Types].xml": contentTypes,
+				"_rels/.rels":         rels(rel("rId1", relDoc, "word/doc.dat")),
+				"word/doc.dat":        lead + doc,
+			})
+			if _, err := docx.OpenBytes(data); !errors.Is(err, docx.ErrLimitExceeded) {
+				t.Fatalf("err = %v, want ErrLimitExceeded", err)
+			}
+		})
 	}
 }
 

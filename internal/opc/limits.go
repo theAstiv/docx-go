@@ -43,21 +43,18 @@ var defaultLimits = limits{entries: MaxEntries, entry: MaxEntrySize, total: MaxT
 // of the resource limits.
 var ErrLimitExceeded = errors.New("opc: resource limit exceeded")
 
-// looksLikeXML reports whether data may be parsed as XML by a later layer:
-// after an optional UTF-8 byte-order mark and whitespace, it starts with '<'.
-// The part name cannot decide this: the officeDocument relationship and the
-// content types choose which part is parsed, so the main part may be called
-// word/doc.dat. Binary parts (images) never start with '<'; an SVG image
-// does, and is scanned too, which is harmless.
-func looksLikeXML(data []byte) bool {
-	data = bytes.TrimPrefix(data, []byte("\xEF\xBB\xBF"))
-	data = bytes.TrimLeft(data, " \t\r\n")
-	return len(data) > 0 && data[0] == '<'
-}
-
 // checkXMLDepth reports an ErrLimitExceeded error when data nests elements
 // deeper than max. Malformed XML stops the scan without an error: the parser
 // that reads the part reports it.
+//
+// readZip runs it on every part, whatever its name or first bytes. Neither
+// can tell which parts a later layer parses: the relationships choose the
+// main part (it may be word/doc.dat), and the part parsers skip any tokens
+// before the root element, text included ("a<w:document…>", or one led by a
+// no-break space). RawToken accepts everything the parsers' Token accepts
+// (no decoder in the module changes Strict or sets a CharsetReader), so no
+// part a parser reads can slip past. A binary part usually stops the scan at
+// its first invalid UTF-8 byte.
 func checkXMLDepth(name string, data []byte, max int) error {
 	d := xml.NewDecoder(bytes.NewReader(data))
 	depth := 0
