@@ -88,6 +88,16 @@ func (f *RunFont) rpr() *wml.CT_RPr {
 	return *f.slot
 }
 
+// edit returns the CT_RPr a setter writes to. A setter that clears a
+// property (clear is true) on a run without w:rPr has nothing to remove: it
+// gets a throwaway element, so it does not add an empty <w:rPr/>.
+func (f *RunFont) edit(clear bool) *wml.CT_RPr {
+	if clear && *f.slot == nil {
+		return new(wml.CT_RPr)
+	}
+	return f.rpr()
+}
+
 // Bold returns the Bold tri-state, or nil (inherit from style).
 func (f *RunFont) Bold() *bool {
 	if f.cur() == nil {
@@ -97,7 +107,7 @@ func (f *RunFont) Bold() *bool {
 }
 
 // SetBold sets Bold. nil removes the element (inherit from style).
-func (f *RunFont) SetBold(b *bool) { f.rpr().SetBold(b) }
+func (f *RunFont) SetBold(b *bool) { f.edit(b == nil).SetBold(b) }
 
 // Italic returns the Italic tri-state, or nil.
 func (f *RunFont) Italic() *bool {
@@ -108,7 +118,7 @@ func (f *RunFont) Italic() *bool {
 }
 
 // SetItalic sets Italic.
-func (f *RunFont) SetItalic(b *bool) { f.rpr().SetItalic(b) }
+func (f *RunFont) SetItalic(b *bool) { f.edit(b == nil).SetItalic(b) }
 
 // Underline returns the underline style, or "".
 func (f *RunFont) Underline() UnderlineStyle {
@@ -119,7 +129,9 @@ func (f *RunFont) Underline() UnderlineStyle {
 }
 
 // SetUnderline sets the underline style. An empty string removes underline.
-func (f *RunFont) SetUnderline(style UnderlineStyle) { f.rpr().SetUnderlineStyle(string(style)) }
+func (f *RunFont) SetUnderline(style UnderlineStyle) {
+	f.edit(style == "").SetUnderlineStyle(string(style))
+}
 
 // Strike returns the strikethrough tri-state, or nil.
 func (f *RunFont) Strike() *bool {
@@ -130,7 +142,7 @@ func (f *RunFont) Strike() *bool {
 }
 
 // SetStrike sets strikethrough.
-func (f *RunFont) SetStrike(b *bool) { f.rpr().SetStrike(b) }
+func (f *RunFont) SetStrike(b *bool) { f.edit(b == nil).SetStrike(b) }
 
 // SizePt returns the font size in points (half-points / 2), or 0 if not set.
 // Use SizeHalfPt for half-point precision.
@@ -157,7 +169,7 @@ func (f *RunFont) SetSizePt(pt float64) {
 }
 
 // SetSizeHalfPt sets the font size in half-points. nil removes it.
-func (f *RunFont) SetSizeHalfPt(hp *int64) { f.rpr().SetSzHalfPt(hp) }
+func (f *RunFont) SetSizeHalfPt(hp *int64) { f.edit(hp == nil).SetSzHalfPt(hp) }
 
 // Color returns the hex RGB color string (e.g. "FF0000"), or "".
 func (f *RunFont) Color() string {
@@ -168,7 +180,7 @@ func (f *RunFont) Color() string {
 }
 
 // SetColor sets the hex RGB color string. An empty string removes color.
-func (f *RunFont) SetColor(hex string) { f.rpr().SetColorVal(hex) }
+func (f *RunFont) SetColor(hex string) { f.edit(hex == "").SetColorVal(hex) }
 
 // Style returns the character style ID, or "".
 func (f *RunFont) Style() string {
@@ -179,7 +191,7 @@ func (f *RunFont) Style() string {
 }
 
 // SetStyle sets the character style ID. An empty string removes it.
-func (f *RunFont) SetStyle(s string) { f.rpr().SetStyleID(s) }
+func (f *RunFont) SetStyle(s string) { f.edit(s == "").SetStyleID(s) }
 
 // VertAlign returns the vertical alignment ("superscript", "subscript", or "").
 func (f *RunFont) VertAlign() VertAlignValue {
@@ -190,7 +202,7 @@ func (f *RunFont) VertAlign() VertAlignValue {
 }
 
 // SetVertAlign sets vertical alignment.
-func (f *RunFont) SetVertAlign(v VertAlignValue) { f.rpr().SetVertAlign(string(v)) }
+func (f *RunFont) SetVertAlign(v VertAlignValue) { f.edit(v == "").SetVertAlign(string(v)) }
 
 // Name returns the font family (w:rFonts/@w:ascii), or "" if not set.
 func (f *RunFont) Name() string {
@@ -219,7 +231,7 @@ func (f *RunFont) Caps() *bool {
 }
 
 // SetCaps sets AllCaps.
-func (f *RunFont) SetCaps(b *bool) { f.rpr().SetCaps(b) }
+func (f *RunFont) SetCaps(b *bool) { f.edit(b == nil).SetCaps(b) }
 
 // SmallCaps returns the SmallCaps tri-state, or nil.
 func (f *RunFont) SmallCaps() *bool {
@@ -230,7 +242,7 @@ func (f *RunFont) SmallCaps() *bool {
 }
 
 // SetSmallCaps sets SmallCaps.
-func (f *RunFont) SetSmallCaps(b *bool) { f.rpr().SetSmallCaps(b) }
+func (f *RunFont) SetSmallCaps(b *bool) { f.edit(b == nil).SetSmallCaps(b) }
 
 // Highlight returns the highlight color name (e.g. "yellow", "none"), or "".
 func (f *RunFont) Highlight() string {
@@ -241,7 +253,7 @@ func (f *RunFont) Highlight() string {
 }
 
 // SetHighlight sets the highlight color name. An empty string removes it.
-func (f *RunFont) SetHighlight(color string) { f.rpr().SetHighlightColor(color) }
+func (f *RunFont) SetHighlight(color string) { f.edit(color == "").SetHighlightColor(color) }
 
 // ASCII returns the ASCII font face name, or "".
 func (f *RunFont) ASCII() string {
@@ -252,7 +264,7 @@ func (f *RunFont) ASCII() string {
 }
 
 // SetASCII sets the ASCII font face name. An empty string removes it.
-func (f *RunFont) SetASCII(name string) { f.rpr().SetFontASCII(name) }
+func (f *RunFont) SetASCII(name string) { f.edit(name == "").SetFontASCII(name) }
 
 // HAnsi returns the High-ANSI font face name, or "".
 func (f *RunFont) HAnsi() string {
@@ -263,4 +275,4 @@ func (f *RunFont) HAnsi() string {
 }
 
 // SetHAnsi sets the High-ANSI font face name. An empty string removes it.
-func (f *RunFont) SetHAnsi(name string) { f.rpr().SetFontHAnsi(name) }
+func (f *RunFont) SetHAnsi(name string) { f.edit(name == "").SetFontHAnsi(name) }

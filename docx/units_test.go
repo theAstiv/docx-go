@@ -1,6 +1,7 @@
 package docx_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/theAstiv/docx-go/docx"
@@ -25,12 +26,38 @@ func TestInches_RoundTrip(t *testing.T) {
 }
 
 func TestCm(t *testing.T) {
-	// 2.54 cm == 1 inch == 1440 twips
-	got := docx.Cm(2.54)
-	// Allow ±2 twips for float rounding
-	diff := int64(got) - 1440
-	if diff < -2 || diff > 2 {
-		t.Errorf("Cm(2.54) = %v, want ~1440", got)
+	if got := docx.Cm(2.54); got != 1440 {
+		t.Errorf("Cm(2.54) = %v, want 1440", got)
+	}
+}
+
+// TestUnitsRound checks every float constructor rounds to the nearest unit
+// and saturates instead of overflowing.
+func TestUnitsRound(t *testing.T) {
+	cases := []struct {
+		name      string
+		got, want int64
+	}{
+		{"Mm(1)", int64(docx.Mm(1)), 57},
+		{"Mm(25.4)", int64(docx.Mm(25.4)), 1440},
+		{"Cm(1)", int64(docx.Cm(1)), 567},
+		{"Inches(0.7)", int64(docx.Inches(0.7)), 1008},
+		{"Inches(-0.7)", int64(docx.Inches(-0.7)), -1008},
+		{"Pt(10.33)", int64(docx.Pt(10.33)), 207},
+		{"Px(1.1)", int64(docx.Px(1.1)), 17},
+		{"Percent(33.33)", int64(docx.Percent(33.33)), 1667},
+		{"EMUInches(0.1)", int64(docx.EMUInches(0.1)), 91440},
+		{"MultipleLine(1.15)", int64(docx.MultipleLine(1.15)), 276},
+		{"HalfPoints(10.75)", int64(docx.HalfPoints(10.75)), 22},
+		{"Inches(1e30)", int64(docx.Inches(1e30)), math.MaxInt64},
+		{"Inches(-1e30)", int64(docx.Inches(-1e30)), math.MinInt64},
+		{"HalfPoints(1e30)", int64(docx.HalfPoints(1e30)), math.MaxInt32},
+		{"Inches(NaN)", int64(docx.Inches(math.NaN())), 0},
+	}
+	for _, tc := range cases {
+		if tc.got != tc.want {
+			t.Errorf("%s = %d, want %d", tc.name, tc.got, tc.want)
+		}
 	}
 }
 

@@ -240,7 +240,16 @@ func (s *CT_SectPr) TextColumns() (num int, space int64, widths []int64) {
 }
 
 // SetPgMargins sets all margins on w:pgMar in twips.
+//
+// The schema requires w:header, w:footer and w:gutter on w:pgMar as well;
+// any of them missing is filled from DefaultSectPr.
 func (s *CT_SectPr) SetPgMargins(top, right, bottom, left int64) {
+	defMar := rawFindChild(DefaultSectPr().raw, ns.Qn("w:pgMar"))
+	for _, local := range []string{"header", "footer", "gutter"} {
+		if rawGetInt64Attr(s.raw, ns.Qn("w:pgMar"), local) == nil {
+			rawSetAttrOnElement(&s.raw, ns.Qn("w:pgMar"), ns.Qn("w:"+local), wAttr(defMar.Attrs, local))
+		}
+	}
 	rawSetInt64Attr(&s.raw, ns.Qn("w:pgMar"), ns.Qn("w:top"), &top)
 	rawSetInt64Attr(&s.raw, ns.Qn("w:pgMar"), ns.Qn("w:right"), &right)
 	rawSetInt64Attr(&s.raw, ns.Qn("w:pgMar"), ns.Qn("w:bottom"), &bottom)

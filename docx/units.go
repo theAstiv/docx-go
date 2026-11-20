@@ -1,5 +1,7 @@
 package docx
 
+import "math"
+
 // Twip is a twentieth of a typographical point (1440 per inch).
 // Used for indents, paragraph spacing, and table widths.
 type Twip int64
@@ -35,27 +37,55 @@ const (
 )
 
 // Inches returns a Twip value for the given number of inches.
-func Inches(n float64) Twip { return Twip(n * twipsPerInch) }
+func Inches(n float64) Twip { return Twip(round64(n * twipsPerInch)) }
 
 // Cm returns a Twip value for the given number of centimetres.
 // Computed from twipsPerInch / 2.54 to stay consistent with Inches.
-func Cm(n float64) Twip { return Twip(n * twipsPerInch / 2.54) }
+func Cm(n float64) Twip { return Twip(round64(n * twipsPerInch / 2.54)) }
 
 // Mm returns a Twip value for the given number of millimetres.
 // Computed from twipsPerInch / 25.4 to stay consistent with Inches.
-func Mm(n float64) Twip { return Twip(n * twipsPerInch / 25.4) }
+func Mm(n float64) Twip { return Twip(round64(n * twipsPerInch / 25.4)) }
 
 // Pt returns a Twip value for the given number of typographical points.
-func Pt(n float64) Twip { return Twip(n * twipsPerPt) }
+func Pt(n float64) Twip { return Twip(round64(n * twipsPerPt)) }
 
 // Px returns a Twip value for the given number of CSS pixels (at 96 dpi).
-func Px(n float64) Twip { return Twip(n * twipsPerPx) }
+func Px(n float64) Twip { return Twip(round64(n * twipsPerPx)) }
 
 // Percent returns a FiftiethPercent value for the given percentage (0–100).
-func Percent(pct float64) FiftiethPercent { return FiftiethPercent(pct * 50) }
+func Percent(pct float64) FiftiethPercent { return FiftiethPercent(round32(pct * 50)) }
 
 // EMUInches returns an EMU value for the given number of inches.
-func EMUInches(n float64) EMU { return EMU(n * emuPerInch) }
+func EMUInches(n float64) EMU { return EMU(round64(n * emuPerInch)) }
+
+// round64 rounds v to the nearest integer, halves away from zero, and
+// saturates at the int64 range (NaN gives 0). A plain conversion truncates
+// (Mm(1) would be 56, not 57) and is undefined out of range.
+func round64(v float64) int64 {
+	switch {
+	case math.IsNaN(v):
+		return 0
+	case v >= math.MaxInt64:
+		return math.MaxInt64
+	case v <= math.MinInt64:
+		return math.MinInt64
+	}
+	return int64(math.Round(v))
+}
+
+// round32 is round64 for the int32-based unit types.
+func round32(v float64) int32 {
+	switch {
+	case math.IsNaN(v):
+		return 0
+	case v >= math.MaxInt32:
+		return math.MaxInt32
+	case v <= math.MinInt32:
+		return math.MinInt32
+	}
+	return int32(math.Round(v))
+}
 
 // ---- LineSpacing240 helpers -------------------------------------------------
 
@@ -69,7 +99,7 @@ func OneAndAHalfLine() LineSpacing240 { return 360 }
 func DoubleLine() LineSpacing240 { return 480 }
 
 // MultipleLine converts a multiplier to LineSpacing240 (e.g. MultipleLine(1.15) → 276).
-func MultipleLine(n float64) LineSpacing240 { return LineSpacing240(n * 240) }
+func MultipleLine(n float64) LineSpacing240 { return LineSpacing240(round32(n * 240)) }
 
 // ---- Conversions ------------------------------------------------------------
 
@@ -83,7 +113,7 @@ func (e EMU) Twip() Twip { return Twip(e / emuPerTwip) }
 func (h HalfPoint) Pt() float64 { return float64(h) / 2 }
 
 // HalfPoints converts a floating-point point size to HalfPoint.
-func HalfPoints(pt float64) HalfPoint { return HalfPoint(pt * 2) }
+func HalfPoints(pt float64) HalfPoint { return HalfPoint(round32(pt * 2)) }
 
 // Pt converts an EighthPoint to floating-point points.
 func (ep EighthPoint) Pt() float64 { return float64(ep) / 8 }
