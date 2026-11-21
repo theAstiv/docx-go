@@ -151,9 +151,9 @@ func textFromRunContent(children []RunContentElement, w *textWriter) {
 		case *CT_InstrText:
 			// Instruction text — always suppressed.
 		case *CT_NoBreakHyphen:
-			w.write("‑") // NON-BREAKING HYPHEN
+			w.write("\u2011") // NON-BREAKING HYPHEN
 		case *CT_SoftHyphen:
-			w.write("­") // SOFT HYPHEN
+			w.write("\u00ad") // SOFT HYPHEN
 		case *CT_Sym:
 			// Symbol glyphs require font+char resolution; contribute nothing for now.
 		case *RawRunContent:

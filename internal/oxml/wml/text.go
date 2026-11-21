@@ -224,9 +224,9 @@ func rawRunText(r *raw.RawElement, w *textWriter) {
 		case ns.Qn("w:br"), ns.Qn("w:cr"):
 			w.write("\n")
 		case ns.Qn("w:noBreakHyphen"):
-			w.write("‑") // NON-BREAKING HYPHEN
+			w.write("\u2011") // NON-BREAKING HYPHEN
 		case ns.Qn("w:softHyphen"):
-			w.write("­") // SOFT HYPHEN
+			w.write("\u00ad") // SOFT HYPHEN
 		case ns.Qn("w:fldChar"):
 			w.fldChar(rawAttr(c, "fldCharType"))
 		}

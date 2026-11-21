@@ -9,7 +9,9 @@ import (
 
 func fc(typ string) string { return `<w:r><w:fldChar w:fldCharType="` + typ + `"/></w:r>` }
 
-func instr(s string) string { return `<w:r><w:instrText xml:space="preserve">` + s + `</w:instrText></w:r>` }
+func instr(s string) string {
+	return `<w:r><w:instrText xml:space="preserve">` + s + `</w:instrText></w:r>`
+}
 
 func run(s string) string { return `<w:r><w:t xml:space="preserve">` + s + `</w:t></w:r>` }
 
