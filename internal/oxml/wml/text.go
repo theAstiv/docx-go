@@ -138,9 +138,9 @@ func rawBlockSegments(re *raw.RawElement, segs []string) []string {
 	case rawSkip[re.QName]:
 		return segs
 	case re.QName == ns.Qn("w:p"):
-		var sb strings.Builder
-		rawInlineText(re.Children, &sb, false)
-		return append(segs, sb.String())
+		var w textWriter
+		rawInlineText(re.Children, &w)
+		return append(segs, w.sb.String())
 	case re.QName == ns.Qn("w:tbl"):
 		var rows []string
 		for _, c := range rawElems(re) {
@@ -194,62 +194,43 @@ func rawCells(re *raw.RawElement, cells []string) []string {
 
 // rawInlineText writes the text of raw paragraph content (runs, and
 // containers such as w:ins, w:smartTag, w:sdt and w:fldSimple holding
-// them). It follows textFromRunContent: tabs as \t, breaks as \n, field
-// results included and instructions excluded. inField is true between a
-// field's begin and separate characters; the updated state is returned.
-func rawInlineText(children []xml.Token, sb *strings.Builder, inField bool) bool {
+// them) into w, with the rules of textFromRunContent.
+func rawInlineText(children []xml.Token, w *textWriter) {
 	for _, k := range children {
 		el, ok := k.(*raw.RawElement)
 		if !ok || rawSkip[el.QName] {
 			continue
 		}
 		if el.QName == ns.Qn("w:r") {
-			inField = rawRunText(el, sb, inField)
+			rawRunText(el, w)
 			continue
 		}
-		inField = rawInlineText(el.Children, sb, inField)
+		rawInlineText(el.Children, w)
 	}
-	return inField
 }
 
-// rawRunText writes the text of a raw w:r.
-func rawRunText(r *raw.RawElement, sb *strings.Builder, inField bool) bool {
+// rawRunText writes the text of a raw w:r into w.
+func rawRunText(r *raw.RawElement, w *textWriter) {
 	for _, c := range rawElems(r) {
 		switch c.QName {
 		case ns.Qn("w:t"):
-			if !inField {
-				for _, tok := range c.Children {
-					if cd, ok := tok.(xml.CharData); ok {
-						sb.Write(cd)
-					}
+			for _, tok := range c.Children {
+				if cd, ok := tok.(xml.CharData); ok {
+					w.write(string(cd))
 				}
 			}
 		case ns.Qn("w:tab"):
-			if !inField {
-				sb.WriteByte('\t')
-			}
+			w.write("\t")
 		case ns.Qn("w:br"), ns.Qn("w:cr"):
-			if !inField {
-				sb.WriteByte('\n')
-			}
+			w.write("\n")
 		case ns.Qn("w:noBreakHyphen"):
-			if !inField {
-				sb.WriteRune('‑') // U+2011 NON-BREAKING HYPHEN
-			}
+			w.write("‑") // NON-BREAKING HYPHEN
 		case ns.Qn("w:softHyphen"):
-			if !inField {
-				sb.WriteRune('­') // U+00AD SOFT HYPHEN
-			}
+			w.write("­") // SOFT HYPHEN
 		case ns.Qn("w:fldChar"):
-			switch rawAttr(c, "fldCharType") {
-			case "begin":
-				inField = true
-			case "separate":
-				inField = false
-			}
+			w.fldChar(rawAttr(c, "fldCharType"))
 		}
 	}
-	return inField
 }
 
 // rawAttr returns the value of the attribute with the given local name.

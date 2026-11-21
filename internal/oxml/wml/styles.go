@@ -250,7 +250,12 @@ func (s *CT_Style) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 				if err := re.UnmarshalXML(d, t); err != nil {
 					return err
 				}
-				if pprSeen {
+				// Known children go to their side of w:pPr/w:rPr by schema
+				// position, whatever order the source used; a table style
+				// without w:pPr/w:rPr would otherwise write w:tblPr before
+				// an w:rPr set later. Unknown children keep their place.
+				_, pre := styleChildSeqPos[t.Name]
+				if styleChildAfterRPr[t.Name] || (pprSeen && !pre) {
 					s.rawRestPost = append(s.rawRestPost, re)
 				} else {
 					s.rawRestPre = append(s.rawRestPre, re)
@@ -269,17 +274,30 @@ func (s *CT_Style) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 // styleChildSeqPos maps w:style child names that precede w:pPr to their
 // xs:sequence position. Unknown names sort to the tail of rawRestPre.
 var styleChildSeqPos = map[xml.Name]int{
-	ns.Qn("w:aliases"):        1,
-	ns.Qn("w:basedOn"):        2,
-	ns.Qn("w:next"):           3,
-	ns.Qn("w:link"):           4,
-	ns.Qn("w:autoRedefine"):   5,
-	ns.Qn("w:hidden"):         6,
-	ns.Qn("w:uiPriority"):     7,
-	ns.Qn("w:semiHidden"):     8,
-	ns.Qn("w:unhideWhenUsed"): 9,
-	ns.Qn("w:qFormat"):        10,
-	ns.Qn("w:locked"):         11,
+	ns.Qn("w:aliases"):         1,
+	ns.Qn("w:basedOn"):         2,
+	ns.Qn("w:next"):            3,
+	ns.Qn("w:link"):            4,
+	ns.Qn("w:autoRedefine"):    5,
+	ns.Qn("w:hidden"):          6,
+	ns.Qn("w:uiPriority"):      7,
+	ns.Qn("w:semiHidden"):      8,
+	ns.Qn("w:unhideWhenUsed"):  9,
+	ns.Qn("w:qFormat"):         10,
+	ns.Qn("w:locked"):          11,
+	ns.Qn("w:personal"):        12,
+	ns.Qn("w:personalCompose"): 13,
+	ns.Qn("w:personalReply"):   14,
+	ns.Qn("w:rsid"):            15,
+}
+
+// styleChildAfterRPr names the w:style children that follow w:rPr in the
+// xs:sequence.
+var styleChildAfterRPr = map[xml.Name]bool{
+	ns.Qn("w:tblPr"):      true,
+	ns.Qn("w:trPr"):       true,
+	ns.Qn("w:tcPr"):       true,
+	ns.Qn("w:tblStylePr"): true,
 }
 
 // setPreStr sets (or, for "", removes) a single-w:val child of rawRestPre,

@@ -109,78 +109,102 @@ func (p *CT_P) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 // w:smartTag, inline w:sdt, w:fldSimple and w:customXml is included; tracked
 // deletions (w:del, w:moveFrom) are excluded (see text.go).
 func (p *CT_P) Text() string {
-	var sb strings.Builder
-	textFromInlines(p.Children, &sb, false)
-	return sb.String()
+	var w textWriter
+	textFromInlines(p.Children, &w)
+	return w.sb.String()
 }
 
-// textFromInlines recursively collects visible text from a run of InlineElements.
-// inField tracks whether we're between w:fldChar begin and separate (instruction phase).
-func textFromInlines(children []InlineElement, sb *strings.Builder, inField bool) bool {
+// textFromInlines collects the visible text of inline content into w.
+func textFromInlines(children []InlineElement, w *textWriter) {
 	for _, child := range children {
 		switch c := child.(type) {
 		case *CT_R:
-			inField = textFromRunContent(c.Children, sb, inField)
+			textFromRunContent(c.Children, w)
 		case *CT_Hyperlink:
-			inField = textFromInlines(c.Children, sb, inField)
+			textFromInlines(c.Children, w)
 		case *RawInline:
 			if c.E != nil && !rawSkip[c.E.QName] {
 				if c.E.QName == ns.Qn("w:r") {
-					inField = rawRunText(c.E, sb, inField)
+					rawRunText(c.E, w)
 				} else {
-					inField = rawInlineText(c.E.Children, sb, inField)
+					rawInlineText(c.E.Children, w)
 				}
 			}
 		case *CT_BookmarkStart, *CT_BookmarkEnd:
 			// No visible text.
 		}
 	}
-	return inField
 }
 
-// textFromRunContent collects text from run inner content.
-func textFromRunContent(children []RunContentElement, sb *strings.Builder, inField bool) bool {
+// textFromRunContent collects the visible text of run inner content into w.
+func textFromRunContent(children []RunContentElement, w *textWriter) {
 	for _, child := range children {
 		switch c := child.(type) {
 		case *CT_Text:
-			if !inField {
-				sb.WriteString(c.Content)
-			}
+			w.write(c.Content)
 		case *CT_Tab:
-			if !inField {
-				sb.WriteByte('\t')
-			}
+			w.write("\t")
 		case *CT_Br, *CT_Cr:
-			if !inField {
-				sb.WriteByte('\n')
-			}
+			w.write("\n")
 		case *CT_FldChar:
-			switch c.FldCharType {
-			case "begin":
-				inField = true
-			case "separate":
-				// Switch from instruction phase to result phase — stop suppressing text.
-				inField = false
-			case "end":
-				// Field result phase is done.
-			}
+			w.fldChar(c.FldCharType)
 		case *CT_InstrText:
 			// Instruction text — always suppressed.
 		case *CT_NoBreakHyphen:
-			if !inField {
-				sb.WriteRune('‑') // U+2011 NON-BREAKING HYPHEN
-			}
+			w.write("‑") // NON-BREAKING HYPHEN
 		case *CT_SoftHyphen:
-			if !inField {
-				sb.WriteRune('­') // U+00AD SOFT HYPHEN
-			}
+			w.write("­") // SOFT HYPHEN
 		case *CT_Sym:
 			// Symbol glyphs require font+char resolution; contribute nothing for now.
 		case *RawRunContent:
 			// Unknown content — contribute nothing.
 		}
 	}
-	return inField
+}
+
+// textWriter collects visible text while following complex fields. It
+// keeps a stack of the fields open at the current point; each entry is
+// true while that field is still in its instruction (before its separate
+// character). Text shows only when no open field is in its instruction:
+// a field result shows, a field nested in another field's instruction
+// (IF { MERGEFIELD … }) does not, and a field without a separate (XE, TC)
+// hides nothing after its end.
+type textWriter struct {
+	sb    strings.Builder
+	instr []bool
+}
+
+func (w *textWriter) visible() bool {
+	for _, in := range w.instr {
+		if in {
+			return false
+		}
+	}
+	return true
+}
+
+func (w *textWriter) write(s string) {
+	if w.visible() {
+		w.sb.WriteString(s)
+	}
+}
+
+// fldChar applies a w:fldChar of the given type. Unbalanced characters (a
+// separate or end with no open field) are ignored.
+func (w *textWriter) fldChar(typ string) {
+	n := len(w.instr)
+	switch typ {
+	case "begin":
+		w.instr = append(w.instr, true)
+	case "separate":
+		if n > 0 {
+			w.instr[n-1] = false
+		}
+	case "end":
+		if n > 0 {
+			w.instr = w.instr[:n-1]
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -319,9 +343,9 @@ func (h *CT_Hyperlink) SetHistory(b *bool) {
 // Text returns the visible text inside the hyperlink, using the same rules
 // as CT_P.Text.
 func (h *CT_Hyperlink) Text() string {
-	var sb strings.Builder
-	textFromInlines(h.Children, &sb, false)
-	return sb.String()
+	var w textWriter
+	textFromInlines(h.Children, &w)
+	return w.sb.String()
 }
 
 // ---------------------------------------------------------------------------
