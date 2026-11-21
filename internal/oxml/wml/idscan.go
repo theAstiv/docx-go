@@ -23,6 +23,9 @@ type IDScan struct {
 	DocPr []int64
 	// Bookmarks holds every w:bookmarkStart.
 	Bookmarks []BookmarkRef
+	// StoreItemIDs holds the w:storeItemID of every w:dataBinding: the
+	// custom XML parts (and document properties) content controls show.
+	StoreItemIDs []string
 }
 
 // DocPrAllocator returns a function that hands out wp:docPr ids, one per
@@ -177,6 +180,10 @@ func scanRaw(re *raw.RawElement, s *IDScan) {
 			ref.ID = *n
 		}
 		s.Bookmarks = append(s.Bookmarks, *ref)
+	case ns.Qn("w:dataBinding"), ns.Qn("w15:dataBinding"):
+		if id := rawAttr(re, "storeItemID"); id != "" {
+			s.StoreItemIDs = append(s.StoreItemIDs, id)
+		}
 	}
 	for _, k := range rawKids(re) {
 		scanRaw(k, s)

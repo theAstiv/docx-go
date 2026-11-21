@@ -354,6 +354,13 @@ func (en *engine) expandBlockRange(blocks []wml.BlockElement, locs []Location, i
 		return en.expandRange(blocks[sp.els+1:j], locs[sp.els+1:j], sc)
 	}
 	if en.check {
+		markers := []*wml.CT_P{blockParagraph(blocks[i]), blockParagraph(blocks[j])}
+		var elseBlocks []wml.BlockElement
+		if sp.hasElse() {
+			markers = append(markers, blockParagraph(blocks[sp.els]))
+			elseBlocks = blocks[sp.els+1 : j]
+		}
+		en.checkBlockDrop([][]wml.BlockElement{body, elseBlocks}, markers, locs[i], open)
 		// Visit both branches; a loop body once, in the loop's scope so
 		// ".field" tags are not reported as outside a loop.
 		inner := sc
@@ -490,6 +497,11 @@ func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k
 		return en.expandRows(rows[sp.els:j+1], rlocs[sp.els:j+1], sc)
 	}
 	if en.check {
+		var elseRows []wml.TableRowElement
+		if sp.hasElse() {
+			elseRows = rows[sp.els : j+1]
+		}
+		en.checkRowDrop([][]wml.TableRowElement{body, elseRows}, rlocs[k], open)
 		inner := sc
 		if open.block == "each" {
 			inner = sc.push(nil, open.path+"[]")
@@ -541,6 +553,12 @@ func (en *engine) fillRow(row *wml.CT_Tr, sc *scope, rloc Location) {
 		}
 		nc++
 	}
+}
+
+// blockParagraph returns b as a paragraph, or nil.
+func blockParagraph(b wml.BlockElement) *wml.CT_P {
+	p, _ := b.(*wml.CT_P)
+	return p
 }
 
 func endsWithParagraph(blocks []wml.BlockElement) bool {

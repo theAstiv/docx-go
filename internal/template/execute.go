@@ -36,6 +36,10 @@ type Story struct {
 	Part string
 	// Blocks is the part's block list. Execute replaces it on success.
 	Blocks *[]wml.BlockElement
+	// FinalParagraph is set for parts that must end with a w:p (headers
+	// and footers): if ranges remove their last paragraph, an empty one is
+	// added.
+	FinalParagraph bool
 }
 
 // Execute fills the stories from data.
@@ -88,9 +92,18 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 	if err != nil {
 		return nil, nil, err
 	}
+	before := make([]storyAnchors, len(work))
+	for i, blocks := range work {
+		before[i] = anchorsOf(blocks)
+	}
 	root := &scope{root: data}
 	for i, s := range stories {
-		work[i] = en.expandBlocks(work[i], root, Location{Part: s.Part})
+		loc := Location{Part: s.Part}
+		work[i] = en.expandBlocks(work[i], root, loc)
+		en.cleanStoryAnchors(&work[i], before[i], loc)
+		if s.FinalParagraph && !endsWithParagraph(work[i]) {
+			work[i] = append(work[i], emptyParagraph())
+		}
 	}
 	en.warnRemovedReferences(work)
 	filled := en.fillXMLParts(boundParts, root)

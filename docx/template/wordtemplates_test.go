@@ -248,3 +248,88 @@ func sortedKeys(m map[string][]byte) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// A custom XML item no content control binds (add-in or SharePoint data) is
+// not template text: its "{{" neither fails Execute nor gets filled.
+func TestWordTemplates_UnboundCustomXMLUntouched(t *testing.T) {
+	src, err := os.ReadFile("../../testdata/fixtures/word/template_cover_sdt.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const item = `<?xml version="1.0" encoding="UTF-8"?><addin><cfg>{{notATag}} {{bad</cfg></addin>`
+	const props = `<?xml version="1.0" encoding="UTF-8"?><ds:datastoreItem ds:itemID="{11111111-2222-3333-4444-555555555555}" ` +
+		`xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"/>`
+	const rels = `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+		`<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" Target="itemProps9.xml"/></Relationships>`
+	src = addZipEntries(t, src, map[string]string{
+		"customXml/item9.xml":            item,
+		"customXml/itemProps9.xml":       props,
+		"customXml/_rels/item9.xml.rels": rels,
+	})
+	doc, err := docx.OpenBytes(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := map[string]any{
+		"report":     map[string]any{"title": "T"},
+		"client":     map[string]any{"name": "C"},
+		"author":     map[string]any{"name": "A"},
+		"assessment": map[string]any{"date": "D"},
+	}
+	if _, err := template.Execute(doc, data, template.Options{}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := doc.Save(&buf); err != nil {
+		t.Fatal(err)
+	}
+	got := zipParts(t, buf.Bytes())
+	if string(got["customXml/item9.xml"]) != item {
+		t.Errorf("unbound item changed:\n%s", got["customXml/item9.xml"])
+	}
+	if strings.Contains(string(got["customXml/item1.xml"]), "{{") {
+		t.Errorf("bound item not filled:\n%s", got["customXml/item1.xml"])
+	}
+}
+
+// addZipEntries returns data with extra entries added.
+func addZipEntries(t *testing.T, data []byte, extra map[string]string) []byte {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	zw := zip.NewWriter(&out)
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = rc.Close()
+		w, err := zw.Create(f.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, body := range extra {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}

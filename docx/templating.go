@@ -103,10 +103,10 @@ func templateStories(d any) []itemplate.Story {
 		}
 	}
 	for _, h := range doc.pkg.UniqueHeaders() {
-		out = append(out, itemplate.Story{Part: h.Path(), Blocks: &h.Part.CT().Children})
+		out = append(out, itemplate.Story{Part: h.Path(), Blocks: &h.Part.CT().Children, FinalParagraph: true})
 	}
 	for _, f := range doc.pkg.UniqueFooters() {
-		out = append(out, itemplate.Story{Part: f.Path(), Blocks: &f.Part.CT().Children})
+		out = append(out, itemplate.Story{Part: f.Path(), Blocks: &f.Part.CT().Children, FinalParagraph: true})
 	}
 	return out
 }
