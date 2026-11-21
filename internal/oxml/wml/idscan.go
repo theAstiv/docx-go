@@ -2,6 +2,7 @@ package wml
 
 import (
 	"encoding/xml"
+	"math"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/raw"
@@ -32,14 +33,46 @@ type IDScan struct {
 // call, all above every id in s. Scan once, then allocate many: rescanning
 // every story per new drawing is quadratic in a loop that adds hundreds.
 func (s *IDScan) DocPrAllocator() func() int64 {
-	next := int64(1)
-	for _, id := range s.DocPr {
+	return NewIDAllocator(s.DocPr, 1, MaxDocPrID)
+}
+
+// MaxDocPrID is the largest wp:docPr id: the attribute is xsd:unsignedInt.
+const MaxDocPrID = math.MaxUint32
+
+// MaxBookmarkID is the largest bookmark id docx-go hands out: w:id is
+// ST_DecimalNumber, which Word reads as a 32-bit signed integer.
+const MaxBookmarkID = math.MaxInt32
+
+// NewIDAllocator returns a function that hands out ids in [lo, hi] that are
+// not in used, one per call: above the largest used id while that fits,
+// then the smallest free ones. Ids outside [lo, hi] are ignored, so a
+// document holding an id at the top of the range (or beyond it) does not
+// make the allocator overflow or leave the range. Once every id in the
+// range is taken it returns hi+1, which no real document reaches.
+func NewIDAllocator(used []int64, lo, hi int64) func() int64 {
+	taken := make(map[int64]bool, len(used))
+	next := lo
+	for _, id := range used {
+		if id < lo || id > hi {
+			continue
+		}
+		taken[id] = true
 		if id >= next {
 			next = id + 1
 		}
 	}
+	wrapped := false
 	return func() int64 {
+		if next > hi && !wrapped {
+			wrapped, next = true, lo
+		}
+		if wrapped {
+			for next <= hi && taken[next] {
+				next++
+			}
+		}
 		id := next
+		taken[id] = true
 		next++
 		return id
 	}

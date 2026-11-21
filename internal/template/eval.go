@@ -97,7 +97,19 @@ func format(v any) (string, bool) {
 	case json.Number:
 		return x.String(), true
 	case fmt.Stringer:
-		return x.String(), true
+		return stringerText(x)
 	}
 	return "", false
+}
+
+// stringerText calls s.String. A caller's String method may panic (a nil
+// pointer whose method does not expect one); that value has no text form
+// rather than crashing Execute.
+func stringerText(s fmt.Stringer) (text string, ok bool) {
+	defer func() {
+		if recover() != nil {
+			text, ok = "", false
+		}
+	}()
+	return s.String(), true
 }

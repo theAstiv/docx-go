@@ -134,3 +134,31 @@ func TestFinalParagraph_EmptiedHeader(t *testing.T) {
 		t.Errorf("header block is %T, want *wml.CT_P", b.Children[0])
 	}
 }
+
+// Nested loops stop at the copy limit with one ErrOutputLimit issue; a
+// negative limit means none.
+func TestMaxCopies(t *testing.T) {
+	inner := tp("{{#each a}}") + tp("{{#each b}}") + tp("{{#each c}}") + tp("x") + tp("{{/each}}") + tp("{{/each}}") + tp("{{/each}}")
+	list := make([]any, 60)
+	for i := range list {
+		list[i] = i
+	}
+	data := map[string]any{"a": list, "b": list, "c": list} // 216,000 paragraphs
+	b := bodyOf(t, inner)
+	_, err := Execute([]Story{{Part: "word/document.xml", Blocks: &b.Children}}, data, Options{})
+	if n := issuesWith(err, ErrOutputLimit); n != 1 {
+		t.Fatalf("ErrOutputLimit issues = %d (err %v), want 1", n, err)
+	}
+	b = bodyOf(t, inner)
+	small := map[string]any{"a": list[:5], "b": list[:5], "c": list[:5]}
+	if _, err := Execute([]Story{{Part: "word/document.xml", Blocks: &b.Children}}, small, Options{MaxCopies: 50}); issuesWith(err, ErrOutputLimit) != 1 {
+		t.Errorf("MaxCopies 50: err = %v, want ErrOutputLimit", err)
+	}
+	b = bodyOf(t, inner)
+	if _, err := Execute([]Story{{Part: "word/document.xml", Blocks: &b.Children}}, small, Options{MaxCopies: -1}); err != nil {
+		t.Errorf("MaxCopies -1: %v", err)
+	}
+	if len(b.Children) != 125 {
+		t.Errorf("%d paragraphs, want 125", len(b.Children))
+	}
+}

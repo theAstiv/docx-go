@@ -39,6 +39,9 @@ var (
 	// text given to number). An error in Strict mode, a warning (and empty
 	// text) in Lenient mode.
 	ErrFormat = errors.New("formatter failed")
+	// ErrOutputLimit: {{#each}} loops would copy more elements than
+	// Options.MaxCopies allows. It fails in both modes.
+	ErrOutputLimit = errors.New("output limit exceeded")
 )
 
 // Severity says whether an Issue stops execution.

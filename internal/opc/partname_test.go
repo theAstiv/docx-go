@@ -160,3 +160,18 @@ func TestContentTypes_CaseInsensitive(t *testing.T) {
 		t.Errorf("ContentTypeFor(.PNG) = %q", got)
 	}
 }
+
+// A huge numeric rId neither overflows the counter nor causes a duplicate.
+func TestRels_HugeRID(t *testing.T) {
+	r := &Rels{}
+	r.AddWithID("rId9223372036854775807", RelTypeImage, "a.png", "")
+	r.AddWithID("rId0", RelTypeImage, "b.png", "")
+	seen := map[string]bool{"rId9223372036854775807": true, "rId0": true}
+	for range 3 {
+		id := r.Add(RelTypeImage, "c.png", "")
+		if seen[id] || strings.Contains(id, "-") {
+			t.Fatalf("Add returned %q", id)
+		}
+		seen[id] = true
+	}
+}

@@ -73,13 +73,8 @@ func (s *story) freshScan() *wml.IDScan {
 }
 
 // nextDocPrID returns an id one above the largest wp:docPr id in any story, or
-// 1 for a document without drawings. Drawing ids must be unique document-wide.
+// 1 for a document without drawings; a free lower id when that would leave
+// the xsd:unsignedInt range. Drawing ids must be unique document-wide.
 func (s *story) nextDocPrID() int64 {
-	next := int64(1)
-	for _, id := range s.scan().DocPr {
-		if id >= next {
-			next = id + 1
-		}
-	}
-	return next
+	return s.scan().DocPrAllocator()()
 }

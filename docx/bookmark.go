@@ -91,15 +91,15 @@ func (s *story) hasBookmarkName(name string) bool {
 }
 
 // nextBookmarkID returns an id one above the largest in use, or 0 when the
-// document has no bookmarks. w:id must be unique across all stories.
+// document has no bookmarks; a free lower id when that would pass
+// wml.MaxBookmarkID. w:id must be unique across all stories.
 func (s *story) nextBookmarkID() int64 {
-	next := int64(0)
-	for _, b := range s.bookmarkStarts() {
-		if b.ID >= next {
-			next = b.ID + 1
-		}
+	starts := s.bookmarkStarts()
+	used := make([]int64, len(starts))
+	for i, b := range starts {
+		used[i] = b.ID
 	}
-	return next
+	return wml.NewIDAllocator(used, 0, wml.MaxBookmarkID)()
 }
 
 // AddBookmark wraps the whole paragraph in a bookmark with the given name.

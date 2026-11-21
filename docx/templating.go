@@ -46,7 +46,8 @@ func init() {
 }
 
 // templateHyperlink adds a link for a template rich-text run, with the
-// rules Paragraph.AddHyperlink applies: a safe absolute URL, the
+// rules Paragraph.AddHyperlink applies: an absolute http:, https: or
+// mailto: URL (data never gets AllowAnyScheme), the
 // relationship on the part holding the link, the document's own Hyperlink
 // style.
 func templateHyperlink(d any, part, url string) (relID, styleID string, err error) {
@@ -54,7 +55,7 @@ func templateHyperlink(d any, part, url string) (relID, styleID string, err erro
 	if !ok || doc == nil || doc.pkg == nil {
 		return "", "", errors.New("docx: no document to add the link to")
 	}
-	if err := validateHyperlinkURL(url); err != nil {
+	if err := validateHyperlinkURL(url, false); err != nil {
 		return "", "", fmt.Errorf("%w: %w", itemplate.ErrUnsupportedValue, err)
 	}
 	relID = doc.pkg.AddExternalHyperlink(part, url)

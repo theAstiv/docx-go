@@ -198,3 +198,17 @@ func BenchmarkClone_Table50(b *testing.B) {
 		}
 	}
 }
+
+// Ids stay in range: above the largest while that fits, then the gaps.
+func TestNewIDAllocator_Bounds(t *testing.T) {
+	next := wml.NewIDAllocator([]int64{3, wml.MaxDocPrID, 1 << 40, -5}, 1, wml.MaxDocPrID)
+	for _, want := range []int64{1, 2, 4, 5} {
+		if got := next(); got != want {
+			t.Fatalf("next() = %d, want %d", got, want)
+		}
+	}
+	next = wml.NewIDAllocator([]int64{7, 41}, 1, wml.MaxDocPrID)
+	if got := next(); got != 42 {
+		t.Errorf("next() = %d, want 42", got)
+	}
+}

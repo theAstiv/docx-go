@@ -386,8 +386,10 @@ func (en *engine) expandBlockRange(blocks []wml.BlockElement, locs []Location, i
 	}
 	copies := copiesOf(en, body, len(list), open, locs[i])
 	var out []wml.BlockElement
-	for k, item := range list {
-		out = append(out, en.expandRange(copies[k], bodyLocs, sc.push(item, itemName(sc, open.path, k)))...)
+	// copies is shorter than list when copying stopped (an error, or the
+	// output limit); execution fails then, and the rest is not filled.
+	for k, cp := range copies {
+		out = append(out, en.expandRange(cp, bodyLocs, sc.push(list[k], itemName(sc, open.path, k)))...)
 	}
 	return out
 }
@@ -525,8 +527,8 @@ func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k
 	}
 	copies := copiesOf(en, body, len(list), open, rlocs[k])
 	var out []wml.TableRowElement
-	for n, item := range list {
-		out = append(out, en.expandRows(copies[n], bodyLocs, sc.push(item, itemName(sc, open.path, n)))...)
+	for n, cp := range copies { // shorter than list after a failure, as for blocks
+		out = append(out, en.expandRows(cp, bodyLocs, sc.push(list[n], itemName(sc, open.path, n)))...)
 	}
 	return out
 }
@@ -810,6 +812,9 @@ func copiesOf[T wml.Cloneable](en *engine, els []T, n int, open tag, loc Locatio
 	if n == 0 {
 		return nil
 	}
+	if !en.spendCopies((n-1)*len(els), loc, open) {
+		return [][]T{els}
+	}
 	fx := &wml.CloneFixup{
 		StripParaIDs:       true,
 		DropBookmarks:      true,
@@ -841,6 +846,26 @@ func copiesOf[T wml.Cloneable](en *engine, els []T, n int, open tag, loc Locatio
 		en.warn(loc, open, "footnote or endnote references were repeated; every copy shows the same note")
 	}
 	return out
+}
+
+// spendCopies takes n copies from the run's budget. It reports false, once
+// with an ErrOutputLimit issue, when the budget does not cover them.
+func (en *engine) spendCopies(n int, loc Location, open tag) bool {
+	if en.copiesLeft < 0 {
+		return true
+	}
+	if n > en.copiesLeft {
+		if !en.overLimit {
+			en.overLimit = true
+			en.fail(loc, open, ErrOutputLimit, fmt.Sprintf(
+				"the loops would copy more than %d paragraphs, tables and rows; raise Options.MaxCopies if the output is meant to be this large",
+				copyBudget(en.opts.MaxCopies)))
+		}
+		en.copiesLeft = 0
+		return false
+	}
+	en.copiesLeft -= n
+	return true
 }
 
 // itemName names one loop item in messages: "threats[3]", or for a relative

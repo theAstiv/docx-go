@@ -27,7 +27,15 @@ type Options struct {
 	Adapt func(any) any
 	// Hooks do what needs the package, such as storing images.
 	Hooks Hooks
+	// MaxCopies bounds the paragraphs, tables and rows {{#each}} loops may
+	// copy in one run; nested loops multiply, so a small template and
+	// moderate data can otherwise produce millions. 0 means
+	// DefaultMaxCopies; a negative value means no limit.
+	MaxCopies int
 }
+
+// DefaultMaxCopies is the copy limit when Options.MaxCopies is 0.
+const DefaultMaxCopies = 100_000
 
 // Story is one part's block content: the document body, a header or a
 // footer.
@@ -64,7 +72,7 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 	if _, ok := opts.Funcs[defaultName]; ok {
 		return nil, nil, errDefaultOverride
 	}
-	en := &engine{opts: opts, skip: skipSet{}, fmts: formatterSet{funcs: opts.Funcs}}
+	en := &engine{opts: opts, skip: skipSet{}, fmts: formatterSet{funcs: opts.Funcs}, copiesLeft: copyBudget(opts.MaxCopies)}
 	work := make([][]wml.BlockElement, len(stories))
 	for i, s := range stories {
 		blocks, err := cloneBlocks(*s.Blocks)
@@ -119,6 +127,17 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 		*s.Blocks = work[i]
 	}
 	return filled, warnings, nil
+}
+
+// copyBudget returns the number of copies a run may make; -1 for no limit.
+func copyBudget(max int) int {
+	switch {
+	case max == 0:
+		return DefaultMaxCopies
+	case max < 0:
+		return -1
+	}
+	return max
 }
 
 // checkStructure reports the template errors that do not depend on the
