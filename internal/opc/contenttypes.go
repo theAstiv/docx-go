@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 const contentTypesName = "[Content_Types].xml"
@@ -135,10 +136,13 @@ func (ct *ContentTypes) marshal() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// SetOverride adds or replaces the Override entry for partName.
+// SetOverride adds or replaces the Override entry for partName. Part names
+// and extensions compare ignoring ASCII case (ECMA-376 Part 2, 9.1.1.1 and
+// 10.1.2.2), so a case variant replaces the entry rather than adding a
+// second one.
 func (ct *ContentTypes) SetOverride(partName, contentType string) {
 	for i, o := range ct.Overrides {
-		if o.PartName == partName {
+		if strings.EqualFold(o.PartName, partName) {
 			ct.Overrides[i].ContentType = contentType
 			return
 		}
@@ -149,7 +153,7 @@ func (ct *ContentTypes) SetOverride(partName, contentType string) {
 // SetDefault adds or replaces the Default entry for extension.
 func (ct *ContentTypes) SetDefault(extension, contentType string) {
 	for i, d := range ct.Defaults {
-		if d.Extension == extension {
+		if strings.EqualFold(d.Extension, extension) {
 			ct.Defaults[i].ContentType = contentType
 			return
 		}
@@ -161,21 +165,21 @@ func (ct *ContentTypes) SetDefault(extension, contentType string) {
 // Override first, then Default by extension).  Returns "" if not found.
 func (ct *ContentTypes) ContentTypeFor(partName string) string {
 	for _, o := range ct.Overrides {
-		if o.PartName == partName {
+		if strings.EqualFold(o.PartName, partName) {
 			return o.ContentType
 		}
 	}
 	// Fall back to Default by extension.
 	ext := extension(partName)
 	for _, d := range ct.Defaults {
-		if d.Extension == ext {
+		if strings.EqualFold(d.Extension, ext) {
 			return d.ContentType
 		}
 	}
 	return ""
 }
 
-// extension extracts the lower-case file extension from a part name.
+// extension extracts the file extension from a part name.
 func extension(name string) string {
 	for i := len(name) - 1; i >= 0; i-- {
 		if name[i] == '.' {

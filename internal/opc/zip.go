@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -48,7 +49,22 @@ func readZip(r io.ReaderAt, size int64, lim limits) (map[string][]byte, error) {
 		}
 	}
 	parts := make(map[string][]byte, len(zr.File))
+	folded := make(map[string]string, len(zr.File))
 	for _, f := range zr.File {
+		// A folder entry ("word/") is not a part; some ZIP tools add them.
+		if strings.HasSuffix(f.Name, "/") && f.UncompressedSize64 == 0 {
+			continue
+		}
+		if err := checkPartName(f.Name); err != nil {
+			return nil, err
+		}
+		// Part names compare ignoring ASCII case; two entries for one part
+		// would leave which one wins to map order.
+		key := strings.ToLower(f.Name)
+		if prev, dup := folded[key]; dup {
+			return nil, fmt.Errorf("%w: %q and %q name the same part", ErrPartName, prev, f.Name)
+		}
+		folded[key] = f.Name
 		rc, err := f.Open()
 		if err != nil {
 			return nil, fmt.Errorf("opc/zip: open %s: %w", f.Name, err)

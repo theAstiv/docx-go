@@ -271,6 +271,9 @@ func TestPhase3a_Fixtures_StructuralRoundTrip(t *testing.T) {
 			before, after := readZip(t, orig), readZip(t, buf.Bytes())
 
 			for name, b := range before {
+				if strings.HasSuffix(name, "/") {
+					continue // a ZIP folder entry, not a part
+				}
 				got, ok := after[name]
 				if !ok {
 					t.Errorf("part %s missing after save", name)
