@@ -30,7 +30,8 @@ POI_COMMIT="c94ee8ad9096bdb8cf8e5e59d8d12432e950dbf3"
 verify() {
     local rel="$1"
     local want got
-    want="$(awk -v f="$rel" '$2 == f || $2 == "*" f { print $1 }' "$SUMS")"
+    # The sums file may have CRLF line ends in a Windows checkout.
+    want="$(awk -v f="$rel" '{ sub(/\r$/, "") } $2 == f || $2 == "*" f { print $1 }' "$SUMS")"
     if [[ -z "$want" ]]; then
         echo "  no checksum for $rel in $SUMS" >&2
         return 1

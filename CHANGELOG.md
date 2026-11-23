@@ -18,13 +18,32 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 ### Added
 
 - `Paragraph.AddSectionBreak` and `Paragraph.SectionBreak` return a `Section` that can set its own headers and footers. Before, only `Document.LastSection` could.
+- `HyperlinkOptions.AllowAnyScheme` accepts link schemes besides `http:`, `https:` and `mailto:` (see Breaking). It never accepts `javascript:`, `vbscript:` or `data:`.
+- `ErrInvalidPartName`: `Open` refuses a file with an entry name no part may have (absolute, with a backslash, or with an empty, `.` or `..` segment), or with two entries for one part, exactly or ignoring case.
+- Templating: `Options.MaxCopies` bounds the paragraphs, tables and rows `{{#each}}` may copy in one `Execute` (default `DefaultMaxCopies`, 100,000; negative for no limit). Beyond it, `Execute` fails with `ErrOutputLimit` in both modes.
 
 ### Fixed
 
 - `RunFont.SetColor` removes a theme colour (`w:themeColor`, `themeTint`, `themeShade`) from the run. Word shows a theme colour in place of the hex value, so a colour set on a run Word had given a theme colour did not show in Word.
+- `RunFont` and `ParagraphFormat` setters called with their clearing value (`nil`, `""`) no longer add an empty `w:rPr` / `w:pPr` to a run or paragraph that has none.
+- `Cell`, `Header` and `Footer.SetText` clean up like `Remove`: the other end of a bookmark or comment range they drop is removed too, and `Document.Bookmarks` stops listing dropped bookmarks.
+- `Section.SetMargins` on a section without page margins writes the `header`, `footer` and `gutter` values the schema requires.
+- Text extraction (`Paragraph.Text`, `Document.Text`, and the skip counts of `Replace`) follows nested fields: an index entry (`XE`, `TC`) no longer hides the rest of its paragraph, and a field inside another field's instruction no longer leaks its result.
+- A table style read without `w:pPr`/`w:rPr` no longer writes `w:tblPr` before a run format set later, which the validator rejected.
+- `Open`: a `.rels` file outside a `_rels` folder is an ordinary part, and `_rels/x.rels` belongs to part `x` (it was renamed on save). A malformed relationships part of a part that is not read no longer fails `Open`. Content types, relationship sources and media names compare ignoring case, so a case variant no longer adds a duplicate `Default` or overwrites an image.
+- `wp:docPr` and bookmark ids stay within their ranges when a document already uses the largest one, and a huge `rId` number no longer makes new relationship ids overflow.
+- Templating: a block or row range the data drops takes the other end of any bookmark or comment range it cut with it, and a removed bookmark that a cross-reference points at is a warning, as for inline ranges. A block whose branch or tag paragraph holds part of a field, or whose tag paragraph holds a drawing, is `ErrSplitAcrossBoundary` / `ErrMisplacedBlock` whatever the data.
+- Templating: a header or footer emptied by a range keeps a final empty paragraph.
+- Templating: only custom XML parts that a content control binds are filled. Add-in or SharePoint data holding `{{` no longer fails `Execute` or gets blanked.
+- Templating: a value whose `String` method panics (a nil pointer) is reported as having no text form instead of crashing `Execute`, and a `json.Number` gets the same checks as a numeric string (`1e100000` is refused by `number` and `currency`).
+- Templating: a paragraph with thousands of split tags is normalised in one pass; it was quadratic.
 
 ### Breaking
 
+- `Paragraph.AddHyperlink` accepts only `http:`, `https:` and `mailto:` URLs by default; other schemes (`ftp:`, `file:`, `tel:`, …) need `HyperlinkOptions.AllowAnyScheme`. Windows handler schemes such as `ms-msdt:` and `search-ms:`, and `file:` links to remote shares, start programs or leak credentials when clicked. Template rich-text links come from data and always use the allow-list.
+- Unit constructors (`Inches`, `Cm`, `Mm`, `Pt`, `Px`, `Percent`, `EMUInches`, `MultipleLine`, `HalfPoints`) round to the nearest unit instead of truncating (`Mm(1)` is 57, not 56) and saturate instead of overflowing.
+- `Open` refuses packages with invalid or duplicate part names (`ErrInvalidPartName`).
+- Templating: `{{#each}}` loops stop at 100,000 copied elements by default (`Options.MaxCopies`).
 - Templating: `{{else}}` is now a keyword. A data key named `else` can no longer be written as `{{else}}`; inside a loop, `{{.else}}` still reads it.
 - Templating: template errors no longer depend on the data. `Execute` now checks every branch for unbalanced or misplaced block tags, section breaks inside blocks and malformed tags in content controls, including blocks the data drops and loops over empty lists. A template with such an error in a dropped block used to succeed; it now fails in both modes. Values in branches that are not rendered are still not required. An error repeated by a loop is reported once.
 
