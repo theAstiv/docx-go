@@ -9,7 +9,7 @@ import (
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
-// Block tags come in two placements (CLAUDE.md, 2026-10-17):
+// Block tags come in two placements:
 //
 //   - Paragraph range: the open and close tags are each alone in a paragraph
 //     of the same block list (body, cell, header). The marker paragraphs go;
@@ -354,6 +354,13 @@ func (en *engine) expandBlockRange(blocks []wml.BlockElement, locs []Location, i
 		return en.expandRange(blocks[sp.els+1:j], locs[sp.els+1:j], sc)
 	}
 	if en.check {
+		markers := []*wml.CT_P{blockParagraph(blocks[i]), blockParagraph(blocks[j])}
+		var elseBlocks []wml.BlockElement
+		if sp.hasElse() {
+			markers = append(markers, blockParagraph(blocks[sp.els]))
+			elseBlocks = blocks[sp.els+1 : j]
+		}
+		en.checkBlockDrop([][]wml.BlockElement{body, elseBlocks}, markers, locs[i], open)
 		// Visit both branches; a loop body once, in the loop's scope so
 		// ".field" tags are not reported as outside a loop.
 		inner := sc
@@ -379,8 +386,10 @@ func (en *engine) expandBlockRange(blocks []wml.BlockElement, locs []Location, i
 	}
 	copies := copiesOf(en, body, len(list), open, locs[i])
 	var out []wml.BlockElement
-	for k, item := range list {
-		out = append(out, en.expandRange(copies[k], bodyLocs, sc.push(item, itemName(sc, open.path, k)))...)
+	// copies is shorter than list when copying stopped (an error, or the
+	// output limit); execution fails then, and the rest is not filled.
+	for k, cp := range copies {
+		out = append(out, en.expandRange(cp, bodyLocs, sc.push(list[k], itemName(sc, open.path, k)))...)
 	}
 	return out
 }
@@ -490,6 +499,11 @@ func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k
 		return en.expandRows(rows[sp.els:j+1], rlocs[sp.els:j+1], sc)
 	}
 	if en.check {
+		var elseRows []wml.TableRowElement
+		if sp.hasElse() {
+			elseRows = rows[sp.els : j+1]
+		}
+		en.checkRowDrop([][]wml.TableRowElement{body, elseRows}, rlocs[k], open)
 		inner := sc
 		if open.block == "each" {
 			inner = sc.push(nil, open.path+"[]")
@@ -513,8 +527,8 @@ func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k
 	}
 	copies := copiesOf(en, body, len(list), open, rlocs[k])
 	var out []wml.TableRowElement
-	for n, item := range list {
-		out = append(out, en.expandRows(copies[n], bodyLocs, sc.push(item, itemName(sc, open.path, n)))...)
+	for n, cp := range copies { // shorter than list after a failure, as for blocks
+		out = append(out, en.expandRows(cp, bodyLocs, sc.push(list[n], itemName(sc, open.path, n)))...)
 	}
 	return out
 }
@@ -541,6 +555,12 @@ func (en *engine) fillRow(row *wml.CT_Tr, sc *scope, rloc Location) {
 		}
 		nc++
 	}
+}
+
+// blockParagraph returns b as a paragraph, or nil.
+func blockParagraph(b wml.BlockElement) *wml.CT_P {
+	p, _ := b.(*wml.CT_P)
+	return p
 }
 
 func endsWithParagraph(blocks []wml.BlockElement) bool {
@@ -792,6 +812,9 @@ func copiesOf[T wml.Cloneable](en *engine, els []T, n int, open tag, loc Locatio
 	if n == 0 {
 		return nil
 	}
+	if !en.spendCopies((n-1)*len(els), loc, open) {
+		return [][]T{els}
+	}
 	fx := &wml.CloneFixup{
 		StripParaIDs:       true,
 		DropBookmarks:      true,
@@ -823,6 +846,26 @@ func copiesOf[T wml.Cloneable](en *engine, els []T, n int, open tag, loc Locatio
 		en.warn(loc, open, "footnote or endnote references were repeated; every copy shows the same note")
 	}
 	return out
+}
+
+// spendCopies takes n copies from the run's budget. It reports false, once
+// with an ErrOutputLimit issue, when the budget does not cover them.
+func (en *engine) spendCopies(n int, loc Location, open tag) bool {
+	if en.copiesLeft < 0 {
+		return true
+	}
+	if n > en.copiesLeft {
+		if !en.overLimit {
+			en.overLimit = true
+			en.fail(loc, open, ErrOutputLimit, fmt.Sprintf(
+				"the loops would copy more than %d paragraphs, tables and rows; raise Options.MaxCopies if the output is meant to be this large",
+				copyBudget(en.opts.MaxCopies)))
+		}
+		en.copiesLeft = 0
+		return false
+	}
+	en.copiesLeft -= n
+	return true
 }
 
 // itemName names one loop item in messages: "threats[3]", or for a relative

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"flag"
+	"image/png"
 	"io"
 	"os"
 	"strings"
@@ -35,9 +36,70 @@ func TestTemplateUpToDate(t *testing.T) {
 		}
 		return
 	}
-	if !bytes.Equal(buf.Bytes(), defaultTemplate) {
-		t.Fatal("template.docx is out of date: go test ./examples/template_report -update-template")
+	// Compare the parts, not the archive bytes: compressed output differs
+	// between Go releases (Go 1.27 changed it), and the committed file need
+	// not change when only the compressor did.
+	got, want := zipEntries(t, buf.Bytes()), zipEntries(t, defaultTemplate)
+	if len(got) != len(want) {
+		t.Fatalf("template.docx is out of date (%d parts, want %d): go test ./examples/template_report -update-template", len(got), len(want))
 	}
+	for name, data := range got {
+		// The example draws its images with image/png, whose compressed
+		// bytes change with the compressor too: compare pixels.
+		if strings.HasSuffix(name, ".png") && samePixels(t, data, want[name]) {
+			continue
+		}
+		if !bytes.Equal(data, want[name]) {
+			t.Fatalf("template.docx is out of date (%s differs): go test ./examples/template_report -update-template", name)
+		}
+	}
+}
+
+// samePixels reports whether two PNGs decode to the same image.
+func samePixels(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	ia, err := png.Decode(bytes.NewReader(a))
+	if err != nil {
+		return false
+	}
+	ib, err := png.Decode(bytes.NewReader(b))
+	if err != nil || ia.Bounds() != ib.Bounds() {
+		return false
+	}
+	r := ia.Bounds()
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		for x := r.Min.X; x < r.Max.X; x++ {
+			r1, g1, b1, a1 := ia.At(x, y).RGBA()
+			r2, g2, b2, a2 := ib.At(x, y).RGBA()
+			if r1 != r2 || g1 != g2 || b1 != b2 || a1 != a2 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// zipEntries returns the uncompressed contents of every entry, by name.
+func zipEntries(t *testing.T, data []byte) map[string][]byte {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string][]byte{}
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[f.Name] = b
+	}
+	return out
 }
 
 // TestFill_Golden snapshots the filled body and header, canonicalised, so a

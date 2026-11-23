@@ -9,6 +9,7 @@ import (
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/raw"
+	"github.com/theAstiv/docx-go/internal/oxml/registry"
 )
 
 // Name is the type of a core property's element name. The alias lets the
@@ -299,4 +300,8 @@ func (c *CT_CoreProperties) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 			return nil
 		}
 	}
+}
+
+func init() {
+	registry.Register(ns.Qn("cp:coreProperties"), func() registry.Element { return new(CT_CoreProperties) })
 }

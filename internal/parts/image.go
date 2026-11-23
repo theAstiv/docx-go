@@ -3,6 +3,7 @@ package parts
 import (
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"path"
 	"strings"
 
@@ -33,7 +34,7 @@ func (p *Package) loadImageIndex() {
 	}
 	p.imgByHash = make(map[[sha256.Size]byte]string)
 	for _, name := range p.pkg.PartPaths() {
-		if path.Dir(name) == PathMediaDir {
+		if strings.EqualFold(path.Dir(name), PathMediaDir) {
 			sum := sha256.Sum256(p.pkg.Part(name))
 			if _, dup := p.imgByHash[sum]; !dup {
 				p.imgByHash[sum] = name
@@ -42,20 +43,27 @@ func (p *Package) loadImageIndex() {
 	}
 }
 
-// nextMediaName returns an unused word/media/imageN.ext path.
+// nextMediaName returns an unused word/media/imageN.ext path. Names compare
+// ignoring case, as part names do: word/media/Image1.PNG takes image1.png.
 func (p *Package) nextMediaName(ext string) string {
 	n := 1
 	for _, name := range p.pkg.PartPaths() {
-		if path.Dir(name) != PathMediaDir {
+		if !strings.EqualFold(path.Dir(name), PathMediaDir) {
 			continue
 		}
 		var i int
-		base := strings.TrimSuffix(path.Base(name), path.Ext(name))
-		if _, err := fmt.Sscanf(base, "image%d", &i); err == nil && i >= n {
+		base := strings.ToLower(strings.TrimSuffix(path.Base(name), path.Ext(name)))
+		if _, err := fmt.Sscanf(base, "image%d", &i); err == nil && i >= n && i < math.MaxInt32 {
 			n = i + 1
 		}
 	}
-	return fmt.Sprintf("%s/image%d.%s", PathMediaDir, n, ext)
+	for {
+		name := fmt.Sprintf("%s/image%d.%s", PathMediaDir, n, ext)
+		if _, used := p.pkg.FindPart(name); !used {
+			return name
+		}
+		n++
+	}
 }
 
 // AddImage stores data as a media part and returns the ID of an image

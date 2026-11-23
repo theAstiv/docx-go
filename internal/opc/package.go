@@ -19,6 +19,16 @@ type Package struct {
 	// rels holds relationship sets keyed by the source part path.
 	// "" is the package-level relationship set (_rels/.rels).
 	rels map[string]*Rels
+
+	// badRels holds, by source part path, the relationships parts that
+	// could not be parsed. Their bytes stay in parts under their own name,
+	// so a part this package never reads keeps them as they were.
+	badRels map[string]badRels
+}
+
+type badRels struct {
+	name string // the relationships part's own name
+	err  error
 }
 
 // NewPackage creates an empty Package with sensible defaults.
@@ -27,6 +37,7 @@ func NewPackage() *Package {
 		ContentTypes: &ContentTypes{},
 		parts:        make(map[string][]byte),
 		rels:         map[string]*Rels{"": {}},
+		badRels:      map[string]badRels{},
 	}
 }
 
@@ -56,7 +67,15 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 			partPath := relsPathToPartPath(name)
 			rels, err := parseRels(data)
 			if err != nil {
-				return nil, fmt.Errorf("opc: parse rels %s: %w", name, err)
+				// The package's own relationships are needed to find
+				// anything; others only matter for parts that are read
+				// (see RelsErr).
+				if partPath == "" {
+					return nil, fmt.Errorf("opc: parse rels %s: %w", name, err)
+				}
+				pkg.parts[name] = data
+				pkg.badRels[partPath] = badRels{name: name, err: fmt.Errorf("opc: parse rels %s: %w", name, err)}
+				continue
 			}
 			pkg.rels[partPath] = rels
 		} else {
@@ -142,13 +161,38 @@ func (p *Package) DeletePart(path string) {
 // Rels returns the relationship set for a source part path.
 // "" means the package-level (_rels/.rels).  A new empty set is created on
 // first access.
+//
+// The source is matched ignoring ASCII case, as part names compare. A set
+// that could not be parsed (RelsErr) is replaced by the new empty one.
 func (p *Package) Rels(partPath string) *Rels {
 	if r, ok := p.rels[partPath]; ok {
 		return r
 	}
+	for src, r := range p.rels {
+		if strings.EqualFold(src, partPath) {
+			return r
+		}
+	}
+	if bad, ok := p.badRels[partPath]; ok {
+		delete(p.parts, bad.name)
+		delete(p.badRels, partPath)
+	}
 	r := &Rels{}
 	p.rels[partPath] = r
 	return r
+}
+
+// RelsErr returns the error that parsing the relationships of the part at
+// partPath gave, or nil. Open keeps a malformed relationships part as
+// opaque bytes instead of failing, since most parts are never read; a
+// caller that reads partPath must check this first.
+func (p *Package) RelsErr(partPath string) error {
+	for src, bad := range p.badRels {
+		if strings.EqualFold(src, partPath) {
+			return bad.err
+		}
+	}
+	return nil
 }
 
 // PartPaths returns all content part paths (excludes .rels and content-types).
@@ -170,48 +214,4 @@ func (p *Package) RelsParts() []string {
 		}
 	}
 	return out
-}
-
-// isRelsFile returns true if name looks like a .rels file.
-func isRelsFile(name string) bool {
-	return len(name) > 5 && name[len(name)-5:] == ".rels"
-}
-
-// relsPathToPartPath inverts relsPath: converts a .rels archive path back to
-// the part path it belongs to.
-//
-//	"_rels/.rels"                  → ""
-//	"word/_rels/document.xml.rels" → "word/document.xml"
-func relsPathToPartPath(relsName string) string {
-	// Strip the trailing ".rels" extension.
-	base := relsName[:len(relsName)-5]
-	// base is e.g. "word/_rels/document.xml" or "_rels/"
-	// Find and remove the "_rels/" component.
-	const marker = "/_rels/"
-	idx := findSuffix(base, "/_rels/")
-	if idx < 0 {
-		// Package-level: "_rels/.rels" → base is "_rels/" → ""
-		if base == "_rels/" {
-			return ""
-		}
-		return base
-	}
-	dir := base[:idx]
-	file := base[idx+len(marker):]
-	if file == "" {
-		return dir
-	}
-	if dir == "" {
-		return file
-	}
-	return dir + "/" + file
-}
-
-func findSuffix(s, sub string) int {
-	for i := len(s) - len(sub); i >= 0; i-- {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
 }

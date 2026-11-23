@@ -10,9 +10,9 @@ import (
 )
 
 // Packages whose parts are not at the canonical paths, or whose
-// relationships name them differently (review 2026-11-19, P0 #7-#9 and the
-// header numbering finding). Each was opened wrong, or saved with edits lost
-// or real parts overwritten.
+// relationships name them differently (absolute or case-variant targets, a
+// main part not named document.xml, unreferenced header parts). Each used to
+// be opened wrong, or saved with edits lost or real parts overwritten.
 
 const (
 	pathsWNS   = `xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"`

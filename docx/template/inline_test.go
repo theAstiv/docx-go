@@ -242,8 +242,8 @@ func TestInline_OneCellRowWithElse(t *testing.T) {
 	}
 }
 
-// An inline range at the start of a row's first cell is not a row range
-// (C13); the row and its other cells stay.
+// An inline range at the start of a row's first cell is not a row range;
+// the row and its other cells stay.
 func TestInline_RowEdgeIsInline(t *testing.T) {
 	for _, x := range []bool{true, false} {
 		doc := docx.New()

@@ -14,7 +14,9 @@ import (
 // Errors returned when creating hyperlinks. Test with errors.Is.
 var (
 	// ErrInvalidURL reports an external link target that is not an absolute
-	// URL, or that uses a scheme that can run code (javascript:, vbscript:, data:).
+	// URL, or whose scheme is not allowed: only http:, https: and mailto:
+	// unless HyperlinkOptions.AllowAnyScheme is set, and never javascript:,
+	// vbscript: or data:.
 	ErrInvalidURL = errors.New("docx: invalid hyperlink URL")
 	// ErrEmptyAnchor reports an internal link without a bookmark name.
 	ErrEmptyAnchor = errors.New("docx: empty hyperlink anchor")
@@ -27,6 +29,13 @@ type HyperlinkOptions struct {
 	// History controls whether Word records the link as visited (w:history);
 	// nil leaves the attribute unset.
 	History *bool
+	// AllowAnyScheme accepts URL schemes besides http:, https: and mailto:
+	// (ftp:, tel:, file:, an application's own scheme), still refusing
+	// javascript:, vbscript: and data:. Schemes such as file:, ms-msdt: and
+	// search-ms: can leak Windows credentials or start programs when the
+	// link is clicked, so set it only for URLs the program chose itself,
+	// never for URLs from user input or template data.
+	AllowAnyScheme bool
 }
 
 // Hyperlink is a proxy for a w:hyperlink element.
@@ -35,9 +44,18 @@ type Hyperlink struct {
 	st *story
 }
 
-// validateHyperlinkURL accepts only absolute URLs with a safe scheme. The
-// string itself is stored unchanged; it is never re-encoded.
-func validateHyperlinkURL(raw string) error {
+// safeSchemes are the URL schemes a link accepts by default: an allow-list,
+// since Windows registers handlers (ms-msdt:, search-ms:, file: to a remote
+// share) that a deny-list cannot keep up with.
+var safeSchemes = map[string]bool{"http": true, "https": true, "mailto": true}
+
+// codeSchemes run code in the reader's context; never accepted.
+var codeSchemes = map[string]bool{"javascript": true, "vbscript": true, "data": true}
+
+// validateHyperlinkURL accepts only absolute URLs with an allowed scheme:
+// safeSchemes, or with anyScheme any scheme except codeSchemes. The string
+// itself is stored unchanged; it is never re-encoded.
+func validateHyperlinkURL(raw string, anyScheme bool) error {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("%w: %q: %w", ErrInvalidURL, raw, err)
@@ -45,8 +63,8 @@ func validateHyperlinkURL(raw string) error {
 	if u.Scheme == "" {
 		return fmt.Errorf("%w: %q is not absolute (no scheme)", ErrInvalidURL, raw)
 	}
-	switch strings.ToLower(u.Scheme) {
-	case "javascript", "vbscript", "data":
+	scheme := strings.ToLower(u.Scheme)
+	if codeSchemes[scheme] || (!anyScheme && !safeSchemes[scheme]) {
 		return fmt.Errorf("%w: %q uses scheme %q", ErrInvalidURL, raw, u.Scheme)
 	}
 	return nil
@@ -64,12 +82,13 @@ func (p *Paragraph) appendHyperlink(h *wml.CT_Hyperlink, opts HyperlinkOptions) 
 }
 
 // AddHyperlink appends an external link to url and returns its proxy.
-// Add the visible text with Hyperlink.AddRun. url must be absolute with a safe
-// scheme (https:, http:, mailto:, ...); otherwise ErrInvalidURL is returned.
+// Add the visible text with Hyperlink.AddRun. url must be absolute with an
+// http:, https: or mailto: scheme (see HyperlinkOptions.AllowAnyScheme for
+// others); otherwise ErrInvalidURL is returned.
 // The relationship is created on the part that holds the paragraph, so links
 // work in headers and footers too, and identical URLs share one relationship.
 func (p *Paragraph) AddHyperlink(target string, opts HyperlinkOptions) (*Hyperlink, error) {
-	if err := validateHyperlinkURL(target); err != nil {
+	if err := validateHyperlinkURL(target, opts.AllowAnyScheme); err != nil {
 		return nil, err
 	}
 	h := new(wml.CT_Hyperlink)

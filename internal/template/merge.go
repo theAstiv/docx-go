@@ -42,12 +42,19 @@ func normalizeInlines(children []wml.InlineElement, skip skipSet) ([]wml.InlineE
 	}
 	tags, lexBad := lexTags(text)
 	bad = append(bad, lexBad...)
-	for _, t := range tags {
-		flat, pieces := textmerge.Flatten(children, skip)
-		// A well-formed tag holds no barrier (lexTags rejects those), so
-		// Collapse always succeeds here.
-		children, _ = textmerge.Collapse(children, pieces, flat, t.start, t.end)
+	if len(tags) == 0 {
+		return children, bad
 	}
+	// One pass for every tag: collapsing them one by one re-flattens the
+	// paragraph each time, quadratic in a paragraph of many split tags. A
+	// well-formed tag holds no barrier (lexTags rejects those), so every
+	// range collapses.
+	flat, pieces := textmerge.Flatten(children, skip)
+	ranges := make([]textmerge.Range, len(tags))
+	for i, t := range tags {
+		ranges[i] = textmerge.Range{Start: t.start, End: t.end}
+	}
+	children, _ = textmerge.CollapseAll(children, pieces, flat, ranges)
 	return children, bad
 }
 

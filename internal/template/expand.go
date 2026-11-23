@@ -30,6 +30,10 @@ type engine struct {
 	// removedBookmarks are the bookmarks inline ranges removed, checked
 	// against cross-references once every story is filled.
 	removedBookmarks []removedBookmark
+	// copiesLeft is how many more elements {{#each}} may copy; -1 for no
+	// limit. Once spent, loops make no more copies (execution fails).
+	copiesLeft int
+	overLimit  bool
 }
 
 // missing reports a value tag whose key is absent: an error in Strict mode,

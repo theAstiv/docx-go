@@ -39,6 +39,12 @@ var ErrLimitExceeded = parts.ErrLimitExceeded
 // XML; Word does not write one.
 var ErrMalformedPart = parts.ErrMalformedPart
 
+// ErrInvalidPartName is returned (wrapped) by Open when a file in the
+// archive has a name no part may have (absolute, with a backslash, or with
+// an empty, "." or ".." segment), or when two files name the same part,
+// exactly or ignoring case. Word does not write such files.
+var ErrInvalidPartName = parts.ErrInvalidPartName
+
 // Open reads a .docx from r and returns a Document proxy.
 //
 // Open applies resource limits (see ErrLimitExceeded), so a hostile file

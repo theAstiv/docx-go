@@ -6,6 +6,7 @@ import (
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/raw"
+	"github.com/theAstiv/docx-go/internal/oxml/registry"
 )
 
 // CT_Settings is the root element of word/settings.xml (w:settings).
@@ -131,4 +132,8 @@ func (s *CT_Settings) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 	}
 	s.raw = children
 	return nil
+}
+
+func init() {
+	registry.Register(ns.Qn("w:settings"), func() registry.Element { return new(CT_Settings) })
 }

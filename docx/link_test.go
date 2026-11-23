@@ -236,17 +236,30 @@ func TestHyperlink_URLValidation(t *testing.T) {
 			t.Errorf("AddHyperlink(%q) err = %v, want ErrInvalidURL", bad, err)
 		}
 	}
-	for _, good := range []string{"https://example.com", "http://x.y/z#frag", "mailto:a@b.co", "ftp://host/file"} {
+	// Schemes outside the allow-list (Follina's ms-msdt:, search-ms:, file:
+	// shares) are refused unless the caller opts in; code schemes always.
+	for _, other := range []string{"ftp://host/file", "file://server/share/x", "ms-msdt:/id x", "search-ms:query=x"} {
+		if _, err := p.AddHyperlink(other, docx.HyperlinkOptions{}); !errors.Is(err, docx.ErrInvalidURL) {
+			t.Errorf("AddHyperlink(%q) err = %v, want ErrInvalidURL", other, err)
+		}
+	}
+	if _, err := p.AddHyperlink("javascript:alert(1)", docx.HyperlinkOptions{AllowAnyScheme: true}); !errors.Is(err, docx.ErrInvalidURL) {
+		t.Errorf("AllowAnyScheme accepted javascript: (err = %v)", err)
+	}
+	for _, good := range []string{"https://example.com", "http://x.y/z#frag", "mailto:a@b.co", "HTTPS://example.com"} {
 		if _, err := p.AddHyperlink(good, docx.HyperlinkOptions{}); err != nil {
 			t.Errorf("AddHyperlink(%q) unexpected error: %v", good, err)
 		}
+	}
+	if _, err := p.AddHyperlink("ftp://host/file", docx.HyperlinkOptions{AllowAnyScheme: true}); err != nil {
+		t.Errorf("AllowAnyScheme refused ftp: %v", err)
 	}
 	var n int
 	for range p.Hyperlinks() {
 		n++
 	}
-	if n != 4 {
-		t.Errorf("%d hyperlinks present, want 4 (rejected ones must not be added)", n)
+	if n != 5 {
+		t.Errorf("%d hyperlinks present, want 5 (rejected ones must not be added)", n)
 	}
 }
 

@@ -437,3 +437,53 @@ func TestRemove_Fixtures(t *testing.T) {
 		t.Fatal("no fixtures")
 	}
 }
+
+// SetText drops the container's content with the same cleanup as Remove:
+// the outside partner of a dropped anchor goes, and the id cache forgets
+// the bookmarks that were inside.
+func TestCellSetText_CleansUpAnchors(t *testing.T) {
+	frag := `<w:tbl` + nsDecl + `><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>` +
+		`<w:p><w:bookmarkStart w:id="7" w:name="Span"/><w:r><w:t>one</w:t></w:r></w:p>` +
+		`<w:p><w:bookmarkStart w:id="8" w:name="Inner"/><w:r><w:t>two</w:t></w:r><w:bookmarkEnd w:id="8"/></w:p>` +
+		`</w:tc></w:tr></w:tbl>` +
+		`<w:p` + nsDecl + `><w:r><w:t>after</w:t></w:r><w:bookmarkEnd w:id="7"/></w:p>`
+	d := injectIntoBody(t, docx.New(), frag)
+	if d.Bookmark("Span") == nil || d.Bookmark("Inner") == nil {
+		t.Fatal("fixture bookmarks missing")
+	}
+	n := 0
+	for range d.Bookmarks() { // fill the id cache
+		n++
+	}
+	tbl := slices.Collect(d.Body().Tables())[0]
+	cells(rows(tbl)[0])[0].SetText("new")
+	if d.Bookmark("Span") != nil || d.Bookmark("Inner") != nil {
+		t.Error("dropped bookmarks still listed")
+	}
+	for range d.Bookmarks() {
+		t.Error("Bookmarks lists a dropped bookmark")
+	}
+	doc := string(partXML(t, d, "word/document.xml"))
+	if hasElemID(doc, "bookmarkEnd", "7") {
+		t.Errorf("orphan bookmarkEnd left behind:\n%s", doc)
+	}
+	if !strings.Contains(d.Text(), "after") {
+		t.Errorf("text after the table lost: %q", d.Text())
+	}
+}
+
+// SetMargins on a section without w:pgMar writes the attributes the schema
+// requires besides the four margins.
+func TestSectionSetMargins_RequiredAttrs(t *testing.T) {
+	frag := `<w:p` + nsDecl + `><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr></w:p>`
+	d := injectIntoBody(t, docx.New(), frag)
+	sec := paras(d)[0].SectionBreak()
+	sec.SetMargins(docx.PageMargins{Top: 1000, Right: 1000, Bottom: 1000, Left: 1000})
+	doc := string(partXML(t, d, "word/document.xml"))
+	m := regexp.MustCompile(`<(\w+:)?pgMar\b[^>]*>`).FindString(doc)
+	for _, a := range []string{"top", "right", "bottom", "left", "header", "footer", "gutter"} {
+		if !regexp.MustCompile(`\b(\w+:)?` + a + `="`).MatchString(m) {
+			t.Errorf("pgMar lacks %s: %s", a, m)
+		}
+	}
+}

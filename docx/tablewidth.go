@@ -5,7 +5,7 @@ import "github.com/theAstiv/docx-go/internal/oxml/wml"
 // A table created without column widths gets them the way Word sizes an
 // inserted table: the text width of the place holding it, shared evenly by
 // the columns that have no width. Without widths Word lays out a table of
-// empty cells as a sliver (CLAUDE.md C17).
+// empty cells as a sliver.
 
 const (
 	// cellMargins is Word's default left plus right cell margin (2 × 0.075").

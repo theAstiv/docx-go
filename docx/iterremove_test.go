@@ -9,7 +9,7 @@ import (
 )
 
 // Removing what an iterator yields, inside the loop, must visit and remove
-// every element (review 2026-11-19, P0 #10). The iterators ranged over the
+// every element. The iterators used to range over the
 // live slice, so each removal shifted the next element into the slot just
 // visited and every other one survived. Earlier tests always collected the
 // iterator first.
@@ -106,7 +106,7 @@ func TestIterators_RemoveWhileIterating(t *testing.T) {
 
 // Proxies inside a removed table found themselves in their (now detached)
 // cell and acted on it: Remove returned nil instead of ErrNotInDocument and
-// inserts attached to the detached cell (review 2026-11-19, P1).
+// inserts attached to the detached cell.
 func TestStaleProxy_AfterTableRemove(t *testing.T) {
 	d := docx.New()
 	tb := d.Body().AddTable(2, 1, docx.TableOptions{})

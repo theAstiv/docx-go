@@ -130,6 +130,17 @@ func (f *ParagraphFormat) ppr() *wml.CT_PPr {
 	return *f.slot
 }
 
+// edit returns the CT_PPr a setter writes to. A setter that clears a
+// property (clear is true) on a paragraph without w:pPr has nothing to
+// remove: it gets a throwaway element, so it does not add an empty
+// <w:pPr/>.
+func (f *ParagraphFormat) edit(clear bool) *wml.CT_PPr {
+	if clear && *f.slot == nil {
+		return new(wml.CT_PPr)
+	}
+	return f.ppr()
+}
+
 // twipPtr converts *Twip to *int64 for the oxml layer. nil in → nil out.
 func twipPtr(t *Twip) *int64 {
 	if t == nil {
@@ -157,7 +168,7 @@ func (f *ParagraphFormat) Style() string {
 }
 
 // SetStyle sets the paragraph style ID. An empty string removes it.
-func (f *ParagraphFormat) SetStyle(s string) { f.ppr().SetStyleID(s) }
+func (f *ParagraphFormat) SetStyle(s string) { f.edit(s == "").SetStyleID(s) }
 
 // Alignment returns the paragraph alignment, or "".
 func (f *ParagraphFormat) Alignment() AlignmentValue {
@@ -168,7 +179,7 @@ func (f *ParagraphFormat) Alignment() AlignmentValue {
 }
 
 // SetAlignment sets the paragraph alignment.
-func (f *ParagraphFormat) SetAlignment(a AlignmentValue) { f.ppr().SetAlignment(string(a)) }
+func (f *ParagraphFormat) SetAlignment(a AlignmentValue) { f.edit(a == "").SetAlignment(string(a)) }
 
 // OutlineLevel returns the outline level (0-8), or nil if not set.
 func (f *ParagraphFormat) OutlineLevel() *int64 {
@@ -179,7 +190,7 @@ func (f *ParagraphFormat) OutlineLevel() *int64 {
 }
 
 // SetOutlineLevel sets the outline level. nil removes it.
-func (f *ParagraphFormat) SetOutlineLevel(lvl *int64) { f.ppr().SetOutlineLevel(lvl) }
+func (f *ParagraphFormat) SetOutlineLevel(lvl *int64) { f.edit(lvl == nil).SetOutlineLevel(lvl) }
 
 // SpaceBefore returns spacing before in twips, or nil.
 func (f *ParagraphFormat) SpaceBefore() *Twip {
@@ -190,7 +201,7 @@ func (f *ParagraphFormat) SpaceBefore() *Twip {
 }
 
 // SetSpaceBefore sets spacing before in twips. nil removes it.
-func (f *ParagraphFormat) SetSpaceBefore(t *Twip) { f.ppr().SetSpacingBefore(twipPtr(t)) }
+func (f *ParagraphFormat) SetSpaceBefore(t *Twip) { f.edit(t == nil).SetSpacingBefore(twipPtr(t)) }
 
 // SpaceAfter returns spacing after in twips, or nil.
 func (f *ParagraphFormat) SpaceAfter() *Twip {
@@ -201,7 +212,7 @@ func (f *ParagraphFormat) SpaceAfter() *Twip {
 }
 
 // SetSpaceAfter sets spacing after in twips. nil removes it.
-func (f *ParagraphFormat) SetSpaceAfter(t *Twip) { f.ppr().SetSpacingAfter(twipPtr(t)) }
+func (f *ParagraphFormat) SetSpaceAfter(t *Twip) { f.edit(t == nil).SetSpacingAfter(twipPtr(t)) }
 
 // LeftIndent returns the left (start) indent in twips, or nil.
 func (f *ParagraphFormat) LeftIndent() *Twip {
@@ -212,7 +223,7 @@ func (f *ParagraphFormat) LeftIndent() *Twip {
 }
 
 // SetLeftIndent sets the left (start) indent in twips. nil removes it.
-func (f *ParagraphFormat) SetLeftIndent(t *Twip) { f.ppr().SetIndStart(twipPtr(t)) }
+func (f *ParagraphFormat) SetLeftIndent(t *Twip) { f.edit(t == nil).SetIndStart(twipPtr(t)) }
 
 // RightIndent returns the right (end) indent in twips, or nil.
 func (f *ParagraphFormat) RightIndent() *Twip {
@@ -223,7 +234,7 @@ func (f *ParagraphFormat) RightIndent() *Twip {
 }
 
 // SetRightIndent sets the right (end) indent in twips. nil removes it.
-func (f *ParagraphFormat) SetRightIndent(t *Twip) { f.ppr().SetIndEnd(twipPtr(t)) }
+func (f *ParagraphFormat) SetRightIndent(t *Twip) { f.edit(t == nil).SetIndEnd(twipPtr(t)) }
 
 // FirstLineIndent returns the first-line indent in twips, or nil.
 func (f *ParagraphFormat) FirstLineIndent() *Twip {
@@ -234,7 +245,7 @@ func (f *ParagraphFormat) FirstLineIndent() *Twip {
 }
 
 // SetFirstLineIndent sets the first-line indent in twips. nil removes it.
-func (f *ParagraphFormat) SetFirstLineIndent(t *Twip) { f.ppr().SetIndFirstLine(twipPtr(t)) }
+func (f *ParagraphFormat) SetFirstLineIndent(t *Twip) { f.edit(t == nil).SetIndFirstLine(twipPtr(t)) }
 
 // HangingIndent returns the hanging indent in twips, or nil.
 func (f *ParagraphFormat) HangingIndent() *Twip {
@@ -245,7 +256,7 @@ func (f *ParagraphFormat) HangingIndent() *Twip {
 }
 
 // SetHangingIndent sets the hanging indent in twips. nil removes it.
-func (f *ParagraphFormat) SetHangingIndent(t *Twip) { f.ppr().SetIndHanging(twipPtr(t)) }
+func (f *ParagraphFormat) SetHangingIndent(t *Twip) { f.edit(t == nil).SetIndHanging(twipPtr(t)) }
 
 // LineSpacingAuto returns the line spacing value in 240ths of a line (lineRule="auto"),
 // or nil if the rule is not "auto" or line spacing is not set.

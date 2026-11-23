@@ -39,7 +39,7 @@ func richRuns(p *docx.Paragraph) map[string]richRun {
 	return out
 }
 
-// TestWordTemplates_Rich fills template_rich.docx, typed in Word (P3c.9):
+// TestWordTemplates_Rich fills template_rich.docx, typed in Word:
 // rich-value tags split by spell-check marks and edited letters, in runs
 // Word made italic, bold or coloured, two in one run, one inside a
 // hyperlink Word made, one in a row loop and one in the default header.

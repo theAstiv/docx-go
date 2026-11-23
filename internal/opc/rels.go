@@ -192,16 +192,30 @@ func relsPath(partPath string) string {
 	return path.Join(dir, "_rels", base+".rels")
 }
 
+// nextRID returns an "rIdN" no relationship in r uses. The counter only
+// follows numeric ids up to maxRIDNum, so a hostile "rId9223372036854775807"
+// cannot make it overflow; the uniqueness check covers the rest.
 func (r *Rels) nextRID() string {
-	id := "rId" + strconv.Itoa(r.nextID)
-	r.nextID++
-	return id
+	for {
+		id := "rId" + strconv.Itoa(r.nextID)
+		r.nextID++
+		if _, taken := r.ByID(id); !taken {
+			return id
+		}
+	}
 }
+
+// maxRIDNum bounds the rId numbers that move the counter; Word numbers
+// relationships from 1 and never comes near it.
+const maxRIDNum = 1 << 30
 
 func parseRIDNum(id string) int {
 	if !strings.HasPrefix(id, "rId") {
 		return 0
 	}
-	n, _ := strconv.Atoi(id[3:])
+	n, err := strconv.Atoi(id[3:])
+	if err != nil || n < 0 || n > maxRIDNum {
+		return 0
+	}
 	return n
 }

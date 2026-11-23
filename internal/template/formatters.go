@@ -235,7 +235,9 @@ func decimalString(v any) (string, error) {
 	case nil:
 		return "", errors.New("no value (pipe through default first)")
 	case json.Number:
-		return x.String(), nil
+		// Same checks as a string: json.Number is not validated on decode
+		// unless the decoder saw it, and 1e100000 would expand to 100k digits.
+		return decimalString(x.String())
 	case string:
 		s := strings.TrimSpace(x)
 		if _, err := strconv.ParseFloat(s, 64); err != nil || strings.ContainsAny(s, "xXnNiIpP_") {

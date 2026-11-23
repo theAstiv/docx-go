@@ -207,3 +207,30 @@ func TestCT_Styles_DocDefaults_RoundTrip(t *testing.T) {
 		t.Errorf("default font = %q, want Calibri", got)
 	}
 }
+
+// A table style read without w:pPr/w:rPr keeps w:tblPr after an w:rPr set
+// later: the split follows the schema, not the source order.
+func TestCT_Style_TblPrStaysAfterLaterRPr(t *testing.T) {
+	src := `<w:style xmlns:w="` + ns.W + `" w:type="table" w:styleId="T"><w:name w:val="T"/>` +
+		`<w:tblPr><w:tblInd w:w="0" w:type="dxa"/></w:tblPr><w:uiPriority w:val="59"/><w:rsid w:val="00AB"/></w:style>`
+	var s wml.CT_Style
+	if err := xml.Unmarshal([]byte(src), &s); err != nil {
+		t.Fatal(err)
+	}
+	s.RPr = &wml.CT_RPr{}
+	s.RPr.SetBold(boolPtr(true))
+	s.PPr = &wml.CT_PPr{}
+	s.PPr.SetKeepNext(boolPtr(true))
+	out, err := xml.Marshal(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	order := regexp.MustCompile(`<(?:\w+:)?(uiPriority|rsid|pPr|rPr|tblPr)\b`).FindAllStringSubmatch(string(out), -1)
+	var got []string
+	for _, m := range order {
+		got = append(got, m[1])
+	}
+	if want := "uiPriority rsid pPr rPr tblPr"; strings.Join(got, " ") != want {
+		t.Errorf("child order = %v, want %s\n%s", got, want, out)
+	}
+}

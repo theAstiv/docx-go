@@ -111,6 +111,9 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 		return nil, fmt.Errorf("parts: open: part %q not found", docPath)
 	}
 	p.docPath = docPath
+	if err := pkg.RelsErr(docPath); err != nil {
+		return nil, fmt.Errorf("parts: open: %w", err)
+	}
 	p.DocPart = new(DocumentPart)
 	if err := p.DocPart.Parse(docData); err != nil {
 		return nil, fmt.Errorf("parts: open: parse document: %w", err)
@@ -172,6 +175,9 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 		}
 		hp := hdrByPath[hdrPath]
 		if hp == nil {
+			if err := pkg.RelsErr(hdrPath); err != nil {
+				return nil, fmt.Errorf("parts: open: %w", err)
+			}
 			hp = new(HeaderPart)
 			if err := hp.Parse(hdrData); err != nil {
 				return nil, fmt.Errorf("parts: open: parse header %q: %w", hdrPath, err)
@@ -188,6 +194,9 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 		}
 		fp := ftrByPath[ftrPath]
 		if fp == nil {
+			if err := pkg.RelsErr(ftrPath); err != nil {
+				return nil, fmt.Errorf("parts: open: %w", err)
+			}
 			fp = new(FooterPart)
 			if err := fp.Parse(ftrData); err != nil {
 				return nil, fmt.Errorf("parts: open: parse footer %q: %w", ftrPath, err)
@@ -445,3 +454,7 @@ var ErrLimitExceeded = opc.ErrLimitExceeded
 // ErrMalformedPart is returned (wrapped) by Open when an XML part holds
 // text or a DOCTYPE declaration before its root element.
 var ErrMalformedPart = opc.ErrMalformedPart
+
+// ErrInvalidPartName is returned (wrapped) by Open when a ZIP entry name is
+// not a valid part name, or two entries name the same part.
+var ErrInvalidPartName = opc.ErrPartName

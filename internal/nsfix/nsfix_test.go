@@ -232,8 +232,8 @@ func TestFix_ProcInstPreserved(t *testing.T) {
 
 // A root with an attribute in its own namespace makes the encoder declare a
 // generated prefix on the root (xmlns:main) and use it in every child below.
-// Rebuilding the root must keep that prefix declared (review 2026-11-19: a
-// w:document with w:conformance was saved with an undeclared main:val).
+// Rebuilding the root must keep that prefix declared (a w:document with
+// w:conformance was once saved with an undeclared main:val).
 func TestFix_RootPrefixUsedByChildren(t *testing.T) {
 	const w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 	src := []byte(`<document xmlns="` + w + `" xmlns:main="` + w + `" main:conformance="transitional">` +

@@ -170,6 +170,8 @@ func TestRich_Errors(t *testing.T) {
 	}{
 		{"unsafe URL", template.Rich{Runs: []template.RichRun{{Text: "x", Link: "javascript:alert(1)"}}}, template.ErrUnsupportedValue},
 		{"relative URL", template.Rich{Runs: []template.RichRun{{Text: "x", Link: "/path"}}}, template.ErrUnsupportedValue},
+		{"handler scheme", template.Rich{Runs: []template.RichRun{{Text: "x", Link: "ms-msdt:/id PCWDiagnostic"}}}, template.ErrUnsupportedValue},
+		{"file URL", template.Rich{Runs: []template.RichRun{{Text: "x", Link: "file://attacker/share/x"}}}, template.ErrUnsupportedValue},
 		{"bad colour", template.Rich{Runs: []template.RichRun{{Text: "x", Color: "red"}}}, template.ErrUnsupportedValue},
 	}
 	for _, tt := range tests {

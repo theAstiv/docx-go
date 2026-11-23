@@ -13,7 +13,7 @@ import (
 	"github.com/theAstiv/docx-go/internal/canon"
 )
 
-// TestWordTemplates_Images fills template_images.docx, typed in Word (P3c.6):
+// TestWordTemplates_Images fills template_images.docx, typed in Word:
 // {{image}} tags split by spell-check marks, an edited letter and formatting
 // toggled mid-tag, in the body, the default header, a row loop and both
 // branches of inline conditions. JSON cannot carry images, so the data is

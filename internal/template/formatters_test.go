@@ -147,3 +147,32 @@ func TestBuiltinFormatters_ArgErrors(t *testing.T) {
 		}
 	}
 }
+
+// A json.Number gets the checks a numeric string gets: an exponent that
+// would expand to an enormous decimal is refused.
+func TestDecimalString_JSONNumber(t *testing.T) {
+	for _, bad := range []json.Number{"1e100000", "NaN", "0x10", "abc"} {
+		if s, err := decimalString(bad); err == nil {
+			t.Errorf("decimalString(%q) = %d chars, want an error", bad, len(s))
+		}
+	}
+	if s, err := decimalString(json.Number("12.5")); err != nil || s != "12.5" {
+		t.Errorf("decimalString(12.5) = %q, %v", s, err)
+	}
+}
+
+type nilStringer struct{ s string }
+
+func (n *nilStringer) String() string { return n.s }
+
+// A Stringer whose String panics (a nil pointer) has no text form; it does
+// not crash Execute.
+func TestFormat_PanickingStringer(t *testing.T) {
+	var p *nilStringer
+	if s, ok := format(p); ok {
+		t.Errorf("format(nil *T) = %q, true; want no text form", s)
+	}
+	if s, ok := format(&nilStringer{s: "x"}); !ok || s != "x" {
+		t.Errorf("format(&T) = %q, %v", s, ok)
+	}
+}

@@ -19,7 +19,7 @@ type ImageValue struct {
 }
 
 // Hooks are the package operations the engine cannot do itself: it sees
-// only element trees (CLAUDE.md, templating D-calls). Nil hooks make the
+// only element trees, never the package. Nil hooks make the
 // matching tags fail with ErrUnsupportedLocation.
 type Hooks struct {
 	// AddImage stores img in the package, with its relationship on the part

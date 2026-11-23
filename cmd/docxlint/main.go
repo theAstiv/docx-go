@@ -30,6 +30,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "docxlint: %v\n", err)
 		os.Exit(2)
 	}
+	// A backend that died part-way (or printed nothing) must not read as a
+	// pass: every file needs a result.
+	if len(results) != len(files) {
+		fmt.Fprintf(os.Stderr, "docxlint: validator returned %d result(s) for %d file(s)\n", len(results), len(files))
+		os.Exit(2)
+	}
 
 	hasErrors := false
 	for _, r := range results {

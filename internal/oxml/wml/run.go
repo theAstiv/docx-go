@@ -3,7 +3,6 @@ package wml
 import (
 	"encoding/xml"
 	"fmt"
-	"strings"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/registry"
@@ -27,9 +26,9 @@ func (*CT_R) isInline() {}
 // Text returns the visible text of this run using the same rendering rules as
 // CT_P.Text(): tabs as \t, breaks as \n, field results included, instructions excluded.
 func (r *CT_R) Text() string {
-	var sb strings.Builder
-	textFromRunContent(r.Children, &sb, false)
-	return sb.String()
+	var w textWriter
+	textFromRunContent(r.Children, &w)
+	return w.sb.String()
 }
 
 // MarshalXML emits <w:r>.

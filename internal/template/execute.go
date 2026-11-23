@@ -27,7 +27,15 @@ type Options struct {
 	Adapt func(any) any
 	// Hooks do what needs the package, such as storing images.
 	Hooks Hooks
+	// MaxCopies bounds the paragraphs, tables and rows {{#each}} loops may
+	// copy in one run; nested loops multiply, so a small template and
+	// moderate data can otherwise produce millions. 0 means
+	// DefaultMaxCopies; a negative value means no limit.
+	MaxCopies int
 }
+
+// DefaultMaxCopies is the copy limit when Options.MaxCopies is 0.
+const DefaultMaxCopies = 100_000
 
 // Story is one part's block content: the document body, a header or a
 // footer.
@@ -36,6 +44,10 @@ type Story struct {
 	Part string
 	// Blocks is the part's block list. Execute replaces it on success.
 	Blocks *[]wml.BlockElement
+	// FinalParagraph is set for parts that must end with a w:p (headers
+	// and footers): if ranges remove their last paragraph, an empty one is
+	// added.
+	FinalParagraph bool
 }
 
 // Execute fills the stories from data.
@@ -60,7 +72,7 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 	if _, ok := opts.Funcs[defaultName]; ok {
 		return nil, nil, errDefaultOverride
 	}
-	en := &engine{opts: opts, skip: skipSet{}, fmts: formatterSet{funcs: opts.Funcs}}
+	en := &engine{opts: opts, skip: skipSet{}, fmts: formatterSet{funcs: opts.Funcs}, copiesLeft: copyBudget(opts.MaxCopies)}
 	work := make([][]wml.BlockElement, len(stories))
 	for i, s := range stories {
 		blocks, err := cloneBlocks(*s.Blocks)
@@ -88,9 +100,18 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 	if err != nil {
 		return nil, nil, err
 	}
+	before := make([]storyAnchors, len(work))
+	for i, blocks := range work {
+		before[i] = anchorsOf(blocks)
+	}
 	root := &scope{root: data}
 	for i, s := range stories {
-		work[i] = en.expandBlocks(work[i], root, Location{Part: s.Part})
+		loc := Location{Part: s.Part}
+		work[i] = en.expandBlocks(work[i], root, loc)
+		en.cleanStoryAnchors(&work[i], before[i], loc)
+		if s.FinalParagraph && !endsWithParagraph(work[i]) {
+			work[i] = append(work[i], emptyParagraph())
+		}
 	}
 	en.warnRemovedReferences(work)
 	filled := en.fillXMLParts(boundParts, root)
@@ -106,6 +127,17 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 		*s.Blocks = work[i]
 	}
 	return filled, warnings, nil
+}
+
+// copyBudget returns the number of copies a run may make; -1 for no limit.
+func copyBudget(max int) int {
+	switch {
+	case max == 0:
+		return DefaultMaxCopies
+	case max < 0:
+		return -1
+	}
+	return max
 }
 
 // checkStructure reports the template errors that do not depend on the

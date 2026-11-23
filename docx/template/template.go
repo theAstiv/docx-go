@@ -45,6 +45,9 @@ var (
 	// not parse. An error in Strict mode; a warning (and empty text) in
 	// Lenient mode.
 	ErrFormat = itemplate.ErrFormat
+	// ErrOutputLimit: {{#each}} loops would copy more paragraphs, tables
+	// and rows than Options.MaxCopies allows. It fails in both modes.
+	ErrOutputLimit = itemplate.ErrOutputLimit
 )
 
 // Image is a data value for an {{image path}} tag: the picture is placed
@@ -87,7 +90,8 @@ type RichRun struct {
 	// Color is a hex colour, RRGGBB; "" keeps the tag run's colour.
 	Color string
 	// Link, when set, makes the run an external hyperlink to this URL. It
-	// must be absolute with a safe scheme, as for Paragraph.AddHyperlink.
+	// must be absolute with an http:, https: or mailto: scheme; since it
+	// comes from data, other schemes are never accepted.
 	Link string
 }
 
@@ -157,7 +161,16 @@ type Options struct {
 	// (upper, lower, number, currency, date) replaces it, so number can be
 	// given local digit grouping. "default" cannot be replaced.
 	Funcs map[string]Formatter
+	// MaxCopies bounds the paragraphs, tables and rows {{#each}} loops may
+	// copy in one Execute (ErrOutputLimit beyond it). Nested loops
+	// multiply, so untrusted data could otherwise make a small template
+	// produce millions of paragraphs. 0 means DefaultMaxCopies (100,000); a
+	// negative value means no limit.
+	MaxCopies int
 }
+
+// DefaultMaxCopies is the copy limit when Options.MaxCopies is 0.
+const DefaultMaxCopies = itemplate.DefaultMaxCopies
 
 // Severity says whether an Issue stopped execution.
 type Severity int
@@ -308,10 +321,11 @@ func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, er
 	}
 	filled, warnings, err := itemplate.ExecuteAll(bridge.Stories(doc), bridge.BoundParts(doc), data,
 		itemplate.Options{
-			Mode:  itemplate.Mode(opts.Mode),
-			Funcs: funcs,
-			Adapt: adapt,
-			Hooks: itemplate.Hooks{AddImage: addImage, AddLink: addLink},
+			Mode:      itemplate.Mode(opts.Mode),
+			Funcs:     funcs,
+			Adapt:     adapt,
+			Hooks:     itemplate.Hooks{AddImage: addImage, AddLink: addLink},
+			MaxCopies: opts.MaxCopies,
 		})
 	if err != nil && restore != nil {
 		restore()

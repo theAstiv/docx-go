@@ -1,7 +1,12 @@
 // Thin OOXML validator wrapper.
 // Usage: validator <file1.docx> [file2.docx ...]
 // Outputs JSON: {"file":"...","errors":[...],"warnings":[...]}
-// Exit code 0 = no errors; 1 = schema errors found; 2 = usage/IO error.
+// Exit code 0 = no errors; 1 = validation errors found; 2 = usage/IO error.
+//
+// Every error the SDK reports counts: Schema, Semantic (duplicate ids,
+// broken relationship references: the defects behind Word's "unreadable
+// content"), Package and MarkupCompatibility. Warnings are reserved for
+// findings the SDK itself does not classify as one of those.
 using System.Text.Json;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
@@ -26,10 +31,18 @@ foreach (var path in args)
         foreach (var err in validator.Validate(doc))
         {
             var msg = $"{err.ErrorType}: {err.Description} (path: {err.Path?.XPath})";
-            if (err.ErrorType == ValidationErrorType.Schema)
-                errors.Add(msg);
-            else
-                warnings.Add(msg);
+            switch (err.ErrorType)
+            {
+                case ValidationErrorType.Schema:
+                case ValidationErrorType.Semantic:
+                case ValidationErrorType.Package:
+                case ValidationErrorType.MarkupCompatibility:
+                    errors.Add(msg);
+                    break;
+                default:
+                    warnings.Add(msg);
+                    break;
+            }
         }
     }
     catch (Exception ex)
