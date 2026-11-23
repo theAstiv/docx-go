@@ -9,7 +9,7 @@ RUN dotnet restore
 COPY . .
 RUN dotnet publish -c Release -o /app
 
-FROM mcr.microsoft.com/dotnet/runtime:8.0-alpine@sha256:a088dd404d4b1c7f7cad246d665eccfd5c05780a99a237a8643063d72dca2b0f
+FROM mcr.microsoft.com/dotnet/runtime:11.0-alpine@sha256:f79ce0f256d44492ac098aa861836d1a71b3b178019d7357cc6d1437f3ad78d1
 WORKDIR /app
 COPY --from=build /app .
 ENTRYPOINT ["dotnet", "validator.dll"]
