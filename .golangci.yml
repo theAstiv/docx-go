@@ -5,6 +5,9 @@ version: "2"
 
 run:
   timeout: 5m
+  # Files behind build tags are linted too (the round-trip audit).
+  build-tags:
+    - roundtripaudit
 
 formatters:
   enable:

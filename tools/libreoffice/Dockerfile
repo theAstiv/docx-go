@@ -2,7 +2,8 @@
 # Mounts a directory of .docx files and converts each to PDF; a non-zero
 # exit from the soffice binary signals that LibreOffice could not open the
 # file.  The PDF output is written to /out.
-FROM debian:bookworm-slim
+# Pinned by digest (the tag is for readers); Dependabot proposes updates.
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \

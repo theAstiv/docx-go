@@ -47,9 +47,12 @@ builds the data in Go and writes `filled-template_rich.docx` for
 `generate-docs.sh`.
 
 Files under `python-docx/` are from the [python-docx](https://github.com/python-openxml/python-docx) project,
-licensed under the **MIT License**. Copyright © python-docx contributors.
+licensed under the **MIT License**. Copyright © 2013 Steve Canny. The licence text is in `NOTICE`.
 
 Files under `poi/` are from the [Apache POI](https://github.com/apache/poi) project,
 licensed under the **Apache License 2.0**. Copyright © The Apache Software Foundation.
+The attribution from Apache POI's `NOTICE` is in `NOTICE`.
 
-Run `bash scripts/fetch-fixtures.sh` to re-download or update these files.
+Run `bash scripts/fetch-fixtures.sh` to re-download these files. It fetches them
+from fixed upstream commits and checks each against `SHA256SUMS`; to add or
+update a fixture, bump the commit in the script and add its checksum.

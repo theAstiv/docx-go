@@ -1,11 +1,18 @@
 name: bench
 
+# Benchmarks of the pull request against its base, with a gate
+# (scripts/benchgate.sh): a significant slowdown over 20% or an allocation
+# increase over 10% fails the job. Not a required check: shared runners are
+# noisy, so a failure is a prompt to look, not a block.
 on:
   pull_request:
     paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
       - "testdata/bench/**"
-      - "**/*_bench_test.go"
-      - "**/*bench*_test.go"
+      - "scripts/benchgate.sh"
+      - ".github/workflows/bench.yml"
 
 # Read-only token: no job writes to the repository, issues or PRs.
 permissions:
@@ -15,24 +22,31 @@ jobs:
   bench:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "1.24"
 
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@v0.0.0-20261009192801-be2c69fb417e
+
+      # Keep the gate script from the PR: the base branch may not have it.
+      - name: Keep gate script
+        run: cp scripts/benchgate.sh "$RUNNER_TEMP/benchgate.sh"
+
       - name: Bench (PR)
-        run: go test -bench=. -benchmem -count=6 ./... | tee new.txt
+        run: go test -run='^$' -bench=. -benchmem -count=6 ./... | tee "$RUNNER_TEMP/new.txt"
 
       - name: Checkout base
-        run: git checkout ${{ github.base_ref }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git checkout "origin/$BASE_REF"
 
       - name: Bench (base)
-        run: go test -bench=. -benchmem -count=6 ./... | tee baseline.txt
+        run: go test -run='^$' -bench=. -benchmem -count=6 ./... | tee "$RUNNER_TEMP/baseline.txt"
 
-      - name: benchstat
-        run: |
-          go install golang.org/x/perf/cmd/benchstat@latest
-          benchstat baseline.txt new.txt
+      - name: benchstat gate
+        run: bash "$RUNNER_TEMP/benchgate.sh" "$RUNNER_TEMP/baseline.txt" "$RUNNER_TEMP/new.txt"

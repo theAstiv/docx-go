@@ -11,3 +11,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+
+  # Validator and LibreOffice base images are pinned by digest.
+  - package-ecosystem: docker
+    directories:
+      - /tools/validator
+      - /tools/libreoffice
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
