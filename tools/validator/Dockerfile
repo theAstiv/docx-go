@@ -2,7 +2,7 @@
 # .NET 8 + DocumentFormat.OpenXml + thin JSON wrapper
 # Base images are pinned by digest (the tag is for readers), so CI builds
 # the same image every time; Dependabot proposes digest updates.
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine@sha256:4f4992f8f302150e4adb5e78c324731e968493a30c0638985ba29cb42a858cd6 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0-alpine@sha256:52556c0fb9d0f609ae9aeab9efeeba96f4acc2f7038f7696f2235ccbdbb8e290 AS build
 WORKDIR /src
 COPY validator.csproj .
 RUN dotnet restore
