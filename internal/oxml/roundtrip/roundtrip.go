@@ -137,3 +137,40 @@ func unmarshalElement[T Element](xmlBytes []byte, _ xml.Name) (T, error) {
 	}
 	return zero, nil
 }
+
+// Fidelity reads input (one element, with its namespace declarations) into
+// el, writes it back, and reports an error unless the output equals the
+// input under canonicalisation and a second round-trip is stable. Unlike
+// Verify, which starts from a value and can only prove idempotence, it
+// fails when UnmarshalXML drops an attribute or child the input had.
+func Fidelity(el Element, input []byte) error {
+	dec := xml.NewDecoder(bytes.NewReader(input))
+	var start xml.StartElement
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return fmt.Errorf("read start token: %w", err)
+		}
+		if se, ok := tok.(xml.StartElement); ok {
+			start = se
+			break
+		}
+	}
+	if err := el.UnmarshalXML(dec, start); err != nil {
+		return fmt.Errorf("UnmarshalXML: %w", err)
+	}
+	out, err := marshalElement(el, start.Name)
+	if err != nil {
+		return err
+	}
+	eq, err := canon.Equal(input, out)
+	if err != nil {
+		return fmt.Errorf("canonicalise: %w", err)
+	}
+	if !eq {
+		ci, _ := canon.XML(input)
+		co, _ := canon.XML(out)
+		return fmt.Errorf("output differs from input\ninput:  %s\noutput: %s", ci, co)
+	}
+	return nil
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
 	"github.com/theAstiv/docx-go/internal/oxml/raw"
+	"github.com/theAstiv/docx-go/internal/oxml/registry"
 )
 
 // ── CT_Numbering ─────────────────────────────────────────────────────────────
@@ -580,4 +581,12 @@ func init() {
 	// body-level block elements, so only CT_Numbering itself needs registration
 	// if it appears as an embedded element (it never does in practice).
 	// No registry entries are needed for numbering types.
+}
+
+func init() {
+	registry.Register(ns.Qn("w:numbering"), func() registry.Element { return new(CT_Numbering) })
+	registry.Register(ns.Qn("w:abstractNum"), func() registry.Element { return new(CT_AbstractNum) })
+	registry.Register(ns.Qn("w:lvl"), func() registry.Element { return new(CT_Lvl) })
+	registry.Register(ns.Qn("w:num"), func() registry.Element { return new(CT_Num) })
+	registry.Register(ns.Qn("w:lvlOverride"), func() registry.Element { return new(CT_LvlOverride) })
 }
