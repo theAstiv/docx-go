@@ -48,7 +48,7 @@ func issuesWith(err error, target error) int {
 }
 
 // A dropped branch takes the partner of an anchor outside it with it, as
-// docx Remove does (C3); anchors the template already had alone stay.
+// docx Remove does; anchors the template already had alone stay.
 func TestBlockDrop_RemovesOrphanedPartners(t *testing.T) {
 	inner := tp("{{#if show}}") +
 		`<w:p><w:bookmarkStart w:id="5" w:name="Gone"/><w:commentRangeStart w:id="2"/><w:r><w:t>hidden</w:t></w:r></w:p>` +

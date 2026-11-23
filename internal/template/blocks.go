@@ -9,7 +9,7 @@ import (
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
-// Block tags come in two placements (CLAUDE.md, 2026-10-17):
+// Block tags come in two placements:
 //
 //   - Paragraph range: the open and close tags are each alone in a paragraph
 //     of the same block list (body, cell, header). The marker paragraphs go;

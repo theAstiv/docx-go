@@ -7,8 +7,8 @@ import (
 )
 
 // A setter called with its clearing value on a run or paragraph that has
-// no properties must not create an empty w:rPr / w:pPr (CLAUDE.md
-// anti-pattern: "SetXxx(nil) allocating an empty <w:pPr/>").
+// no properties must not create an empty w:rPr / w:pPr: clearing a
+// property that was never set must leave the document unchanged.
 func TestClearingSettersDoNotAllocate(t *testing.T) {
 	fontSetters := map[string]func(*RunFont){
 		"SetBold":       func(f *RunFont) { f.SetBold(nil) },

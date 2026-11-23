@@ -39,7 +39,8 @@ jobs:
           go-version: stable
 
       # Linter versions are pinned so new lint rules cannot fail CI unannounced.
-      # Bump deliberately, and keep the local install in sync (see CLAUDE.md).
+      # Bump deliberately, and upgrade your local install in the same change:
+      # an older local linter passes code that CI rejects.
       - name: staticcheck
         uses: dominikh/staticcheck-action@9716614d4101e79b4340dd97b10e54d68234e431 # v1.4.1
         with:

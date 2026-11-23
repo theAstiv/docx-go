@@ -101,10 +101,11 @@ func (p *CT_P) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 }
 
 // Text returns the visible text of the paragraph by walking all w:t
-// descendants in document order, following the rendering rules in CLAUDE.md.
+// descendants in document order, text inside hyperlinks included.
 //
 // Tabs render as \t, breaks and carriage-returns as \n.
-// Field instructions (w:instrText) are excluded; field results are included.
+// Field instructions (w:instrText) are excluded; field results are included
+// (see textWriter for nested fields).
 // Content the typed model keeps raw is walked too: text inside w:ins,
 // w:smartTag, inline w:sdt, w:fldSimple and w:customXml is included; tracked
 // deletions (w:del, w:moveFrom) are excluded (see text.go).

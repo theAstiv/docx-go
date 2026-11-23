@@ -9,7 +9,8 @@ import (
 )
 
 // Attributes and children Word writes on numbering and field characters
-// must survive a round-trip (review 2026-11-19, P0 #4-#6). VerifyBytes
+// must survive a round-trip (w15:restartNumberingAfterBreak,
+// w16cid:durableId, w:dirty, w:fldLock, unknown children). VerifyBytes
 // compares the output with the input, so a lossy UnmarshalXML fails here.
 const (
 	wDecl   = `xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"`

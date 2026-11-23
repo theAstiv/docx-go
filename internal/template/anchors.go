@@ -16,7 +16,7 @@ import (
 //     hold a drawing or object (it would be deleted with the tag);
 //   - after execution (cleanStoryAnchors), a bookmark or comment-range
 //     anchor whose partner a dropped block took is removed too, as
-//     docx Remove does (C3), and a removed bookmark that a cross-reference
+//     docx Remove does, and a removed bookmark that a cross-reference
 //     points at is reported like an inline one.
 
 // storyAnchors is what a story held before execution.

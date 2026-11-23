@@ -25,8 +25,8 @@ func setBlocksText(children *[]wml.BlockElement, text string, st *story) *Paragr
 	*children = []wml.BlockElement{p}
 	// The blocks dropped here may hold lists other proxies hint at.
 	st.detach()
-	// Same cleanup as removal (C3): partners of dropped bookmark and
-	// comment anchors go too, and the id cache forgets dropped ids.
+	// Same cleanup as Remove: partners of dropped bookmark and comment
+	// anchors go too, and the id cache forgets dropped ids.
 	st.afterRemoval(marks)
 	para := &Paragraph{p: p, st: st, parent: children, gen: st.stamp()}
 	if text != "" {

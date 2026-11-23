@@ -8,7 +8,7 @@ import (
 	"github.com/theAstiv/docx-go/internal/textmerge"
 )
 
-// Inline block ranges (P3c.10, CLAUDE.md C13): {{#if x}}text{{/if}} inside
+// Inline block ranges: {{#if x}}text{{/if}} inside
 // one paragraph. A paragraph whose whole text is one block tag is a marker
 // paragraph (blocks.go); otherwise the block tags of each inline container
 // (the paragraph's own children, each hyperlink's children) that pair inside
@@ -95,7 +95,7 @@ func blockTagsOf(tags []tag) []tag {
 
 // inlineAtEdge reports whether the block tag at a row edge, the first tag
 // of the row's first paragraph (first) or the last of its last, is part of
-// an inline range and so not a row-range edge (C13). The exception is a
+// an inline range and so not a row-range edge. The exception is a
 // range without {{else}} that fills a one-paragraph row on its own: that
 // stays a one-row row range, as before inline ranges existed. (A row range
 // cannot hold an {{else}} in its opening row, so with one the range is

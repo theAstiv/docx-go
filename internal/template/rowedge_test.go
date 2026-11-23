@@ -11,7 +11,8 @@ import (
 // Row-range edge tags are found with the paragraph's full text, which
 // includes tracked insertions and inline content controls, but only typed
 // runs can be edited. A tag held there must be reported, not re-detected
-// forever (review 2026-11-19, P0 #3). The tag held in raw content is the
+// forever (the range used to re-open until the stack overflowed). The tag
+// held in raw content is the
 // one reported as unsupported, not only its unpaired partner.
 func TestRowEdge_TagInRawContent(t *testing.T) {
 	ins := func(s string) string {

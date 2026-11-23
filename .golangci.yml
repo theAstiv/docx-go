@@ -1,5 +1,6 @@
-# golangci-lint configuration for docx-go.
-# See CLAUDE.md "CI / lint rules" for rationale.
+# golangci-lint configuration for docx-go. Each linter's line says why it
+# is on; docs/architecture.md describes the three-layer architecture the
+# depguard rules enforce.
 
 version: "2"
 
@@ -51,8 +52,8 @@ linters:
         - "github\\.com/theAstiv/docx-go/internal/oxml/.*"
 
     depguard:
-      # Three-layer architecture — see CLAUDE.md for the rationale.
-      # Failure messages include a link so contributors understand WHY.
+      # Three-layer architecture (docs/architecture.md). Each failure message
+      # says why the import is refused.
       #
       # File globs use "**/pkg/**.go", not "**/pkg/**/*.go": the latter needs at
       # least one directory below pkg/, so files directly in docx/ or
@@ -65,11 +66,11 @@ linters:
             - "**/internal/oxml/**.go"
           deny:
             - pkg: "github.com/theAstiv/docx-go/internal/parts"
-              desc: "oxml layer must not import parts — see CLAUDE.md three-layer architecture"
+              desc: "oxml is the element layer and knows nothing about parts or packages (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/internal/opc"
-              desc: "oxml layer must not import opc — see CLAUDE.md three-layer architecture"
+              desc: "oxml is the element layer and knows nothing about ZIP or relationships (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/docx"
-              desc: "oxml layer must not import docx — see CLAUDE.md three-layer architecture"
+              desc: "oxml is the element layer and must not depend on the public API (docs/architecture.md)"
 
         opc-layer:
           # internal/opc/** must use stdlib only.
@@ -78,33 +79,33 @@ linters:
             - "**/internal/opc/**.go"
           deny:
             - pkg: "github.com/theAstiv/docx-go/internal/oxml"
-              desc: "opc layer must not import oxml — see CLAUDE.md three-layer architecture"
+              desc: "opc handles ZIP, content types and relationships only, with the standard library (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/internal/parts"
-              desc: "opc layer must not import parts — see CLAUDE.md three-layer architecture"
+              desc: "opc sits below parts; parts imports opc, not the other way round (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/docx"
-              desc: "opc layer must not import docx — see CLAUDE.md three-layer architecture"
+              desc: "opc must not depend on the public API (docs/architecture.md)"
 
         docx-layer:
-          # docx/ may use parts, internal/oxml/wml (type construction only;
-          # see the CLAUDE.md decision log, 2026-04-26), internal/oxml/docprops
-          # (property names; 2026-11-14) and internal/textmerge (Replace;
-          # 2026-11-15), but no other oxml internals and not opc directly.
+          # docx/ may use parts, internal/oxml/wml (to construct element
+          # types; no encoding/xml calls), internal/oxml/docprops (property
+          # names) and internal/textmerge (Replace), but no other oxml
+          # internals and not opc directly.
           list-mode: lax
           files:
             - "**/docx/**.go"
           deny:
             - pkg: "github.com/theAstiv/docx-go/internal/oxml/dml"
-              desc: "docx layer must not import dml directly — use parts; see CLAUDE.md"
+              desc: "docx must not build DrawingML directly; go through parts or wml (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/internal/oxml/registry"
-              desc: "docx layer must not import registry — see CLAUDE.md"
+              desc: "the element registry is internal to oxml (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/internal/oxml/raw"
-              desc: "docx layer must not import raw — see CLAUDE.md"
+              desc: "raw elements are the oxml passthrough; docx works on typed elements only (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/internal/oxml/order"
-              desc: "docx layer must not import order — see CLAUDE.md"
+              desc: "child ordering is oxml's job; use the wml setters (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/internal/oxml/roundtrip"
-              desc: "docx layer must not import roundtrip — see CLAUDE.md"
+              desc: "roundtrip is a test helper for oxml types (docs/architecture.md)"
             - pkg: "github.com/theAstiv/docx-go/internal/opc"
-              desc: "docx layer must not import opc directly — use parts; see CLAUDE.md"
+              desc: "docx reaches the package through parts, never opc directly (docs/architecture.md)"
             - pkg: "encoding/xml"
               desc: "docx layer must not import encoding/xml — enforced by forbidigo too"
 
