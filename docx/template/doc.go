@@ -42,7 +42,13 @@
 // or link, on top of the formatting of the run holding the tag. It is a
 // typed value, not markup, so data cannot inject document content. Where
 // only text can go (content controls, text boxes, document properties) its
-// plain text is written, with a warning.
+// plain text is written, with a warning. A link must be an http:, https: or
+// mailto: URL; others (file:, ms-msdt:, …) are ErrUnsupportedValue.
+//
+// Nested loops multiply: {{#each}} stops after copying Options.MaxCopies
+// paragraphs, tables and rows in one Execute (DefaultMaxCopies, 100,000,
+// when it is 0), with ErrOutputLimit, so untrusted data cannot make a small
+// template produce millions of paragraphs.
 //
 // A value tag can pipe its value through formatters, left to right:
 //

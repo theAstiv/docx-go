@@ -8,10 +8,17 @@
 // Without flags it uses the template.docx and data.json embedded in the
 // example. The template's syntax:
 //
-//	{{client.name}}                 a value
-//	{{#each areas}} … {{/each}}     a loop over table rows or paragraphs
-//	{{#if .critical}} … {{/if}}     a conditional block
-//	{{#unless gaps}} … {{/unless}}  the reverse
+//	{{client.name}}                          a value
+//	{{assessment.date | date "2 January 2006"}}  a value through a formatter
+//	{{#each areas}} … {{/each}}              a loop over table rows or paragraphs
+//	{{#if .critical}} … {{else}} … {{/if}}   a conditional block
+//	{{#each gaps}} … {{else}} … {{/each}}    a loop with a block for an empty list
+//	{{#if .critical}} (critical){{/if}}      a condition inside a paragraph
+//	{{image client.logo}}                    a picture
+//	{{summary.verdict}}                      formatted text, from a template.Rich value
+//
+// JSON cannot hold pictures or formatted text, so fill adds client.logo and
+// summary.verdict to the data in Go (see addGoValues).
 package main
 
 import (
@@ -85,6 +92,9 @@ func fill(tpl, data []byte) (*docx.Document, []template.Issue, error) {
 	if err := json.Unmarshal(data, &values); err != nil {
 		return nil, nil, fmt.Errorf("read data: %w", err)
 	}
+	if err := addGoValues(values); err != nil {
+		return nil, nil, err
+	}
 	// Word then refreshes page numbers and any table of contents from the
 	// filled text when the report opens. A TOC repeats heading tags, which
 	// Execute leaves for Word to rebuild.
@@ -96,4 +106,50 @@ func fill(tpl, data []byte) (*docx.Document, []template.Issue, error) {
 		return nil, warnings, fmt.Errorf("fill template: %w", err)
 	}
 	return doc, warnings, nil
+}
+
+// addGoValues adds the values JSON cannot express: the client's logo (a
+// template.Image) and a coloured verdict with a link (a template.Rich). A
+// value the data already holds is left alone; a missing client or summary
+// object is left for Strict mode to report.
+func addGoValues(values map[string]any) error {
+	if client, ok := values["client"].(map[string]any); ok {
+		if _, set := client["logo"]; !set {
+			logo, err := clientLogoPNG()
+			if err != nil {
+				return err
+			}
+			client["logo"] = template.Image{
+				Data:    logo,
+				Width:   docx.Inches(0.9).EMU(), // the height follows the aspect ratio
+				AltText: "Client logo",
+			}
+		}
+	}
+	if summary, ok := values["summary"].(map[string]any); ok {
+		if _, set := summary["verdict"]; !set {
+			score, _ := summary["score"].(float64)
+			maxScore, _ := summary["max"].(float64)
+			summary["verdict"] = verdict(score, maxScore)
+		}
+	}
+	return nil
+}
+
+// verdict turns the readiness score into bold, coloured text with a link to
+// the regulator's site.
+func verdict(score, maxScore float64) template.Rich {
+	label, colour := "Ready", "1E8449"
+	switch {
+	case maxScore <= 0 || score/maxScore < 0.5:
+		label, colour = "Not ready", "C0392B"
+	case score/maxScore < 0.8:
+		label, colour = "Partly ready", "B9770E"
+	}
+	return template.Rich{Runs: []template.RichRun{
+		{Text: label, Bold: docx.On(), Color: colour},
+		{Text: " (see the "},
+		{Text: "Ministry's data protection pages", Link: "https://www.meity.gov.in/"},
+		{Text: ")"},
+	}}
 }

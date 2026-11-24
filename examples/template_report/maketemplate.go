@@ -15,11 +15,15 @@ import (
 // example needs no binary it cannot regenerate. TestTemplateUpToDate keeps
 // the committed file in step (go test ./examples/template_report -update-template).
 //
-// It shows every placement the engine supports:
-//   - value tags in the body, the header and a table;
+// It shows every placement and value kind the engine supports:
+//   - value tags in the body, the header and a table, some piped through
+//     formatters (date, currency, default);
+//   - an image value ({{image client.logo}}) and a rich-text value
+//     ({{summary.verdict}}), which fill adds to the JSON data in Go;
 //   - a row loop ({{#each}} at the edges of a table row);
-//   - a paragraph loop with a nested {{#if}} and a nested loop;
-//   - {{#unless}} for an empty list;
+//   - a paragraph loop with a nested {{#if}} … {{else}} … {{/if}}, a
+//     nested loop, and an {{else}} for an empty list;
+//   - a condition inside a paragraph (" (critical)" in each gap heading);
 //   - a static logo in the header and page numbers in the footer, which
 //     pass through untouched.
 func buildTemplate() (*docx.Document, error) {
@@ -67,15 +71,18 @@ func buildTemplate() (*docx.Document, error) {
 	}
 
 	para("Title", "DPDPA Gap Assessment")
+	para("", "{{image client.logo}}")
 	para("", "Prepared for {{client.name}}, {{client.city}}")
-	para("", "Assessment date: {{assessment.date}} · Assessor: {{assessment.assessor}}")
+	para("", `Assessment date: {{assessment.date | date "2 January 2006"}} · Assessor: {{assessment.assessor | default "not named"}}`)
 
 	para("Heading1", "Summary")
 	p := para("", "Overall readiness: ")
 	score := p.AddRun("{{summary.score}}")
 	score.Font().SetBold(docx.On())
 	p.AddRun(" of {{summary.max}}")
+	para("", "Verdict: {{summary.verdict}}")
 	para("", "{{summary.text}}")
+	para("", `Estimated remediation budget: {{summary.budget | currency "₹" 0}}`)
 
 	// Scorecard: a header row, then one row per area.
 	para("Heading1", "Scorecard")
@@ -99,12 +106,9 @@ func buildTemplate() (*docx.Document, error) {
 
 	// Gaps: one section per gap, each with its own bulleted actions.
 	para("Heading1", "Gaps")
-	para("", "{{#unless gaps}}")
-	para("", "No gaps were found.")
-	para("", "{{/unless}}")
 	actions := d.CreateList(docx.ListOptions{Style: docx.ListBullet})
 	para("", "{{#each gaps}}")
-	para("Heading2", "{{.id}} · {{.title}}")
+	para("Heading2", "{{.id}} · {{.title}}{{#if .critical}} (critical){{/if}}")
 	para("", "Provision: {{.provision}}")
 	para("", "{{.finding}}")
 	para("", "{{#if .critical}}")
@@ -112,11 +116,15 @@ func buildTemplate() (*docx.Document, error) {
 	r := warn.AddRun("Critical: fix before processing resumes.")
 	r.Font().SetBold(docx.On())
 	r.Font().SetColor("C0392B")
+	para("", "{{else}}")
+	para("", "Priority: fix within the next quarter.")
 	para("", "{{/if}}")
 	para("", "Recommended actions:")
 	para("", "{{#each .actions}}")
 	para("", "{{.}}").SetList(actions, 0)
 	para("", "{{/each}}")
+	para("", "{{else}}")
+	para("", "No gaps were found.")
 	para("", "{{/each}}")
 
 	para("Heading1", "Next steps")
@@ -148,6 +156,28 @@ func logoPNG() ([]byte, error) {
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return nil, fmt.Errorf("encode logo: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// clientLogoPNG draws a stand-in client logo, a teal disc on white, for the
+// {{image client.logo}} value. A real program would load the client's file.
+func clientLogoPNG() ([]byte, error) {
+	const size, r = 96, 40
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	for y := range size {
+		for x := range size {
+			dx, dy := x-size/2, y-size/2
+			c := color.RGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+			if dx*dx+dy*dy <= r*r {
+				c = color.RGBA{R: 0x00, G: 0x80, B: 0x80, A: 0xFF}
+			}
+			img.Set(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, fmt.Errorf("encode client logo: %w", err)
 	}
 	return buf.Bytes(), nil
 }
