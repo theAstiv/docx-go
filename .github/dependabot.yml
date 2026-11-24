@@ -20,3 +20,17 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # The validator's SDK image, runtime image and TargetFramework must
+      # move to a new .NET version together; Dependabot bumps one image at
+      # a time, which leaves an app the runtime cannot start. Digest and
+      # patch updates within a version still come through.
+      - dependency-name: "dotnet/*"
+        update-types: ["version-update:semver-major"]
+
+  # The validator's OpenXML SDK: its rules decide what counts as an error.
+  - package-ecosystem: nuget
+    directory: /tools/validator
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

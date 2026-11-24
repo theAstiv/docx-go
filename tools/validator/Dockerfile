@@ -1,15 +1,22 @@
 # OOXML Validator container
-# .NET 8 + DocumentFormat.OpenXml + thin JSON wrapper
+# .NET 10 (LTS) + DocumentFormat.OpenXml + thin JSON wrapper
+#
 # Base images are pinned by digest (the tag is for readers), so CI builds
 # the same image every time; Dependabot proposes digest updates.
-FROM mcr.microsoft.com/dotnet/sdk:11.0-alpine@sha256:52556c0fb9d0f609ae9aeab9efeeba96f4acc2f7038f7696f2235ccbdbb8e290 AS build
+#
+# The SDK image, the runtime image and TargetFramework in validator.csproj
+# must name the same .NET version: an app built for one major version does
+# not start on another's runtime (exit 150, "You must install or update
+# .NET"). Move all three together; Dependabot is told not to propose major
+# bumps of these images (.github/dependabot.yml).
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine@sha256:0294f285d062afacc8b5f6d7febb0cd4ee879320e5585fa15f2f4ebf1feb9ba7 AS build
 WORKDIR /src
 COPY validator.csproj .
 RUN dotnet restore
 COPY . .
 RUN dotnet publish -c Release -o /app
 
-FROM mcr.microsoft.com/dotnet/runtime:8.0-alpine@sha256:a088dd404d4b1c7f7cad246d665eccfd5c05780a99a237a8643063d72dca2b0f
+FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine@sha256:7518aaad9e4328001518006a7e8b3fcf6ce8f8816355574f7264c1fa0a0ce188
 WORKDIR /app
 COPY --from=build /app .
 ENTRYPOINT ["dotnet", "validator.dll"]
