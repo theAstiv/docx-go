@@ -2,41 +2,11 @@
 
 docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the public API may change between minor versions.** Requires Go ≥ 1.23.
 
-## Unreleased
+## v0.5.0: templating 2
 
-### Changed
+Templates gain `{{else}}`, formatters for dates, numbers and currency, conditions inside a paragraph, pictures and formatted text. Tables created without column widths are sized the way Word sizes them. A review of the whole codebase hardened `Open` and `Execute` for untrusted files and data, and fixed the round-trip and structure bugs it found.
 
-- A table created without column widths now gets them, the way Word sizes an inserted table, so a table of empty cells no longer collapses to a sliver in Word. This applies to `Body.AddTable`, `Header`/`Footer.AddTable` and `Paragraph.InsertTableAfter`.
-  - Columns that `TableOptions.ColWidth` leaves out (nil, too short, or a zero entry) share what is left of the text width evenly, on the grid and on every cell (`w:tcW`).
-  - The text width depends on where the table goes:
-    - **In the body:** one text column of the section holding it: the page width less the left, right and gutter margins, divided among the section's text columns (`w:cols`; the first column's width when they are unequal).
-    - **In a cell:** the cell's width (its fixed `w:tcW`, else the outer grid columns it spans) less the default cell margins.
-    - **In a header or footer:** the first section that uses it.
-  - When the given widths leave less than half an inch per missing column, each missing column gets an even share of the whole width instead.
-  - Columns with a width are unchanged.
-
-### Added
-
-- `Paragraph.AddSectionBreak` and `Paragraph.SectionBreak` return a `Section` that can set its own headers and footers. Before, only `Document.LastSection` could.
-- `HyperlinkOptions.AllowAnyScheme` accepts link schemes besides `http:`, `https:` and `mailto:` (see Breaking). It never accepts `javascript:`, `vbscript:` or `data:`.
-- `ErrInvalidPartName`: `Open` refuses a file with an entry name no part may have (absolute, with a backslash, or with an empty, `.` or `..` segment), or with two entries for one part, exactly or ignoring case.
-- Templating: `Options.MaxCopies` bounds the paragraphs, tables and rows `{{#each}}` may copy in one `Execute` (default `DefaultMaxCopies`, 100,000; negative for no limit). Beyond it, `Execute` fails with `ErrOutputLimit` in both modes.
-
-### Fixed
-
-- `RunFont.SetColor` removes a theme colour (`w:themeColor`, `themeTint`, `themeShade`) from the run. Word shows a theme colour in place of the hex value, so a colour set on a run Word had given a theme colour did not show in Word.
-- `RunFont` and `ParagraphFormat` setters called with their clearing value (`nil`, `""`) no longer add an empty `w:rPr` / `w:pPr` to a run or paragraph that has none.
-- `Cell`, `Header` and `Footer.SetText` clean up like `Remove`: the other end of a bookmark or comment range they drop is removed too, and `Document.Bookmarks` stops listing dropped bookmarks.
-- `Section.SetMargins` on a section without page margins writes the `header`, `footer` and `gutter` values the schema requires.
-- Text extraction (`Paragraph.Text`, `Document.Text`, and the skip counts of `Replace`) follows nested fields: an index entry (`XE`, `TC`) no longer hides the rest of its paragraph, and a field inside another field's instruction no longer leaks its result.
-- A table style read without `w:pPr`/`w:rPr` no longer writes `w:tblPr` before a run format set later, which the validator rejected.
-- `Open`: a `.rels` file outside a `_rels` folder is an ordinary part, and `_rels/x.rels` belongs to part `x` (it was renamed on save). A malformed relationships part of a part that is not read no longer fails `Open`. Content types, relationship sources and media names compare ignoring case, so a case variant no longer adds a duplicate `Default` or overwrites an image.
-- `wp:docPr` and bookmark ids stay within their ranges when a document already uses the largest one, and a huge `rId` number no longer makes new relationship ids overflow.
-- Templating: a block or row range the data drops takes the other end of any bookmark or comment range it cut with it, and a removed bookmark that a cross-reference points at is a warning, as for inline ranges. A block whose branch or tag paragraph holds part of a field, or whose tag paragraph holds a drawing, is `ErrSplitAcrossBoundary` / `ErrMisplacedBlock` whatever the data.
-- Templating: a header or footer emptied by a range keeps a final empty paragraph.
-- Templating: only custom XML parts that a content control binds are filled. Add-in or SharePoint data holding `{{` no longer fails `Execute` or gets blanked.
-- Templating: a value whose `String` method panics (a nil pointer) is reported as having no text form instead of crashing `Execute`, and a `json.Number` gets the same checks as a numeric string (`1e100000` is refused by `number` and `currency`).
-- Templating: a paragraph with thousands of split tags is normalised in one pass; it was quadratic.
+Every document this release generates passes the OOXML schema validator (now counting semantic errors too) and opens in LibreOffice (checked in CI). [`examples/template_report`](examples/template_report) uses every new kind of tag.
 
 ### Breaking
 
@@ -78,6 +48,44 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
   - A bad colour or an unsafe or relative URL is `ErrUnsupportedValue`. Formatters other than `default` reject a rich value (`ErrFormat`).
   - It is a typed value, not markup, so data cannot inject document content. In content controls, text boxes and document properties the plain text is written, with a warning.
   - A failed `Execute` also undoes links: the relationship and the Hyperlink style it added are removed.
+- Templating: `Options.MaxCopies` bounds the paragraphs, tables and rows `{{#each}}` may copy in one `Execute` (default `DefaultMaxCopies`, 100,000; negative for no limit). Beyond it, `Execute` fails with `ErrOutputLimit` in both modes.
+- `Paragraph.AddSectionBreak` and `Paragraph.SectionBreak` return a `Section` that can set its own headers and footers. Before, only `Document.LastSection` could.
+- `HyperlinkOptions.AllowAnyScheme` accepts link schemes besides `http:`, `https:` and `mailto:` (see Breaking). It never accepts `javascript:`, `vbscript:` or `data:`.
+- `Open` limits what a file may make it do (`ErrLimitExceeded`): 10,000 ZIP entries, 512 MiB per entry and 1 GiB in total uncompressed, and XML nested 20,000 elements deep. A small hostile file used to crash the process or allocate hundreds of megabytes.
+- `ErrMalformedPart`: `Open` refuses an XML part with text or a DOCTYPE before its root element.
+- `ErrInvalidPartName`: `Open` refuses a file with an entry name no part may have (absolute, with a backslash, or with an empty, `.` or `..` segment), or with two entries for one part, exactly or ignoring case.
+
+### Changed
+
+- A table created without column widths now gets them, the way Word sizes an inserted table, so a table of empty cells no longer collapses to a sliver in Word. This applies to `Body.AddTable`, `Header`/`Footer.AddTable` and `Paragraph.InsertTableAfter`.
+  - Columns that `TableOptions.ColWidth` leaves out (nil, too short, or a zero entry) share what is left of the text width evenly, on the grid and on every cell (`w:tcW`).
+  - The text width depends on where the table goes:
+    - **In the body:** one text column of the section holding it: the page width less the left, right and gutter margins, divided among the section's text columns (`w:cols`; the first column's width when they are unequal).
+    - **In a cell:** the cell's width (its fixed `w:tcW`, else the outer grid columns it spans) less the default cell margins.
+    - **In a header or footer:** the first section that uses it.
+  - When the given widths leave less than half an inch per missing column, each missing column gets an even share of the whole width instead.
+  - Columns with a width are unchanged.
+
+### Fixed
+
+- Saving no longer drops Word's attributes and unknown children from list definitions and field characters: `w15:restartNumberingAfterBreak` and `w16cid:durableId` on numbering (Word writes them on nearly every list), and `w:dirty` and `w:fldLock` on fields (Word refreshed a table of contents on open, and kept locked fields locked, only with them).
+- `Open` finds the main document through an absolute relationship target (`/word/document.xml`, as the Open XML SDK writes it) and under any name, and edits are saved back to the parts they were read from. A main part named `word/document2.xml` used to lose every edit, and a styles part named in another case was overwritten with defaults. A new header or footer never overwrites a part already in the file.
+- Removing elements while ranging over an iterator (`for p := range body.Paragraphs() { p.Remove() }`) removes all of them; it used to skip every other one. A proxy inside a removed table returns `ErrNotInDocument` instead of acting on the detached copy.
+- Templating: a row-range tag typed with Track Changes on (inside `w:ins`) or in a content control no longer makes `Execute` recurse until the stack overflows; it is `ErrUnsupportedLocation`.
+- Saving keeps every namespace prefix the content uses declared, so a document whose root carries an attribute in its own namespace (`w:conformance`) is no longer written with an undeclared prefix.
+- `RunFont.SetColor` removes a theme colour (`w:themeColor`, `themeTint`, `themeShade`) from the run. Word shows a theme colour in place of the hex value, so a colour set on a run Word had given a theme colour did not show in Word.
+- `RunFont` and `ParagraphFormat` setters called with their clearing value (`nil`, `""`) no longer add an empty `w:rPr` / `w:pPr` to a run or paragraph that has none.
+- `Cell`, `Header` and `Footer.SetText` clean up like `Remove`: the other end of a bookmark or comment range they drop is removed too, and `Document.Bookmarks` stops listing dropped bookmarks.
+- `Section.SetMargins` on a section without page margins writes the `header`, `footer` and `gutter` values the schema requires.
+- Text extraction (`Paragraph.Text`, `Document.Text`, and the skip counts of `Replace`) follows nested fields: an index entry (`XE`, `TC`) no longer hides the rest of its paragraph, and a field inside another field's instruction no longer leaks its result.
+- A table style read without `w:pPr`/`w:rPr` no longer writes `w:tblPr` before a run format set later, which the validator rejected.
+- `Open`: a `.rels` file outside a `_rels` folder is an ordinary part, and `_rels/x.rels` belongs to part `x` (it was renamed on save). A malformed relationships part of a part that is not read no longer fails `Open`. Content types, relationship sources and media names compare ignoring case, so a case variant no longer adds a duplicate `Default` or overwrites an image.
+- `wp:docPr` and bookmark ids stay within their ranges when a document already uses the largest one, and a huge `rId` number no longer makes new relationship ids overflow.
+- Templating: a block or row range the data drops takes the other end of any bookmark or comment range it cut with it, and a removed bookmark that a cross-reference points at is a warning, as for inline ranges. A block whose branch or tag paragraph holds part of a field, or whose tag paragraph holds a drawing, is `ErrSplitAcrossBoundary` / `ErrMisplacedBlock` whatever the data.
+- Templating: a header or footer emptied by a range keeps a final empty paragraph.
+- Templating: only custom XML parts that a content control binds are filled. Add-in or SharePoint data holding `{{` no longer fails `Execute` or gets blanked.
+- Templating: a value whose `String` method panics (a nil pointer) is reported as having no text form instead of crashing `Execute`, and a `json.Number` gets the same checks as a numeric string (`1e100000` is refused by `number` and `currency`).
+- Templating: a paragraph with thousands of split tags is normalised in one pass; it was quadratic.
 
 ## v0.4.0: editing existing documents
 

@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"flag"
 	"image/png"
 	"io"
@@ -134,6 +135,27 @@ func TestFill_Golden(t *testing.T) {
 	}
 }
 
+// With no gaps, the {{else}} of {{#each gaps}} shows instead of the loop.
+func TestFill_NoGaps(t *testing.T) {
+	var values map[string]any
+	if err := json.Unmarshal(defaultData, &values); err != nil {
+		t.Fatal(err)
+	}
+	values["gaps"] = []any{}
+	data, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, _, err := fill(defaultTemplate, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := doc.Text()
+	if !strings.Contains(text, "No gaps were found.") || strings.Contains(text, "Recommended actions") {
+		t.Errorf("body = %q", text)
+	}
+}
+
 // The template lists what the data must provide.
 func TestTemplate_Placeholders(t *testing.T) {
 	doc, err := docx.OpenBytes(defaultTemplate)
@@ -185,16 +207,43 @@ func TestFill(t *testing.T) {
 		"Record consent with a timestamp and the notice version shown.",
 		"G-03 · Erasure requests are handled by email only",
 		"Address G-01 and G-02 first.\tA follow-up review",
+		// Formatters.
+		"Assessment date: 17 October 2026 · Assessor: A. Assessor",
+		"Estimated remediation budget: ₹450,000",
+		// Rich value: 58 of 100 is "Partly ready", with a link.
+		"Verdict: Partly ready (see the Ministry's data protection pages)",
+		// Inline condition.
+		"G-01 · Consent is bundled with the terms of service (critical)",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("body lacks %q", want)
 		}
 	}
+	if strings.Contains(text, "by email only (critical)") {
+		t.Error("the inline condition kept its text for a gap that is not critical")
+	}
 	if strings.Contains(text, "No gaps were found") {
-		t.Error("the {{#unless gaps}} block was kept")
+		t.Error("the {{else}} of {{#each gaps}} was kept")
 	}
 	if n := strings.Count(text, "Critical: fix before processing resumes."); n != 2 {
 		t.Errorf("%d critical notes, want 2 (G-01 and G-02)", n)
+	}
+	if n := strings.Count(text, "Priority: fix within the next quarter."); n != 1 {
+		t.Errorf("%d priority notes from {{else}}, want 1 (G-03)", n)
+	}
+	var bodyImages, links int
+	for p := range r.Body().Paragraphs() {
+		for run := range p.Runs() {
+			for range run.Images() {
+				bodyImages++
+			}
+		}
+		for range p.Hyperlinks() {
+			links++
+		}
+	}
+	if bodyImages != 1 || links != 1 {
+		t.Errorf("body has %d images and %d links, want the client logo and the verdict's link", bodyImages, links)
 	}
 
 	// Scorecard: the header row plus one row per area.

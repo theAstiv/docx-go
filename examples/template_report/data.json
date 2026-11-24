@@ -5,12 +5,13 @@
     "city": "Pune"
   },
   "assessment": {
-    "date": "17 October 2026",
+    "date": "2026-10-17",
     "assessor": "A. Assessor"
   },
   "summary": {
     "score": 58,
     "max": 100,
+    "budget": 450000,
     "text": "Consent capture and breach response need work before the next audit.\nRetention and grievance handling are largely in place."
   },
   "areas": [

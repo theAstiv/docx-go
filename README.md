@@ -9,14 +9,14 @@
 A permissively-licensed Go library for creating, reading, and modifying `.docx`
 (OOXML WordprocessingML) files, without losing unknown content.
 
-**Status: v0.4.0.** Build reports from scratch (images, hyperlinks, styled tables, page numbers, a table of contents), fill Word templates from JSON data, or edit existing documents (remove and insert content, find and replace, plain text, document properties). Every document the library generates, and every template it fills, passes the OOXML schema validator and opens without a "Repaired document" prompt in Word, LibreOffice and Google Docs. **Pre-1.0:** the API may still change between minor versions; see the [changelog](CHANGELOG.md).
+**Status: v0.5.0.** Build reports from scratch (images, hyperlinks, styled tables, page numbers, a table of contents), fill Word templates from JSON data (loops, conditions with `{{else}}`, formatters, pictures and formatted text), or edit existing documents (remove and insert content, find and replace, plain text, document properties). Every document the library generates, and every template it fills, passes the OOXML schema validator and opens without a "Repaired document" prompt in Word, LibreOffice and Google Docs. **Pre-1.0:** the API may still change between minor versions; see the [changelog](CHANGELOG.md).
 
 ---
 
 ## Install
 
 ```sh
-go get github.com/theAstiv/docx-go@v0.4.0
+go get github.com/theAstiv/docx-go@v0.5.0
 ```
 
 Requires Go ≥ 1.23.
@@ -36,7 +36,7 @@ defer f.Close()
 _ = doc.Save(f)
 ```
 
-Open an existing file with `docx.Open(r, size)` or `docx.OpenBytes(data)`; anything the library does not model is kept as it was.
+Open an existing file with `docx.Open(r, size)` or `docx.OpenBytes(data)`; anything the library does not model is kept as it was. `Open` is safe on untrusted files: it limits archive size, entry count and XML nesting (`ErrLimitExceeded`), and refuses malformed parts and invalid part names (`ErrMalformedPart`, `ErrInvalidPartName`).
 
 ---
 
@@ -72,9 +72,10 @@ Block tags go **alone in their own paragraph** (the paragraphs and tables betwee
 - `template.Placeholders(doc)` lists a template's tags, so data can be checked against a template before rendering.
 - Repeated content gets fresh drawing ids, keeps bookmarks on the first copy only, and keeps list numbering continuous.
 - Tested against templates made in Word itself (`testdata/fixtures/word/template_*.docx`).
-- Not supported: `{{else}}`, helpers, conditions inside a paragraph, rich-text and image values, and tags in footnotes, endnotes and comments (`Execute` warns about those).
+- Data is treated as untrusted: values are plain text (no markup injection), links in rich text accept only `http:`, `https:` and `mailto:`, and `{{#each}}` loops stop at 100,000 copied paragraphs, tables and rows (`Options.MaxCopies`, `ErrOutputLimit`).
+- Not supported: block and image tags inside content controls and text boxes (value tags work there), helpers beyond the formatters above, and tags in footnotes, endnotes and comments (`Execute` warns about those).
 
-See [`examples/template_report`](examples/template_report) for a gap-assessment report built from a template and [`data.json`](examples/template_report/data.json).
+See [`examples/template_report`](examples/template_report) for a gap-assessment report built from a template and [`data.json`](examples/template_report/data.json). It uses every kind of tag above; the logo and the formatted verdict, which JSON cannot hold, are added in Go.
 
 Without writing Go, use the [`docxfill`](cmd/docxfill) command:
 
@@ -105,7 +106,7 @@ See [`examples/edit`](examples/edit).
 | Feature | API surface |
 |---|---|
 | Inline images | `Run.AddImage(r, ImageOptions)` (PNG/JPEG/GIF), `Run.Images()`, `Image.Size/SetSize/AltText/Bytes`; identical images are stored once |
-| Hyperlinks | `Paragraph.AddHyperlink(url, opts)`, `AddInternalLink(bookmark, opts)`, `Hyperlinks()`, `Hyperlink.AddRun/URL/Anchor/Text` |
+| Hyperlinks | `Paragraph.AddHyperlink(url, opts)` (`http:`, `https:`, `mailto:`; others with `HyperlinkOptions.AllowAnyScheme`), `AddInternalLink(bookmark, opts)`, `Hyperlinks()`, `Hyperlink.AddRun/URL/Anchor/Text` |
 | Bookmarks | `Paragraph.AddBookmark(name)`, `Document.Bookmark(name)`, `Document.Bookmarks()` |
 | Styles | `Document.Styles()`, `Styles.ByID/All/AddParagraphStyle/AddCharacterStyle/AddTableStyle/EnsureBuiltin/DocDefaultsFont`, `Style.Format()/Font()/SetBasedOn/SetNext` |
 | Table formatting | `Table/Cell.SetBorders(BorderOptions)`, `SetWidth(TableWidth)`, `Table.SetCellMargins/SetLayout`, `Cell.SetShading`, `Row.SetHeader/SetCantSplit` |
@@ -138,7 +139,7 @@ See [`examples/report`](examples/report) for a report that uses all of them.
 | v0.2.0 ✅ | Paragraphs, runs and formatting; tables; lists; sections; headers and footers |
 | v0.3.0 ✅ | Report building (images, hyperlinks, bookmarks, table formatting, styles, page and TOC fields) and templating |
 | v0.4.0 ✅ | Editing existing documents: remove and insert paragraphs, tables, rows and runs; find and replace across runs; whole-document text; document properties; paragraph tab stops, borders and shading |
-| v0.5.0 | Templating: image values, `{{else}}`, formatters (dates, numbers, currency), rich-text values, conditions inside a paragraph |
+| v0.5.0 ✅ | Templating: image values, `{{else}}`, formatters (dates, numbers, currency), rich-text values, conditions inside a paragraph; default table widths; hardening for untrusted files and data |
 | v0.6.0 | Appending and merging documents, template includes, footnotes and endnotes, floating images and SVG, a PDF conversion recipe |
 | Later | Threaded comments, resolving style inheritance into effective formatting, REF/HYPERLINK/SEQ fields, bookmarks spanning paragraphs, typed content controls, tracked changes (accept / reject), equations, shapes and charts (kept as they are today) |
 | v1.0 | A stable public API, once the surface above has settled |
