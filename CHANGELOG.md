@@ -6,7 +6,7 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 
 Templates gain `{{else}}`, formatters for dates, numbers and currency, conditions inside a paragraph, pictures and formatted text. Tables created without column widths are sized the way Word sizes them. A review of the whole codebase hardened `Open` and `Execute` for untrusted files and data, and fixed the round-trip and structure bugs it found.
 
-Every document this release generates passes the OOXML schema validator (now counting semantic errors too) and opens in LibreOffice (checked in CI). [`examples/template_report`](examples/template_report) uses every new kind of tag.
+Every document this release generates passes the OOXML schema validator (now counting semantic errors too) and opens without a "Repaired document" prompt in LibreOffice (checked in CI). Word and Google Docs were checked by hand. [`examples/template_report`](examples/template_report) uses every new kind of tag.
 
 ### Breaking
 
