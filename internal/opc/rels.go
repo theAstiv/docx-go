@@ -96,6 +96,16 @@ func (r *Rels) ByID(id string) (Relationship, bool) {
 	return Relationship{}, false
 }
 
+// Remove deletes the relationship with the given ID, if there is one.
+func (r *Rels) Remove(id string) {
+	for i, e := range r.entries {
+		if e.ID == id {
+			r.entries = append(r.entries[:i], r.entries[i+1:]...)
+			return
+		}
+	}
+}
+
 // All returns all relationships.
 func (r *Rels) All() []Relationship {
 	out := make([]Relationship, len(r.entries))

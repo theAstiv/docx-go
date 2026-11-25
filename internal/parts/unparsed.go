@@ -9,19 +9,20 @@ import (
 
 // unparsedStory matches the story parts this package keeps as opaque bytes:
 // footnotes, endnotes and comments.
-var unparsedStory = regexp.MustCompile(`^word/(footnotes|endnotes|comments)\.xml$`)
+// Part names compare ignoring case (OPC), so the patterns do too.
+var unparsedStory = regexp.MustCompile(`(?i)^word/(footnotes|endnotes|comments)\.xml$`)
 
-// boundData matches the parts content controls bind to: the core document
-// properties and the custom XML data items (not their itemProps).
-var boundData = regexp.MustCompile(`^(docProps/core\.xml|customXml/item\d+\.xml)$`)
+// customXMLItem matches the custom XML data items content controls bind to
+// (not their itemProps).
+var customXMLItem = regexp.MustCompile(`(?i)^customXml/item\d+\.xml$`)
 
 // BoundDataParts returns, by path, the parts data-bound content controls
-// read from (w:dataBinding): docProps/core.xml, and each customXml/item*.xml
-// whose item id a content control in the document names. Word re-syncs a
-// bound control from its part when it opens a file, so text written into
-// such a control must also be written to the part. Custom XML items no
-// control binds (add-in or SharePoint data) are left out: their text is not
-// template text.
+// read from (w:dataBinding): the core properties part the package
+// relationships name, and each customXml/item*.xml whose item id a content
+// control in the document names. Word re-syncs a bound control from its part
+// when it opens a file, so text written into such a control must also be
+// written to the part. Custom XML items no control binds (add-in or
+// SharePoint data) are left out: their text is not template text.
 //
 // Core properties changed through EditCoreProps are written into the part
 // first, so the bytes returned include them. If that fails the part's
@@ -29,20 +30,22 @@ var boundData = regexp.MustCompile(`^(docProps/core\.xml|customXml/item\d+\.xml)
 func (p *Package) BoundDataParts() map[string][]byte {
 	_ = p.flushCoreProps() // a failure resurfaces in Save, which flushes again
 	out := map[string][]byte{}
+	if cp := p.corePropsPath(); cp != "" {
+		if data := p.pkg.Part(cp); data != nil {
+			out[cp] = data
+		}
+	}
 	var bound map[string]bool
 	for _, name := range p.pkg.PartPaths() {
-		if !boundData.MatchString(name) {
+		if !customXMLItem.MatchString(name) {
 			continue
 		}
-		if strings.HasPrefix(name, "customXml/") {
-			if bound == nil {
-				bound = p.boundStoreItems()
-			}
-			if !bound[p.customXMLItemID(name)] {
-				continue
-			}
+		if bound == nil {
+			bound = p.boundStoreItems()
 		}
-		out[name] = p.pkg.Part(name)
+		if bound[p.customXMLItemID(name)] {
+			out[name] = p.pkg.Part(name)
+		}
 	}
 	return out
 }
@@ -88,10 +91,7 @@ func (p *Package) boundStoreItems() map[string]bool {
 // from its properties part; "" when it has none.
 func (p *Package) customXMLItemID(item string) string {
 	for _, r := range p.pkg.Rels(item).ByType(relCustomXMLProps) {
-		if r.TargetMode == "External" {
-			continue
-		}
-		name, ok := p.pkg.FindPart(resolveRelPath(item, r.Target))
+		name, ok := p.findTarget(item, r)
 		if !ok {
 			continue
 		}
@@ -114,7 +114,7 @@ func normItemID(id string) string {
 // use.
 func (p *Package) SetPartData(path string, data []byte) {
 	p.pkg.SetPart(path, data)
-	if p.core != nil && p.core.path == path {
+	if p.core != nil && strings.EqualFold(p.core.path, path) {
 		p.core = nil
 	}
 }

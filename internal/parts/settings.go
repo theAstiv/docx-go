@@ -36,6 +36,9 @@ func (sp *SettingsPart) Parse(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("parts: settings: %w", err)
 	}
+	if err := checkRoot(start, "settings"); err != nil {
+		return fmt.Errorf("parts: settings: %w", err)
+	}
 	sp.ct = new(wml.CT_Settings)
 	return sp.ct.UnmarshalXML(dec, start)
 }

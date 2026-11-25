@@ -37,6 +37,9 @@ func (sp *StylesPart) Parse(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("parts: styles: %w", err)
 	}
+	if err := checkRoot(start, "styles"); err != nil {
+		return fmt.Errorf("parts: styles: %w", err)
+	}
 	sp.styles = new(wml.CT_Styles)
 	return sp.styles.UnmarshalXML(dec, start)
 }

@@ -27,13 +27,19 @@ type corePropsState struct {
 }
 
 // corePropsPath returns the path of the core properties part named by the
-// package relationships, or "" when there is none.
+// package relationships: the stored name when the part exists (OPC names
+// compare ignoring case), else the resolved name. It returns "" when there
+// is no such relationship or its target names no part inside the package.
 func (p *Package) corePropsPath() string {
 	rels := p.pkg.Rels("").ByType(opc.RelTypeCoreProps)
 	if len(rels) == 0 {
 		return ""
 	}
-	return resolveRelPath("", rels[0].Target)
+	name, _, ok := p.locate("", rels[0])
+	if !ok {
+		return ""
+	}
+	return name
 }
 
 // load parses the core properties part on first use. It returns nil when
@@ -83,15 +89,24 @@ func (p *Package) CoreProps() *docprops.CT_CoreProperties {
 
 // EditCoreProps returns the core document properties for modification and
 // marks them to be written on Save. A package without the part gets one,
-// with its content-type override and package relationship. A part that
+// with its content-type override and package relationship, under the first
+// of docProps/core.xml, docProps/core2.xml, … no part uses; a relationship
+// whose target names no part inside the package is replaced. A part that
 // exists but cannot be parsed is replaced by an empty one.
 func (p *Package) EditCoreProps() *docprops.CT_CoreProperties {
 	st := p.loadCoreProps()
 	if st == nil {
 		path := p.corePropsPath()
 		if path == "" {
+			rels := p.pkg.Rels("")
+			for _, r := range rels.ByType(opc.RelTypeCoreProps) {
+				rels.Remove(r.ID)
+			}
 			path = PathCoreProps
-			p.pkg.Rels("").Add(opc.RelTypeCoreProps, PathCoreProps, "")
+			for n := 2; p.taken(path); n++ {
+				path = fmt.Sprintf("docProps/core%d.xml", n)
+			}
+			rels.Add(opc.RelTypeCoreProps, path, "")
 		}
 		p.pkg.ContentTypes.SetOverride("/"+path, ContentTypeCoreProps)
 		st = &corePropsState{path: path, ct: new(docprops.CT_CoreProperties), dirty: false}

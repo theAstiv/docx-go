@@ -129,11 +129,11 @@ func relativeTarget(source, partPath string) (string, error) {
 // is not an internal image relationship, or its part is absent.
 func (p *Package) ImageData(source, relID string) ([]byte, bool) {
 	r, ok := p.pkg.Rels(source).ByID(relID)
-	if !ok || r.Type != opc.RelTypeImage || r.TargetMode == targetModeExternal {
+	if !ok || r.Type != opc.RelTypeImage {
 		return nil, false
 	}
-	data := p.pkg.Part(resolveRelPath(source, r.Target))
-	if data == nil {
+	_, data, ok := p.locate(source, r) // external and invalid targets: !ok
+	if !ok || data == nil {
 		return nil, false
 	}
 	return data, true
