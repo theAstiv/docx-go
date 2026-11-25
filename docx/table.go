@@ -61,7 +61,8 @@ type Table struct {
 	// parent is the block list the table was found in or added to: a hint
 	// for Remove and the Insert methods, checked before use (locate.go).
 	parent *[]wml.BlockElement
-	// gen is story.stamp() when parent was recorded (locate.go).
+	// gen is story.stamp() (or, for a table made from a cell, the cell's
+	// childGen) when parent was recorded (locate.go).
 	gen uint64
 }
 
@@ -73,7 +74,7 @@ func (t *Table) Rows() iter.Seq[*Row] {
 			if !ok {
 				continue
 			}
-			if !yield(&Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.st.stamp()}) {
+			if !yield(&Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.childGen()}) {
 				return
 			}
 		}
@@ -95,7 +96,7 @@ func (t *Table) AddRowWithOptions(opts RowOptions) *Row {
 		tr.TrPr = trpr
 	}
 	t.tbl.Children = append(t.tbl.Children, tr)
-	return &Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.st.stamp()}
+	return &Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.childGen()}
 }
 
 // Style returns the table style ID, or "" if none.
@@ -122,8 +123,8 @@ type Row struct {
 	st *story
 	// tbl is the table the row belongs to.
 	tbl *wml.CT_Tbl
-	// gen is story.stamp() when the row was found or added; while it is
-	// current, tbl is known to be in the document (locate.go).
+	// gen is the table's childGen when the row was found or added; while it
+	// is current, the row is in tbl and tbl in the document (locate.go).
 	gen uint64
 }
 
@@ -135,7 +136,7 @@ func (r *Row) Cells() iter.Seq[*Cell] {
 			if !ok {
 				continue
 			}
-			if !yield(&Cell{tc: tc, st: r.st}) {
+			if !yield(&Cell{tc: tc, st: r.st, row: r, gen: r.childGen()}) {
 				return
 			}
 		}
@@ -164,7 +165,7 @@ func (r *Row) AddCellWithOptions(opts CellOptions) *Cell {
 		tc.TcPr = tcpr
 	}
 	r.tr.Children = append(r.tr.Children, tc)
-	return &Cell{tc: tc, st: r.st}
+	return &Cell{tc: tc, st: r.st, row: r, gen: r.childGen()}
 }
 
 // IsHeader returns whether this row is marked as a repeating table header.
@@ -182,6 +183,11 @@ func (r *Row) IsHeader() bool {
 type Cell struct {
 	tc *wml.CT_Tc
 	st *story
+	// row is the row the cell was found in or added to.
+	row *Row
+	// gen is row's childGen when the cell was found or added; while it is
+	// current, the cell is in the document (locate.go).
+	gen uint64
 }
 
 // Paragraphs returns an iterator over paragraph children of the cell.
@@ -192,7 +198,7 @@ func (c *Cell) Paragraphs() iter.Seq[*Paragraph] {
 			if !ok {
 				continue
 			}
-			if !yield(&Paragraph{p: p, st: c.st, parent: &c.tc.Children, gen: c.st.stamp()}) {
+			if !yield(&Paragraph{p: p, st: c.st, parent: &c.tc.Children, gen: c.childGen()}) {
 				return
 			}
 		}
@@ -207,7 +213,7 @@ func (c *Cell) Tables() iter.Seq[*Table] {
 			if !ok {
 				continue
 			}
-			if !yield(&Table{tbl: tbl, st: c.st, parent: &c.tc.Children, gen: c.st.stamp()}) {
+			if !yield(&Table{tbl: tbl, st: c.st, parent: &c.tc.Children, gen: c.childGen()}) {
 				return
 			}
 		}
@@ -220,7 +226,7 @@ func (c *Cell) Tables() iter.Seq[*Table] {
 func (c *Cell) AddParagraph() *Paragraph {
 	p := new(wml.CT_P)
 	c.tc.Children = append(c.tc.Children, p)
-	return &Paragraph{p: p, st: c.st, parent: &c.tc.Children, gen: c.st.stamp()}
+	return &Paragraph{p: p, st: c.st, parent: &c.tc.Children, gen: c.childGen()}
 }
 
 // SetText replaces the cell's content with one paragraph holding text and
@@ -229,7 +235,9 @@ func (c *Cell) AddParagraph() *Paragraph {
 // fills it, where AddParagraph would add a second. SetText("") gives the
 // cell's own paragraph, empty, to build on.
 func (c *Cell) SetText(text string) *Paragraph {
-	return setBlocksText(&c.tc.Children, text, c.st)
+	p := setBlocksText(&c.tc.Children, text, c.st)
+	p.gen = c.childGen()
+	return p
 }
 
 // SetSpan sets the column span (gridSpan) and optionally marks the cell as the

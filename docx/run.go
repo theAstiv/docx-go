@@ -13,7 +13,8 @@ type Run struct {
 	// parent is the inline list (a paragraph's or hyperlink's children) the
 	// run was found in or added to: a hint for Remove (locate.go).
 	parent *[]wml.InlineElement
-	// gen is story.stamp() when parent was recorded (locate.go).
+	// gen is the childGen of the paragraph or link the run was made from
+	// (locate.go).
 	gen uint64
 }
 

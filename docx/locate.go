@@ -1,6 +1,10 @@
 package docx
 
-import "github.com/theAstiv/docx-go/internal/oxml/wml"
+import (
+	"slices"
+
+	"github.com/theAstiv/docx-go/internal/oxml/wml"
+)
 
 // Proxies hold their element, not its container. Removing or inserting
 // next to an element needs the container, so proxies carry a parent hint
@@ -15,6 +19,12 @@ import "github.com/theAstiv/docx-go/internal/oxml/wml"
 // methods) only while no removal has happened since; otherwise the walk
 // decides. Iterators create each proxy when they yield it, so a loop that
 // removes what it visits still uses fresh hints and stays linear.
+//
+// A current gen means more than a current hint: the element is in the
+// document. So a proxy made from another one (a row from a table, a run
+// from a paragraph, a paragraph from a cell) records its parent's childGen,
+// never the story's current stamp: a child of a removed table must not look
+// attached just because it was made after the removal.
 
 // stamp returns the value a proxy records with its parent hint: the
 // package's structure generation plus one, so that the zero value of an
@@ -57,6 +67,83 @@ func (r *Run) hint() *[]wml.InlineElement {
 		return nil
 	}
 	return r.parent
+}
+
+// childGen returns the gen a proxy made from the paragraph records: the
+// current stamp while the paragraph is in the document, else 0 (never
+// current, so the child's hint is checked by a walk). A stale gen is
+// refreshed by a walk, so a loop that removes the paragraph's runs pays
+// one walk per removal rather than one per later run operation.
+func (p *Paragraph) childGen() uint64 {
+	if p.gen == p.st.stamp() {
+		return p.gen
+	}
+	if list, _, ok := p.st.locateBlock(p.p, nil); ok {
+		p.parent, p.gen = list, p.st.stamp()
+		return p.gen
+	}
+	return 0
+}
+
+// childGen returns the gen a proxy made from the table records, like
+// Paragraph.childGen.
+func (t *Table) childGen() uint64 {
+	if t.gen == t.st.stamp() {
+		return t.gen
+	}
+	if list, _, ok := t.st.locateBlock(t.tbl, nil); ok {
+		t.parent, t.gen = list, t.st.stamp()
+		return t.gen
+	}
+	return 0
+}
+
+// childGen returns the gen a proxy made from the row records: current
+// while the row is in its table and the table in the document.
+func (r *Row) childGen() uint64 {
+	if r.gen == r.st.stamp() {
+		return r.gen
+	}
+	if r.tbl == nil || !slices.ContainsFunc(r.tbl.Children, func(e wml.TableRowElement) bool { return e == r.tr }) {
+		return 0
+	}
+	if _, _, ok := r.st.locateBlock(r.tbl, nil); ok {
+		r.gen = r.st.stamp()
+		return r.gen
+	}
+	return 0
+}
+
+// childGen returns the gen a proxy made from the cell records: current
+// while the cell is in its row and the row in the document.
+func (c *Cell) childGen() uint64 {
+	if c.gen == c.st.stamp() {
+		return c.gen
+	}
+	if c.row == nil || !slices.ContainsFunc(c.row.tr.Children, func(e wml.TableCellElement) bool { return e == c.tc }) {
+		return 0
+	}
+	if g := c.row.childGen(); g != 0 {
+		c.gen = g
+		return g
+	}
+	return 0
+}
+
+// childGen returns the gen a run made from the link records: current while
+// the link is in its paragraph and the paragraph in the document.
+func (h *Hyperlink) childGen() uint64 {
+	if h.gen == h.st.stamp() {
+		return h.gen
+	}
+	if h.para == nil || indexOfInline(h.para.p.Children, h.h) < 0 {
+		return 0
+	}
+	if g := h.para.childGen(); g != 0 {
+		h.gen = g
+		return g
+	}
+	return 0
 }
 
 // roots returns the top-level block lists of every story: the body, then
