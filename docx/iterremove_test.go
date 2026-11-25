@@ -152,6 +152,160 @@ func TestStaleProxy_StillAttached(t *testing.T) {
 	}
 }
 
+// Proxies made from a removed parent after the removal (review H4) took the
+// story's current generation, so their hints looked current: Remove returned
+// nil and inserts edited the detached tree. Each case makes the child only
+// after its parent is gone.
+func TestStaleProxy_ChildOfRemovedParent(t *testing.T) {
+	notIn := func(t *testing.T, what string, err error) {
+		t.Helper()
+		if !errors.Is(err, docx.ErrNotInDocument) {
+			t.Errorf("%s: Remove = %v, want ErrNotInDocument", what, err)
+		}
+	}
+	removedTable := func(t *testing.T) (*docx.Document, *docx.Table) {
+		t.Helper()
+		d := docx.New()
+		d.Body().AddParagraph().AddRun("keep")
+		tb := d.Body().AddTable(3, 1, docx.TableOptions{})
+		firstCell(tb).SetText("cell")
+		if err := tb.Remove(); err != nil {
+			t.Fatal(err)
+		}
+		return d, tb
+	}
+	t.Run("rows", func(t *testing.T) {
+		_, tb := removedTable(t)
+		for row := range tb.Rows() {
+			notIn(t, "row", row.Remove())
+			break
+		}
+		notIn(t, "inserted row", tb.InsertRow(0, docx.RowOptions{}).Remove())
+		notIn(t, "added row", tb.AddRow().Remove())
+	})
+	t.Run("cell paragraphs", func(t *testing.T) {
+		d, tb := removedTable(t)
+		c := firstCell(tb)
+		for p := range c.Paragraphs() {
+			notIn(t, "cell paragraph", p.Remove())
+			p.InsertParagraphAfter("ghost")
+		}
+		notIn(t, "added cell paragraph", c.AddParagraph().Remove())
+		notIn(t, "SetText paragraph", c.SetText("x").Remove())
+		if got := d.Text(); got != "keep\n" {
+			t.Errorf("Text() = %q, want %q", got, "keep\n")
+		}
+	})
+	t.Run("nested table", func(t *testing.T) {
+		d := docx.New()
+		outer := d.Body().AddTable(1, 1, docx.TableOptions{})
+		firstCell(outer).AddParagraph().InsertTableAfter(1, 1, docx.TableOptions{})
+		c := firstCell(outer)
+		if err := outer.Remove(); err != nil {
+			t.Fatal(err)
+		}
+		for inner := range c.Tables() {
+			notIn(t, "nested table", inner.Remove())
+			for row := range inner.Rows() {
+				notIn(t, "nested row", row.Remove())
+			}
+		}
+	})
+	t.Run("row cells", func(t *testing.T) {
+		d := docx.New()
+		tb := d.Body().AddTable(2, 1, docx.TableOptions{})
+		var row *docx.Row
+		for r := range tb.Rows() {
+			row = r
+			break
+		}
+		if err := row.Remove(); err != nil {
+			t.Fatal(err)
+		}
+		for c := range row.Cells() {
+			for p := range c.Paragraphs() {
+				notIn(t, "paragraph of removed row", p.Remove())
+			}
+		}
+		notIn(t, "paragraph of added cell", row.AddCell().AddParagraph().Remove())
+	})
+	t.Run("runs", func(t *testing.T) {
+		d := docx.New()
+		p := d.Body().AddParagraph()
+		p.AddRun("a")
+		d.Body().AddParagraph().AddRun("keep")
+		if err := p.Remove(); err != nil {
+			t.Fatal(err)
+		}
+		for r := range p.Runs() {
+			notIn(t, "run", r.Remove())
+		}
+		notIn(t, "added run", p.AddRun("b").Remove())
+	})
+	t.Run("hyperlink runs", func(t *testing.T) {
+		d := docx.New()
+		p := d.Body().AddParagraph()
+		link, err := p.AddInternalLink("x", docx.HyperlinkOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		link.AddRun("a")
+		d.Body().AddParagraph().AddRun("keep")
+		if err := p.Remove(); err != nil {
+			t.Fatal(err)
+		}
+		notIn(t, "run of held link", link.AddRun("b").Remove())
+		for h := range p.Hyperlinks() {
+			for r := range h.Runs() {
+				notIn(t, "link run", r.Remove())
+			}
+		}
+	})
+}
+
+// Children of a parent that is still in the document keep working after an
+// unrelated removal made the parent's gen stale.
+func TestStaleProxy_ChildOfAttachedParent(t *testing.T) {
+	d := docx.New()
+	gone := d.Body().AddParagraph()
+	tb := d.Body().AddTable(3, 1, docx.TableOptions{})
+	p := d.Body().AddParagraph()
+	p.AddRun("a")
+	link, err := p.AddInternalLink("x", docx.HyperlinkOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	link.AddRun("b")
+	if err := gone.Remove(); err != nil {
+		t.Fatal(err)
+	}
+	for row := range tb.Rows() {
+		if err := row.Remove(); err != nil && !errors.Is(err, docx.ErrLastRow) {
+			t.Fatalf("row Remove: %v", err)
+		}
+	}
+	if n := countSeq(tb.Rows()); n != 1 {
+		t.Errorf("%d rows left, want 1", n)
+	}
+	cp := firstCell(tb).AddParagraph()
+	if err := cp.Remove(); err != nil {
+		t.Errorf("cell paragraph Remove: %v", err)
+	}
+	for r := range p.Runs() {
+		if err := r.Remove(); err != nil {
+			t.Errorf("run Remove: %v", err)
+		}
+	}
+	for r := range link.Runs() {
+		if err := r.Remove(); err != nil {
+			t.Errorf("link run Remove: %v", err)
+		}
+	}
+	if got := p.Text(); got != "" {
+		t.Errorf("paragraph text %q, want empty", got)
+	}
+}
+
 func countSeq[T any](seq func(func(T) bool)) int {
 	n := 0
 	for range seq {
