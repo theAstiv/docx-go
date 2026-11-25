@@ -313,7 +313,7 @@ func (t *Table) InsertRow(i int, opts RowOptions) *Row {
 	}
 	tr := newRowLike(ref, below, t.tbl, opts)
 	t.tbl.Children = slices.Insert(t.tbl.Children, pos, wml.TableRowElement(tr))
-	return &Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.st.stamp()}
+	return &Row{tr: tr, st: t.st, tbl: t.tbl, gen: t.childGen()}
 }
 
 // newRowLike builds an empty row shaped like ref (or, without ref, one cell

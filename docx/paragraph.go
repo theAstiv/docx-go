@@ -15,7 +15,8 @@ type Paragraph struct {
 	// parent is the block list the paragraph was found in or added to: a
 	// hint for Remove and the Insert methods, checked before use (locate.go).
 	parent *[]wml.BlockElement
-	// gen is story.stamp() when parent was recorded (locate.go).
+	// gen is story.stamp() (or, for a paragraph made from a cell, the cell's
+	// childGen) when parent was recorded (locate.go).
 	gen uint64
 }
 
@@ -35,7 +36,7 @@ func (p *Paragraph) Runs() iter.Seq[*Run] {
 			if !ok {
 				continue
 			}
-			if !yield(&Run{r: r, st: p.st, parent: &p.p.Children, gen: p.st.stamp()}) {
+			if !yield(&Run{r: r, st: p.st, parent: &p.p.Children, gen: p.childGen()}) {
 				return
 			}
 		}
@@ -53,7 +54,7 @@ func (p *Paragraph) AddRun(text string) *Run {
 		r.Children = append(r.Children, t)
 	}
 	p.p.Children = append(p.p.Children, r)
-	return &Run{r: r, st: p.st, parent: &p.p.Children, gen: p.st.stamp()}
+	return &Run{r: r, st: p.st, parent: &p.p.Children, gen: p.childGen()}
 }
 
 // Text returns the visible text of the paragraph by walking all w:t descendants
