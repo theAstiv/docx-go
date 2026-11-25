@@ -2,6 +2,17 @@
 
 docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the public API may change between minor versions.** Requires Go ≥ 1.23.
 
+## Unreleased (v0.5.1)
+
+### Fixed
+
+- Templating: a block tag at a row's edge split by a bookmark or comment mark crashed the process with a stack overflow when both edges were split. It is now reported as `ErrSplitAcrossBoundary`.
+- Templating: deeply nested paragraph ranges no longer take time and memory that grow with the square of the nesting depth (8,000 levels ran out of memory). Each block list is paired once for every level.
+
+### Changed
+
+- Templating: block tags nest at most 100 deep (paragraph and row ranges together, through table cells). Deeper nesting fails with `ErrOutputLimit` in both modes.
+
 ## v0.5.0: templating 2
 
 Templates gain `{{else}}`, formatters for dates, numbers and currency, conditions inside a paragraph, pictures and formatted text. Tables created without column widths are sized the way Word sizes them. A review of the whole codebase hardened `Open` and `Execute` for untrusted files and data, and fixed the round-trip and structure bugs it found.

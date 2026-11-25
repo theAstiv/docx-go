@@ -48,7 +48,9 @@
 // Nested loops multiply: {{#each}} stops after copying Options.MaxCopies
 // paragraphs, tables and rows in one Execute (DefaultMaxCopies, 100,000,
 // when it is 0), with ErrOutputLimit, so untrusted data cannot make a small
-// template produce millions of paragraphs.
+// template produce millions of paragraphs. Block tags (paragraph and row
+// ranges, counted together through table cells) nest at most 100 deep;
+// deeper nesting also fails with ErrOutputLimit.
 //
 // A value tag can pipe its value through formatters, left to right:
 //
