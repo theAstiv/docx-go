@@ -106,11 +106,26 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 	// The target may be absolute ("/word/document.xml", as System.IO.Packaging
 	// and the Open XML SDK write it) and may differ in case from the ZIP
 	// entry; OPC part names compare case-insensitively.
-	docPath, docData := p.locate("", docRels[0].Target)
+	docPath, docData, ok := p.locate("", docRels[0])
+	if !ok {
+		return nil, fmt.Errorf("parts: open: officeDocument target %q is not a part of the package", docRels[0].Target)
+	}
 	if docData == nil {
 		return nil, fmt.Errorf("parts: open: part %q not found", docPath)
 	}
 	p.docPath = docPath
+	// Every typed role the package resolves is claimed here; one part may
+	// hold only one (roles.go).
+	claims := roleClaims{}
+	claim := func(name, role string) error {
+		if err := claims.claim(name, role); err != nil {
+			return fmt.Errorf("parts: open: %w", err)
+		}
+		return nil
+	}
+	if err := claim(docPath, "main document"); err != nil {
+		return nil, err
+	}
 	if err := pkg.RelsErr(docPath); err != nil {
 		return nil, fmt.Errorf("parts: open: %w", err)
 	}
@@ -120,19 +135,24 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 	}
 
 	// Locate the styles part. Every Word document has one; when the
-	// relationship is missing a default one is added under a free name, so
-	// an orphaned word/styles.xml is never overwritten.
+	// relationship is missing, or names no part inside the package, a
+	// default one is added under a free name (attach), so an orphaned
+	// word/styles.xml is never overwritten.
 	if styRels := pkg.Rels(docPath).ByType(opc.RelTypeStyles); len(styRels) > 0 {
-		styPath, styData := p.locate(docPath, styRels[0].Target)
-		p.styPath = styPath
-		if styData != nil {
-			p.StyPart = new(StylesPart)
-			if err := p.StyPart.Parse(styData); err != nil {
-				return nil, fmt.Errorf("parts: open: parse styles: %w", err)
+		if styPath, styData, ok := p.locate(docPath, styRels[0]); ok {
+			p.styPath = styPath
+			if err := claim(styPath, "styles"); err != nil {
+				return nil, err
 			}
-		} else {
-			// The relationship names a missing part: create it there.
-			p.pkg.ContentTypes.SetOverride("/"+styPath, ContentTypeStyles)
+			if styData != nil {
+				p.StyPart = new(StylesPart)
+				if err := p.StyPart.Parse(styData); err != nil {
+					return nil, fmt.Errorf("parts: open: parse styles: %w", err)
+				}
+			} else {
+				// The relationship names a missing part: create it there.
+				p.pkg.ContentTypes.SetOverride("/"+styPath, ContentTypeStyles)
+			}
 		}
 	}
 	if p.StyPart == nil {
@@ -144,7 +164,10 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 
 	// Locate the settings part (optional).
 	if setRels := pkg.Rels(docPath).ByType(opc.RelTypeSettings); len(setRels) > 0 {
-		if setPath, setData := p.locate(docPath, setRels[0].Target); setData != nil {
+		if setPath, setData, _ := p.locate(docPath, setRels[0]); setData != nil {
+			if err := claim(setPath, "settings"); err != nil {
+				return nil, err
+			}
 			p.SetPart = new(SettingsPart)
 			if err := p.SetPart.Parse(setData); err != nil {
 				return nil, fmt.Errorf("parts: open: parse settings: %w", err)
@@ -155,7 +178,10 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 
 	// Locate the numbering part (optional).
 	if numRels := pkg.Rels(docPath).ByType(opc.RelTypeNumbering); len(numRels) > 0 {
-		if numPath, numData := p.locate(docPath, numRels[0].Target); numData != nil {
+		if numPath, numData, _ := p.locate(docPath, numRels[0]); numData != nil {
+			if err := claim(numPath, "numbering"); err != nil {
+				return nil, err
+			}
 			p.NumPart = new(NumberingPart)
 			if err := p.NumPart.Parse(numData); err != nil {
 				return nil, fmt.Errorf("parts: open: parse numbering: %w", err)
@@ -169,9 +195,12 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 	// other, and the last one would win.
 	hdrByPath := map[string]*HeaderPart{}
 	for _, rel := range pkg.Rels(docPath).ByType(opc.RelTypeHeader) {
-		hdrPath, hdrData := p.locate(docPath, rel.Target)
+		hdrPath, hdrData, _ := p.locate(docPath, rel)
 		if hdrData == nil {
 			continue
+		}
+		if err := claim(hdrPath, "header"); err != nil {
+			return nil, err
 		}
 		hp := hdrByPath[hdrPath]
 		if hp == nil {
@@ -188,9 +217,12 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 	}
 	ftrByPath := map[string]*FooterPart{}
 	for _, rel := range pkg.Rels(docPath).ByType(opc.RelTypeFooter) {
-		ftrPath, ftrData := p.locate(docPath, rel.Target)
+		ftrPath, ftrData, _ := p.locate(docPath, rel)
 		if ftrData == nil {
 			continue
+		}
+		if err := claim(ftrPath, "footer"); err != nil {
+			return nil, err
 		}
 		fp := ftrByPath[ftrPath]
 		if fp == nil {
@@ -206,18 +238,57 @@ func Open(r io.ReaderAt, size int64) (*Package, error) {
 		p.Footers = append(p.Footers, &FooterEntry{RelID: rel.ID, Part: fp, path: ftrPath})
 	}
 
+	// Core properties are parsed lazily, and a part that does not parse is
+	// replaced on the first edit, so a core-properties relationship to the
+	// main document would overwrite it.
+	if cp := p.corePropsPath(); cp != "" {
+		if err := claim(cp, "core properties"); err != nil {
+			return nil, err
+		}
+	}
+
 	return p, nil
 }
 
-// locate resolves a relationship target from the part at source and returns
-// the stored name of the part it names (compared ignoring case) with its
-// bytes, or the resolved name and nil when there is no such part.
-func (p *Package) locate(source, target string) (string, []byte) {
-	name := resolveRelPath(source, target)
-	if stored, ok := p.pkg.FindPart(name); ok {
-		return stored, p.pkg.Part(stored)
+// locate resolves relationship r of the part at source (resolveTarget) and
+// returns the stored name of the part it names (compared ignoring case) with
+// its bytes, or the resolved name and nil when there is no such part. ok is
+// false, with no name, when r names no part inside the package (an external
+// or invalid target).
+func (p *Package) locate(source string, r opc.Relationship) (name string, data []byte, ok bool) {
+	name, ok = resolveTarget(source, r)
+	if !ok {
+		return "", nil, false
 	}
-	return name, nil
+	if stored, found := p.pkg.FindPart(name); found {
+		return stored, p.pkg.Part(stored), true
+	}
+	if p.nestsWithPart(name) {
+		return "", nil, false
+	}
+	return name, nil, true
+}
+
+// nestsWithPart reports whether name, which no part has, is a folder of a
+// stored part ("word" beside "word/document.xml") or lies inside one
+// ("word/document.xml/x"). OPC forbids both (ECMA-376 Part 2, 9.1.1.1), and
+// a ZIP holding them is no longer a valid package.
+func (p *Package) nestsWithPart(name string) bool {
+	lower := strings.ToLower(name)
+	for _, stored := range p.pkg.PartPaths() {
+		s := strings.ToLower(stored)
+		if strings.HasPrefix(s, lower+"/") || strings.HasPrefix(lower, s+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// findTarget returns the stored name of the part relationship r of the part
+// at source points to, and whether there is one.
+func (p *Package) findTarget(source string, r opc.Relationship) (string, bool) {
+	name, data, ok := p.locate(source, r)
+	return name, ok && data != nil
 }
 
 // taken reports whether name is in use, ignoring case: by a stored part or
@@ -270,7 +341,16 @@ func (p *Package) freeName(base string, numbered bool) string {
 // attach picks a free part name from base, adds a relationship of relType
 // from the main document part to it and its content-type override, and
 // returns the name.
+//
+// attach is called only when the package has no part of that role, so any
+// relationship of relType the main document already has names nothing
+// usable (an external or invalid target, or a missing part); those are
+// removed, or the document would have two relationships for one role.
 func (p *Package) attach(relType, base, contentType string) string {
+	rels := p.pkg.Rels(p.docPath)
+	for _, r := range rels.ByType(relType) {
+		rels.Remove(r.ID)
+	}
 	name := p.freeName(base, false)
 	p.pkg.Rels(p.docPath).Add(relType, path.Base(name), "")
 	p.pkg.ContentTypes.SetOverride("/"+name, contentType)
@@ -431,19 +511,59 @@ func (p *Package) Save(w io.Writer) error {
 	return p.pkg.Save(w)
 }
 
-// resolveRelPath resolves a relationship target relative to the source part path.
-// Absolute targets (starting with "/") are returned as-is after stripping the
-// leading slash to match OPC's unrooted part naming convention.
-// Relative targets are resolved against the source part's directory using path.Join,
-// which correctly handles "../" traversals.
+// resolveTarget returns the part name that relationship r of the part at
+// source points to, unrooted as parts are stored, and whether it names a
+// part inside the package at all. It reports false for an external
+// relationship, a target with a URI scheme or host, an empty target, one that
+// climbs above the package root, and any result that is not a valid part
+// name (opc.IsPartName). Callers treat such a relationship as naming no part:
+// its target must never become the name a part is saved under.
 //
-//	("word/document.xml", "styles.xml")          → "word/styles.xml"
-//	("word/document.xml", "../media/img.png")    → "media/img.png"
-func resolveRelPath(sourcePart, target string) string {
-	if strings.HasPrefix(target, "/") {
-		return target[1:]
+//	("word/document.xml", "styles.xml")        → "word/styles.xml"
+//	("word/document.xml", "../media/img.png")  → "media/img.png"
+//	("word/document.xml", "/word/styles.xml")  → "word/styles.xml"
+//	("word/document.xml", "../../x.xml")       → false
+func resolveTarget(source string, r opc.Relationship) (string, bool) {
+	if strings.EqualFold(r.TargetMode, targetModeExternal) {
+		return "", false
 	}
-	return path.Join(path.Dir(sourcePart), target)
+	return resolveRelPath(source, r.Target)
+}
+
+// resolveRelPath is resolveTarget for an internal target.
+func resolveRelPath(source, target string) (string, bool) {
+	if target == "" {
+		return "", false
+	}
+	if hasScheme(target) || strings.HasPrefix(target, "//") {
+		return "", false
+	}
+	var name string
+	if strings.HasPrefix(target, "/") {
+		name = strings.TrimPrefix(path.Clean(target), "/")
+	} else {
+		name = path.Join(path.Dir(source), target)
+	}
+	if name == ".." || strings.HasPrefix(name, "../") || !opc.IsPartName(name) {
+		return "", false
+	}
+	return name, true
+}
+
+// hasScheme reports whether target starts with a URI scheme ("http:",
+// "file:"): a letter, then letters, digits, "+", "-" or ".", then ":".
+func hasScheme(target string) bool {
+	for i, c := range target {
+		switch {
+		case c == ':':
+			return i > 0
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z':
+		case i > 0 && ('0' <= c && c <= '9' || c == '+' || c == '-' || c == '.'):
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 // ErrLimitExceeded is returned (wrapped) by Open when the archive exceeds a
@@ -452,7 +572,9 @@ func resolveRelPath(sourcePart, target string) string {
 var ErrLimitExceeded = opc.ErrLimitExceeded
 
 // ErrMalformedPart is returned (wrapped) by Open when an XML part holds
-// text or a DOCTYPE declaration before its root element.
+// text or a DOCTYPE declaration before its root element, a typed part's root
+// element is not the one its role calls for, or one part holds two typed
+// roles (roles.go).
 var ErrMalformedPart = opc.ErrMalformedPart
 
 // ErrInvalidPartName is returned (wrapped) by Open when a ZIP entry name is

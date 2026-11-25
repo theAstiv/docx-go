@@ -26,6 +26,16 @@ func checkPartName(name string) error {
 	return nil
 }
 
+// IsPartName reports whether name (unrooted, as parts are stored) may name an
+// ordinary part: a valid part name that is not a relationships part, a
+// "_rels" folder, or the content types stream, which the package writes
+// itself.
+func IsPartName(name string) bool {
+	return checkPartName(name) == nil && !isRelsFile(name) &&
+		!strings.EqualFold(path.Base(name), "_rels") &&
+		!strings.EqualFold(name, contentTypesName)
+}
+
 // isRelsFile reports whether name is a relationships part: a file named
 // "<source>.rels" in a "_rels" folder. Other files ending in ".rels" are
 // ordinary parts.

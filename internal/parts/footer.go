@@ -35,6 +35,9 @@ func (fp *FooterPart) Parse(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("parts: footer: %w", err)
 	}
+	if err := checkRoot(start, "ftr"); err != nil {
+		return fmt.Errorf("parts: footer: %w", err)
+	}
 	fp.ct = new(wml.CT_Ftr)
 	return fp.ct.UnmarshalXML(dec, start)
 }

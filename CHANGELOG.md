@@ -8,10 +8,14 @@ docx-go follows [semantic versioning](https://semver.org/). **Before 1.0, the pu
 
 - Templating: a block tag at a row's edge split by a bookmark or comment mark crashed the process with a stack overflow when both edges were split. It is now reported as `ErrSplitAcrossBoundary`.
 - Templating: deeply nested paragraph ranges no longer take time and memory that grow with the square of the nesting depth (8,000 levels ran out of memory). Each block list is paired once for every level.
+- `Open` refuses a package whose relationships give one part two roles, such as a header or styles relationship naming the main document, or a header and a footer naming one part. Saving such a file wrote one role's content over the other, so the main document could be replaced by a header. The error is `ErrMalformedPart`.
+- A relationship target outside the package (`../../evil.xml`), an empty target, a folder name or a URI no longer becomes the name a part is saved under. Save used to write entries such as `../../evil.xml` or `word` beside the `word/` folder, and the output failed to open. Such a target, and any relationship with `TargetMode="External"`, now names no part. When docx-go needs that part (styles, settings, numbering, core properties), it creates one under a free name and replaces the unusable relationship.
+- Core properties, custom XML items, footnote/endnote/comment parts and images are looked up ignoring case, as OPC part names compare. A core-properties target `docProps/Core.xml` with an entry `docProps/core.xml` used to read as empty, and an edit saved a second part, so the output failed to open.
 
 ### Changed
 
 - Templating: block tags nest at most 100 deep (paragraph and row ranges together, through table cells). Deeper nesting fails with `ErrOutputLimit` in both modes.
+- `Open` checks the root element of the main document, styles, settings, numbering, header and footer parts, and refuses the wrong one with `ErrMalformedPart`. Strict OOXML parts (`purl.oclc.org` namespaces), which docx-go does not support, now fail to open.
 
 ## v0.5.0: templating 2
 

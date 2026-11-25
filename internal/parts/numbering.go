@@ -36,6 +36,9 @@ func (np *NumberingPart) Parse(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("parts: numbering: %w", err)
 	}
+	if err := checkRoot(start, "numbering"); err != nil {
+		return fmt.Errorf("parts: numbering: %w", err)
+	}
 	np.ct = new(wml.CT_Numbering)
 	return np.ct.UnmarshalXML(dec, start)
 }

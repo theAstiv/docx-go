@@ -43,6 +43,9 @@ func (dp *DocumentPart) Parse(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("parts: document: %w", err)
 	}
+	if err := checkRoot(start, "document"); err != nil {
+		return fmt.Errorf("parts: document: %w", err)
+	}
 	dp.doc = new(wml.CT_Document)
 	return dp.doc.UnmarshalXML(dec, start)
 }

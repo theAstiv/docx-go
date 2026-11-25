@@ -35,6 +35,9 @@ func (hp *HeaderPart) Parse(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("parts: header: %w", err)
 	}
+	if err := checkRoot(start, "hdr"); err != nil {
+		return fmt.Errorf("parts: header: %w", err)
+	}
 	hp.ct = new(wml.CT_Hdr)
 	return hp.ct.UnmarshalXML(dec, start)
 }

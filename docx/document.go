@@ -37,6 +37,12 @@ var ErrLimitExceeded = parts.ErrLimitExceeded
 // and whitespace before its root element: text, or a DOCTYPE declaration
 // (Open Packaging Conventions forbid DTDs). Such a part is not well-formed
 // XML; Word does not write one.
+//
+// It is also returned when the relationships give one part two roles (a
+// header relationship naming the main document, or a header and a footer
+// naming one part), or a typed part's root element is not the one its role
+// calls for (w:document, w:styles, w:settings, w:numbering, w:hdr, w:ftr).
+// Saving such a package would write one role's content over the other's.
 var ErrMalformedPart = parts.ErrMalformedPart
 
 // ErrInvalidPartName is returned (wrapped) by Open when a file in the

@@ -3,6 +3,7 @@ package docx_test
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -204,6 +205,292 @@ func TestPaths_NewHeaderAvoidsUnreferencedPart(t *testing.T) {
 	entries := readZip(t, saveBytes(t, d))
 	if got := string(entries["word/header1.xml"]); !strings.Contains(got, "orphan") {
 		t.Errorf("word/header1.xml was overwritten:\n%s", got)
+	}
+}
+
+const (
+	relFooter    = `http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer`
+	relSettings  = `http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings`
+	relNumbering = `http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering`
+	relCore      = `http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties`
+)
+
+// Two typed roles naming one part (a header relationship to the main
+// document, say) were each parsed as their own type and saved in a fixed
+// order, so the last writer replaced the part: the main document became a
+// <w:hdr> (v0.5.0 review H2). Open now refuses the package.
+func TestPaths_TypedRolesShareAPart(t *testing.T) {
+	base := func(docRels []string, pkgRels ...string) map[string]string {
+		return map[string]string{
+			"[Content_Types].xml":          contentTypes,
+			"_rels/.rels":                  rels(append([]string{rel("rId1", relDoc, "word/document.xml")}, pkgRels...)...),
+			"word/document.xml":            documentXML("hello", ""),
+			"word/_rels/document.xml.rels": rels(append([]string{rel("rId1", relStyles, "styles.xml")}, docRels...)...),
+			"word/styles.xml":              stylesXML("Mine"),
+			"word/header1.xml":             headerXML("head"),
+		}
+	}
+	cases := []struct {
+		name  string
+		files map[string]string
+	}{
+		{"header is the document", base([]string{rel("rId2", relHeader, "document.xml")})},
+		{"header is the document, other case", base([]string{rel("rId2", relHeader, "Document.XML")})},
+		{"footer is the document", base([]string{rel("rId2", relFooter, "/word/document.xml")})},
+		{"header and footer share a part", base([]string{rel("rId2", relHeader, "header1.xml"), rel("rId3", relFooter, "header1.xml")})},
+		{"settings are the styles", base([]string{rel("rId2", relSettings, "styles.xml")})},
+		{"numbering is the document", base([]string{rel("rId2", relNumbering, "document.xml")})},
+		{"core properties are the document", base(nil, rel("rId2", relCore, "word/document.xml"))},
+		{"styles are the document", func() map[string]string {
+			f := base(nil)
+			f["word/_rels/document.xml.rels"] = rels(rel("rId1", relStyles, "document.xml"))
+			return f
+		}()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := docx.OpenBytes(zipFiles(t, tc.files))
+			if !errors.Is(err, docx.ErrMalformedPart) {
+				t.Fatalf("err = %v, want ErrMalformedPart", err)
+			}
+		})
+	}
+}
+
+// A typed part whose root element is not the one its relationship type
+// calls for (a header relationship to a footer part) is refused rather than
+// parsed as the wrong type and written back over itself.
+func TestPaths_WrongRootElement(t *testing.T) {
+	ftr := `<w:ftr ` + pathsWNS + `><w:p/></w:ftr>`
+	cases := []struct {
+		name, relType, target, part string
+	}{
+		{"header holding a footer", relHeader, "header1.xml", ftr},
+		{"footer holding a header", relFooter, "footer1.xml", headerXML("x")},
+		{"settings holding styles", relSettings, "settings.xml", stylesXML("x")},
+		{"numbering in another namespace", relNumbering, "numbering.xml", `<numbering xmlns="urn:x"/>`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := zipFiles(t, map[string]string{
+				"[Content_Types].xml":          contentTypes,
+				"_rels/.rels":                  rels(rel("rId1", relDoc, "word/document.xml")),
+				"word/document.xml":            documentXML("hello", ""),
+				"word/_rels/document.xml.rels": rels(rel("rId1", relStyles, "styles.xml"), rel("rId2", tc.relType, tc.target)),
+				"word/styles.xml":              stylesXML("Mine"),
+				"word/" + tc.target:            tc.part,
+			})
+			_, err := docx.OpenBytes(data)
+			if !errors.Is(err, docx.ErrMalformedPart) {
+				t.Fatalf("err = %v, want ErrMalformedPart", err)
+			}
+		})
+	}
+	t.Run("main part not a document", func(t *testing.T) {
+		data := zipFiles(t, map[string]string{
+			"[Content_Types].xml": contentTypes,
+			"_rels/.rels":         rels(rel("rId1", relDoc, "word/styles.xml")),
+			"word/styles.xml":     stylesXML("Mine"),
+		})
+		if _, err := docx.OpenBytes(data); !errors.Is(err, docx.ErrMalformedPart) {
+			t.Fatalf("err = %v, want ErrMalformedPart", err)
+		}
+	})
+}
+
+func relMode(id, typ, target, mode string) string {
+	return `<Relationship Id="` + id + `" Type="` + typ + `" Target="` + target + `" TargetMode="` + mode + `"/>`
+}
+
+func coreXML(title string) string {
+	return `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" ` +
+		`xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>` + title + `</dc:title></cp:coreProperties>`
+}
+
+// checkEntryNames fails unless every ZIP entry is a valid part name: rooted
+// inside the package, no empty, "." or ".." segment, and no entry that is a
+// folder of another.
+func checkEntryNames(t *testing.T, entries map[string][]byte) {
+	t.Helper()
+	for name := range entries {
+		if name == "" || strings.HasPrefix(name, "/") || strings.Contains(name, `\`) {
+			t.Errorf("invalid entry %q", name)
+			continue
+		}
+		for _, seg := range strings.Split(name, "/") {
+			if seg == "" || seg == "." || seg == ".." {
+				t.Errorf("invalid entry %q", name)
+			}
+		}
+		for other := range entries {
+			if strings.HasPrefix(strings.ToLower(other), strings.ToLower(name)+"/") {
+				t.Errorf("entry %q is a folder of %q", name, other)
+			}
+		}
+	}
+}
+
+// countRels counts the relationships of type typ in a saved .rels part.
+func countRels(relsXML []byte, typ string) int {
+	return strings.Count(string(relsXML), `Type="`+typ+`"`)
+}
+
+// A relationship target that climbs out of the package, is empty, names a
+// folder or is a URI became the name the part was saved under: Save wrote
+// "../../evil.xml" or an entry "word" beside the word/ folder, and the
+// output no longer opened (v0.5.0 review H3). Such a target names no part:
+// the styles relationship is replaced by one to a fresh part.
+func TestPaths_StylesTargetOutsidePackage(t *testing.T) {
+	for _, target := range []string{"../../../evil.xml", "", ".", "..", "http://x/y", "/"} {
+		t.Run(target, func(t *testing.T) {
+			data := zipFiles(t, map[string]string{
+				"[Content_Types].xml":          contentTypes,
+				"_rels/.rels":                  rels(rel("rId1", relDoc, "word/document.xml")),
+				"word/document.xml":            documentXML("hello", ""),
+				"word/_rels/document.xml.rels": rels(rel("rId1", relStyles, target)),
+			})
+			d, err := docx.OpenBytes(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := saveBytes(t, d)
+			entries := readZip(t, out)
+			checkEntryNames(t, entries)
+			if n := countRels(entries["word/_rels/document.xml.rels"], relStyles); n != 1 {
+				t.Errorf("%d styles relationships, want 1", n)
+			}
+			if _, ok := entries["word/styles.xml"]; !ok {
+				t.Error("no word/styles.xml written")
+			}
+			if _, err := docx.OpenBytes(out); err != nil {
+				t.Fatalf("reopen: %v", err)
+			}
+		})
+	}
+}
+
+// A core properties relationship with an external, URI or escaping target
+// made EditCoreProps create a part named "http:/x/y" or "../x" (review H3).
+func TestPaths_CorePropsTargetOutsidePackage(t *testing.T) {
+	for _, r := range []string{
+		relMode("rId2", relCore, "http://x/y", "External"),
+		rel("rId2", relCore, "http://x/y"),
+		rel("rId2", relCore, "../x"),
+		rel("rId2", relCore, "docProps"),
+	} {
+		t.Run(r, func(t *testing.T) {
+			data := zipFiles(t, map[string]string{
+				"[Content_Types].xml":          contentTypes,
+				"_rels/.rels":                  rels(rel("rId1", relDoc, "word/document.xml"), r),
+				"word/document.xml":            documentXML("hello", ""),
+				"word/_rels/document.xml.rels": rels(rel("rId1", relStyles, "styles.xml")),
+				"word/styles.xml":              stylesXML("Mine"),
+				"docProps/app.xml":             `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"/>`,
+			})
+			d, err := docx.OpenBytes(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := d.CoreProperties().Title(); got != "" {
+				t.Errorf("Title() = %q from a target outside the package", got)
+			}
+			d.CoreProperties().SetTitle("New")
+			out := saveBytes(t, d)
+			entries := readZip(t, out)
+			checkEntryNames(t, entries)
+			if n := countRels(entries["_rels/.rels"], relCore); n != 1 {
+				t.Errorf("%d core properties relationships, want 1", n)
+			}
+			d2, err := docx.OpenBytes(out)
+			if err != nil {
+				t.Fatalf("reopen: %v", err)
+			}
+			if got := d2.CoreProperties().Title(); got != "New" {
+				t.Errorf("Title() after reopen = %q, want New", got)
+			}
+		})
+	}
+}
+
+// Core properties were looked up by exact name: with target
+// docProps/Core.xml and entry docProps/core.xml they read as empty, and an
+// edit saved a second part, so the output failed to open (review M3).
+func TestPaths_CorePropsTargetCase(t *testing.T) {
+	data := zipFiles(t, map[string]string{
+		"[Content_Types].xml":          contentTypes,
+		"_rels/.rels":                  rels(rel("rId1", relDoc, "word/document.xml"), rel("rId2", relCore, "docProps/Core.xml")),
+		"word/document.xml":            documentXML("hello", ""),
+		"word/_rels/document.xml.rels": rels(rel("rId1", relStyles, "styles.xml")),
+		"word/styles.xml":              stylesXML("Mine"),
+		"docProps/core.xml":            coreXML("Old"),
+	})
+	d, err := docx.OpenBytes(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.CoreProperties().Title(); got != "Old" {
+		t.Fatalf("Title() = %q, want Old", got)
+	}
+	d.CoreProperties().SetTitle("New")
+	out := saveBytes(t, d)
+	n := 0
+	for name := range readZip(t, out) {
+		if strings.EqualFold(name, "docProps/core.xml") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d core properties parts, want 1", n)
+	}
+	d2, err := docx.OpenBytes(out)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if got := d2.CoreProperties().Title(); got != "New" {
+		t.Errorf("Title() after reopen = %q, want New", got)
+	}
+}
+
+// Typed-part relationships with TargetMode="External" were loaded as parts
+// inside the package (review L14). They name nothing: the part beside them
+// is left alone, and a part created for the role replaces the relationship.
+func TestPaths_ExternalTypedRelationship(t *testing.T) {
+	settings := `<w:settings ` + pathsWNS + `><w:zoom w:percent="42"/></w:settings>`
+	data := zipFiles(t, map[string]string{
+		"[Content_Types].xml": contentTypes,
+		"_rels/.rels":         rels(rel("rId1", relDoc, "word/document.xml")),
+		"word/document.xml":   documentXML("hello", ""),
+		"word/_rels/document.xml.rels": rels(relMode("rId1", relStyles, "styles.xml", "External"),
+			relMode("rId2", relSettings, "settings.xml", "External")),
+		"word/styles.xml":   stylesXML("Mine"),
+		"word/settings.xml": settings,
+	})
+	d, err := docx.OpenBytes(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Styles().ByID("Mine") != nil {
+		t.Error("styles behind an external relationship were loaded")
+	}
+	d.SetEvenAndOddHeaders(true) // creates a settings part
+	out := saveBytes(t, d)
+	entries := readZip(t, out)
+	checkEntryNames(t, entries)
+	if got := string(entries["word/styles.xml"]); !strings.Contains(got, "Mine") {
+		t.Errorf("word/styles.xml was overwritten:\n%s", got)
+	}
+	if got := string(entries["word/settings.xml"]); got != settings {
+		t.Errorf("word/settings.xml was overwritten:\n%s", got)
+	}
+	docRels := entries["word/_rels/document.xml.rels"]
+	if strings.Contains(string(docRels), "External") {
+		t.Errorf("external typed relationships kept beside the new parts:\n%s", docRels)
+	}
+	if countRels(docRels, relStyles) != 1 || countRels(docRels, relSettings) != 1 {
+		t.Errorf("want one styles and one settings relationship:\n%s", docRels)
+	}
+	if _, err := docx.OpenBytes(out); err != nil {
+		t.Fatalf("reopen: %v", err)
 	}
 }
 
