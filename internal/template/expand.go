@@ -34,6 +34,12 @@ type engine struct {
 	// limit. Once spent, loops make no more copies (execution fails).
 	copiesLeft int
 	overLimit  bool
+	// depth is the number of block ranges being expanded around the
+	// current point; tooDeep is set once maxNesting was reported.
+	depth   int
+	tooDeep bool
+	// rowEdgeMemo caches each row's edge tags until the row is stripped.
+	rowEdgeMemo map[*wml.CT_Tr]rowEdges
 }
 
 // missing reports a value tag whose key is absent: an error in Strict mode,

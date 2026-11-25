@@ -40,9 +40,10 @@ type span struct {
 func (s span) hasElse() bool { return s.els >= 0 }
 
 // pair matches open, else and close marks. It returns the outermost ranges
-// (open index → span) and false, after reporting, if the level is not
-// balanced. With report false it only computes the ranges.
-func (en *engine) pair(marks []mark, report bool) (map[int]span, bool) {
+// (open index → span), or with all the ranges at every nesting level, and
+// false, after reporting, if the level is not balanced. With report false it
+// only computes the ranges.
+func (en *engine) pair(marks []mark, report, all bool) (map[int]span, bool) {
 	ranges := map[int]span{}
 	ok := true
 	fail := func(m mark, sentinel error, detail string) {
@@ -84,7 +85,7 @@ func (en *engine) pair(marks []mark, report bool) (map[int]span, bool) {
 			fail(m, ErrUnbalancedBlock, fmt.Sprintf("closes %s, opened at %s", open.m.t.text, open.m.loc))
 			continue
 		}
-		if len(stack) == 0 {
+		if all || len(stack) == 0 {
 			ranges[open.m.idx] = span{els: open.els, close: m.idx}
 		}
 	}
@@ -143,57 +144,220 @@ func blockLocs(blocks []wml.BlockElement, loc Location) []Location {
 	return locs
 }
 
-// expandBlocks fills a story's or a cell's block list.
-func (en *engine) expandBlocks(blocks []wml.BlockElement, sc *scope, loc Location) []wml.BlockElement {
-	return en.expandRange(blocks, blockLocs(blocks, loc), sc)
+// maxNesting bounds how deeply block ranges nest along one path: paragraph
+// ranges and row ranges counted together, through cells. Real templates
+// nest a few levels. Without a bound, the template alone decides how deep
+// expansion recurses and how often the row ranges' edge rows are examined.
+const maxNesting = 100
+
+// nestingDetail explains the nesting limit.
+const nestingDetail = "block tags nest more than 100 deep"
+
+// blockPlan is the structure of one block list, found once: its marker
+// paragraphs, paired at every nesting level. Nested ranges and {{#each}}
+// copies (clones, which hold the same blocks at the same indexes) are
+// expanded from it by index, so no level lexes, pairs or scans its body
+// again. Rescanning made N nested ranges cost N² (v0.5.0 review H5).
+type blockPlan struct {
+	locs []Location
+	// opens holds the open tag at each range's first index.
+	opens map[int]tag
+	// spans holds every range, at every level, by its open index.
+	spans map[int]span
+	// sects[k] counts the section-break paragraphs among blocks[:k].
+	sects []int
+	// fieldsOK holds, in the structure check, whether each range's branches
+	// hold whole fields.
+	fieldsOK map[int]bool
 }
 
-// expandRange expands the block ranges and fills the other blocks.
-func (en *engine) expandRange(blocks []wml.BlockElement, locs []Location, sc *scope) []wml.BlockElement {
+// expandBlocks fills a story's or a cell's block list.
+func (en *engine) expandBlocks(blocks []wml.BlockElement, sc *scope, loc Location) []wml.BlockElement {
+	pl, ok := en.planBlocks(blocks, blockLocs(blocks, loc))
+	if !ok {
+		return blocks
+	}
+	return en.expandPlanned(blocks, pl, 0, sc, make([]wml.BlockElement, 0, len(blocks)))
+}
+
+// planBlocks finds and pairs the marker paragraphs of a block list. It
+// returns false, after reporting, when they do not pair or nest too deeply.
+func (en *engine) planBlocks(blocks []wml.BlockElement, locs []Location) (*blockPlan, bool) {
+	pl := &blockPlan{locs: locs, opens: map[int]tag{}, spans: nil, sects: make([]int, len(blocks)+1), fieldsOK: nil}
 	var marks []mark
 	for i, b := range blocks {
-		if p, ok := b.(*wml.CT_P); ok {
-			if t, ok := marker(p); ok {
-				marks = append(marks, mark{idx: i, t: t, loc: locs[i]})
+		pl.sects[i+1] = pl.sects[i]
+		p, ok := b.(*wml.CT_P)
+		if !ok {
+			continue
+		}
+		if p.PPr != nil && p.PPr.SectPr != nil {
+			pl.sects[i+1]++
+		}
+		if t, ok := marker(p); ok {
+			marks = append(marks, mark{idx: i, t: t, loc: locs[i]})
+			if t.kind == tagOpen {
+				pl.opens[i] = t
 			}
 		}
 	}
-	ranges, ok := en.pair(marks, true)
+	// A balanced list is balanced inside every range too, so pairing the
+	// whole list once covers every level.
+	spans, ok := en.pair(marks, true, true)
 	if !ok {
 		// The structure is broken and Execute will fail; filling the rest
 		// would only add noise (".field" outside its loop) to the report.
 		// Misplaced block tags are still worth reporting: one is often why
 		// the level does not pair.
 		en.reportMisplaced(blocks, locs)
-		return blocks
+		return nil, false
 	}
-	opens := map[int]tag{}
+	if !en.nestingFits(marks) {
+		return nil, false
+	}
+	pl.spans = spans
+	if en.check && len(spans) > 0 {
+		pl.fieldsOK = fieldsOKOf(blocks, spans)
+	}
+	return pl, true
+}
+
+// nestingFits reports, after reporting the first range too deep, whether the
+// balanced marks nest within maxNesting from the current depth.
+func (en *engine) nestingFits(marks []mark) bool {
+	depth := en.depth
 	for _, m := range marks {
-		opens[m.idx] = m.t
+		switch m.t.kind {
+		case tagOpen:
+			depth++
+			if depth > maxNesting {
+				if !en.tooDeep {
+					en.tooDeep = true
+					en.fail(m.loc, m.t, ErrOutputLimit, nestingDetail)
+				}
+				return false
+			}
+		case tagClose:
+			depth--
+		}
 	}
-	out := make([]wml.BlockElement, 0, len(blocks))
+	return true
+}
+
+// enter counts one more level of nesting. It reports false, once per
+// Execute, with an ErrOutputLimit issue, when the levels would exceed
+// maxNesting; the range is then left unexpanded.
+func (en *engine) enter(loc Location, open tag) bool {
+	if en.depth >= maxNesting {
+		if !en.tooDeep {
+			en.tooDeep = true
+			en.fail(loc, open, ErrOutputLimit, nestingDetail)
+		}
+		return false
+	}
+	en.depth++
+	return true
+}
+
+func (en *engine) leave() { en.depth-- }
+
+// expandPlanned appends the expansion of blocks to out. blocks[0] is block
+// base of the list pl was planned from, or its clone in a loop copy.
+func (en *engine) expandPlanned(blocks []wml.BlockElement, pl *blockPlan, base int, sc *scope, out []wml.BlockElement) []wml.BlockElement {
 	for i := 0; i < len(blocks); i++ {
-		if sp, isOpen := ranges[i]; isOpen {
-			out = append(out, en.expandBlockRange(blocks, locs, i, sp, opens[i], sc)...)
-			i = sp.close
+		if sp, isOpen := pl.spans[base+i]; isOpen {
+			out = en.expandBlockRange(blocks, pl, base, i, sp, sc, out)
+			i = sp.close - base
 			continue
 		}
+		loc := pl.locs[base+i]
 		switch el := blocks[i].(type) {
 		case *wml.CT_P:
-			en.fillParagraph(el, sc, locs[i])
+			en.fillParagraph(el, sc, loc)
 			out = append(out, el)
 		case *wml.CT_Tbl:
-			if en.expandTable(el, sc, locs[i]) {
+			if en.expandTable(el, sc, loc) {
 				out = append(out, el)
 			}
 		case *wml.RawBlock:
-			en.fillRaw(el.E, sc, locs[i])
+			en.fillRaw(el.E, sc, loc)
 			out = append(out, el)
 		default:
 			out = append(out, el)
 		}
 	}
 	return out
+}
+
+// fieldSum summarises the field characters of some content for
+// wml.FieldsBalanced, so that the summaries of consecutive pieces combine:
+// net is the change in field depth, low the lowest depth reached relative
+// to the start (a separate counts as one below its depth, since it needs an
+// open field).
+type fieldSum struct{ net, low int }
+
+// then returns the summary of s followed by b.
+func (s fieldSum) then(b fieldSum) fieldSum {
+	return fieldSum{net: s.net + b.net, low: min(s.low, s.net+b.low)}
+}
+
+// whole reports whether the content holds whole fields.
+func (s fieldSum) whole() bool { return s.net == 0 && s.low >= 0 }
+
+func fieldSumOf(node any) fieldSum {
+	var s fieldSum
+	for _, mk := range wml.MarksIn(node) {
+		if mk.Kind != wml.MarkFldChar {
+			continue
+		}
+		switch mk.FldCharType {
+		case wml.FldCharBegin:
+			s.net++
+		case wml.FldCharSeparate:
+			s.low = min(s.low, s.net-1)
+		case wml.FldCharEnd:
+			s.net--
+			s.low = min(s.low, s.net)
+		}
+	}
+	return s
+}
+
+// fieldsOKOf reports, for each range of a paired block list, whether its
+// branches hold whole fields. Each block is summarised once and each
+// range's summary is built from its parts, so the cost is linear however
+// deep the ranges nest.
+func fieldsOKOf(blocks []wml.BlockElement, spans map[int]span) map[int]bool {
+	ok := make(map[int]bool, len(spans))
+	var sum func(lo, hi int) fieldSum
+	sum = func(lo, hi int) fieldSum {
+		var s fieldSum
+		for i := lo; i < hi; i++ {
+			sp, isOpen := spans[i]
+			if !isOpen {
+				s = s.then(fieldSumOf(blocks[i]))
+				continue
+			}
+			thenEnd := sp.close
+			if sp.hasElse() {
+				thenEnd = sp.els
+			}
+			body := sum(i+1, thenEnd)
+			r := fieldSumOf(blocks[i]).then(body)
+			whole := body.whole()
+			if sp.hasElse() {
+				els := sum(sp.els+1, sp.close)
+				whole = whole && els.whole()
+				r = r.then(fieldSumOf(blocks[sp.els])).then(els)
+			}
+			ok[i] = whole
+			s = s.then(r.then(fieldSumOf(blocks[sp.close])))
+			i = sp.close
+		}
+		return s
+	}
+	sum(0, len(blocks))
+	return ok
 }
 
 // reportMisplaced reports the block tags in paragraphs that are not marker
@@ -241,12 +405,11 @@ func (en *engine) reportMisplacedRows(rows []wml.TableRowElement, rlocs []Locati
 		}
 		// The paragraphs holding this row's edge tags, and which end to skip.
 		var openPara, closePara *wml.CT_P
-		if _, ok := en.rowOpen(row); ok {
-			openPara = edgeParagraph(row, true)
-		} else if _, ok := rowElse(row); ok {
+		e := en.edges(row)
+		if e.hasOpen || e.hasElse {
 			openPara = edgeParagraph(row, true)
 		}
-		if _, ok := en.rowClose(row); ok {
+		if e.hasClose {
 			closePara = edgeParagraph(row, false)
 		}
 		nc := 0
@@ -331,65 +494,74 @@ func paragraphBlockTags(p *wml.CT_P) []tag {
 // misplacedDetail explains where block tags may go.
 const misplacedDetail = "a block tag must be alone in its paragraph, or at the start of a row's first cell or the end of its last cell"
 
-// expandBlockRange handles blocks[i..sp.close], whose first and last blocks
-// (and the block at sp.els, if any) are the marker paragraphs of open.
-func (en *engine) expandBlockRange(blocks []wml.BlockElement, locs []Location, i int, sp span, open tag, sc *scope) []wml.BlockElement {
-	j := sp.close
-	for k := i; k <= j; k++ {
-		if p, ok := blocks[k].(*wml.CT_P); ok && p.PPr != nil && p.PPr.SectPr != nil {
-			en.fail(locs[k], open, ErrSectionBreakInBlock, "move the section break outside "+open.text+" … {{/"+open.block+"}}")
-			return nil
+// expandBlockRange appends to out the expansion of the range whose open
+// marker is blocks[i] (block base+i of pl's list). The range's first and last
+// blocks, and the block at sp.els if any, are its marker paragraphs; sp
+// holds indexes into pl's list.
+func (en *engine) expandBlockRange(blocks []wml.BlockElement, pl *blockPlan, base, i int, sp span, sc *scope, out []wml.BlockElement) []wml.BlockElement {
+	g := base + i
+	open := pl.opens[g]
+	loc := pl.locs[g]
+	j := sp.close - base
+	if pl.sects[sp.close+1] > pl.sects[g] {
+		for k := i; k <= j; k++ {
+			if p, ok := blocks[k].(*wml.CT_P); ok && p.PPr != nil && p.PPr.SectPr != nil {
+				en.fail(pl.locs[base+k], open, ErrSectionBreakInBlock, "move the section break outside "+open.text+" … {{/"+open.block+"}}")
+				return out
+			}
 		}
 	}
+	if !en.enter(loc, open) {
+		return out
+	}
+	defer en.leave()
 	// The then branch runs to the {{else}} marker; the else branch follows it.
-	thenEnd := j
+	thenEnd := sp.close
 	if sp.hasElse() {
 		thenEnd = sp.els
 	}
-	body, bodyLocs := blocks[i+1:thenEnd], locs[i+1:thenEnd]
-	elseBranch := func() []wml.BlockElement {
+	body := blocks[i+1 : thenEnd-base]
+	elseBranch := func(out []wml.BlockElement) []wml.BlockElement {
 		if !sp.hasElse() {
-			return nil
+			return out
 		}
-		return en.expandRange(blocks[sp.els+1:j], locs[sp.els+1:j], sc)
+		return en.expandPlanned(blocks[sp.els-base+1:j], pl, sp.els+1, sc, out)
 	}
 	if en.check {
 		markers := []*wml.CT_P{blockParagraph(blocks[i]), blockParagraph(blocks[j])}
-		var elseBlocks []wml.BlockElement
 		if sp.hasElse() {
-			markers = append(markers, blockParagraph(blocks[sp.els]))
-			elseBlocks = blocks[sp.els+1 : j]
+			markers = append(markers, blockParagraph(blocks[sp.els-base]))
 		}
-		en.checkBlockDrop([][]wml.BlockElement{body, elseBlocks}, markers, locs[i], open)
+		en.checkBlockDrop(pl.fieldsOK[g], markers, loc, open)
 		// Visit both branches; a loop body once, in the loop's scope so
-		// ".field" tags are not reported as outside a loop.
+		// ".field" tags are not reported as outside a loop. The check's
+		// output is not used.
 		inner := sc
 		if open.block == "each" {
 			inner = sc.push(nil, open.path+"[]")
 		}
-		en.expandRange(body, bodyLocs, inner)
-		elseBranch()
-		return nil
+		en.expandPlanned(body, pl, g+1, inner, nil)
+		elseBranch(nil)
+		return out
 	}
 	if open.block != "each" {
 		if !en.condition(open, sc) {
-			return elseBranch()
+			return elseBranch(out)
 		}
-		return en.expandRange(body, bodyLocs, sc)
+		return en.expandPlanned(body, pl, g+1, sc, out)
 	}
-	list, ok := en.list(open, sc, locs[i], sp.hasElse())
+	list, ok := en.list(open, sc, loc, sp.hasElse())
 	if !ok {
-		return nil
+		return out
 	}
 	if len(list) == 0 {
-		return elseBranch()
+		return elseBranch(out)
 	}
-	copies := copiesOf(en, body, len(list), open, locs[i])
-	var out []wml.BlockElement
+	copies := copiesOf(en, body, len(list), open, loc)
 	// copies is shorter than list when copying stopped (an error, or the
 	// output limit); execution fails then, and the rest is not filled.
 	for k, cp := range copies {
-		out = append(out, en.expandRange(cp, bodyLocs, sc.push(list[k], itemName(sc, open.path, k)))...)
+		out = en.expandPlanned(cp, pl, g+1, sc.push(list[k], itemName(sc, open.path, k)), out)
 	}
 	return out
 }
@@ -408,7 +580,7 @@ func (en *engine) expandTable(t *wml.CT_Tbl, sc *scope, loc Location) bool {
 			hadRows = true
 		}
 	}
-	t.Children = en.expandRows(t.Children, rlocs, sc)
+	t.Children = en.expandRows(t.Children, rlocs, sc, make([]wml.TableRowElement, 0, len(t.Children)))
 	if !hadRows {
 		return true
 	}
@@ -421,8 +593,38 @@ func (en *engine) expandTable(t *wml.CT_Tbl, sc *scope, loc Location) bool {
 	return false
 }
 
-// expandRows expands the row ranges among rows and fills the other rows.
-func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *scope) []wml.TableRowElement {
+// rowEdges are the block tags at a row's edges: an open or else tag at the
+// start of its first cell, a close tag at the end of its last.
+type rowEdges struct {
+	open, els, close           tag
+	hasOpen, hasElse, hasClose bool
+}
+
+// edges returns a row's edge tags. Row ranges are found level by level (an
+// edge tag shows once the range around it has stripped its own), so each
+// level looks at every row of its body again; the result is kept until the
+// row is stripped, so a row's text is lexed once per strip, not once per
+// level.
+func (en *engine) edges(row *wml.CT_Tr) rowEdges {
+	if e, ok := en.rowEdgeMemo[row]; ok {
+		return e
+	}
+	var e rowEdges
+	e.open, e.hasOpen = en.rowOpen(row)
+	if !e.hasOpen {
+		e.els, e.hasElse = rowElse(row)
+	}
+	e.close, e.hasClose = en.rowClose(row)
+	if en.rowEdgeMemo == nil {
+		en.rowEdgeMemo = map[*wml.CT_Tr]rowEdges{}
+	}
+	en.rowEdgeMemo[row] = e
+	return e
+}
+
+// expandRows appends to out the expansion of the row ranges among rows and
+// the other rows, filled.
+func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *scope, out []wml.TableRowElement) []wml.TableRowElement {
 	var marks []mark
 	opens := map[int]tag{}
 	for k, r := range rows {
@@ -430,28 +632,28 @@ func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *s
 		if !ok {
 			continue
 		}
-		if t, ok := en.rowOpen(row); ok {
-			marks = append(marks, mark{idx: k, t: t, loc: rlocs[k]})
-			opens[k] = t
-		} else if t, ok := rowElse(row); ok {
-			marks = append(marks, mark{idx: k, t: t, loc: rlocs[k]})
+		e := en.edges(row)
+		if e.hasOpen {
+			marks = append(marks, mark{idx: k, t: e.open, loc: rlocs[k]})
+			opens[k] = e.open
+		} else if e.hasElse {
+			marks = append(marks, mark{idx: k, t: e.els, loc: rlocs[k]})
 		}
-		if t, ok := en.rowClose(row); ok {
-			marks = append(marks, mark{idx: k, t: t, loc: rlocs[k]})
+		if e.hasClose {
+			marks = append(marks, mark{idx: k, t: e.close, loc: rlocs[k]})
 		}
 	}
-	ranges, ok := en.pair(marks, true)
+	ranges, ok := en.pair(marks, true, false)
 	if !ok {
 		// As for paragraph ranges: report block tags that are not at a row
 		// edge (a close tag in the last cell but not at its end, say), which
 		// is often why the rows do not pair.
 		en.reportMisplacedRows(rows, rlocs)
-		return rows
+		return append(out, rows...)
 	}
-	out := make([]wml.TableRowElement, 0, len(rows))
 	for k := 0; k < len(rows); k++ {
 		if sp, isOpen := ranges[k]; isOpen {
-			out = append(out, en.expandRowRange(rows, rlocs, k, sp, opens[k], sc)...)
+			out = en.expandRowRange(rows, rlocs, k, sp, opens[k], sc, out)
 			k = sp.close
 			continue
 		}
@@ -466,37 +668,49 @@ func (en *engine) expandRows(rows []wml.TableRowElement, rlocs []Location, sc *s
 	return out
 }
 
-// expandRowRange handles rows[k..sp.close], whose edge cells hold open and
-// its close tag. With an {{else}}, the row starting with it begins the else
-// branch: rows k..sp.els-1 are the then branch, sp.els..sp.close the else
-// branch.
-func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k int, sp span, open tag, sc *scope) []wml.TableRowElement {
+// rowEdgeSplitDetail explains a row-edge tag that cannot be stripped.
+const rowEdgeSplitDetail = "a block tag at a row's edge must be one piece of text; " +
+	"this one is split by a bookmark, comment mark or other element, so delete it and type it again"
+
+// expandRowRange appends to out the expansion of rows[k..sp.close], whose
+// edge cells hold open and its close tag. With an {{else}}, the row starting
+// with it begins the else branch: rows k..sp.els-1 are the then branch,
+// sp.els..sp.close the else branch.
+func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k int, sp span, open tag, sc *scope, out []wml.TableRowElement) []wml.TableRowElement {
 	j := sp.close
 	first, _ := rows[k].(*wml.CT_Tr)
 	last, _ := rows[j].(*wml.CT_Tr)
 	// The close tag is found before any tag is stripped: stripping the else
 	// tag from a one-cell row could otherwise change what rowClose sees.
-	closeTag, hasClose := en.rowClose(last)
-	stripRowEdge(first, open, true)
+	ends := en.edges(last)
+	stripped := en.stripRowEdge(first, open, true)
 	if sp.hasElse() {
 		elseRow, _ := rows[sp.els].(*wml.CT_Tr)
-		if t, ok := rowElse(elseRow); ok {
-			stripRowEdge(elseRow, t, true)
-		}
+		e := en.edges(elseRow)
+		stripped = stripped && e.hasElse && en.stripRowEdge(elseRow, e.els, true)
 	}
-	if hasClose {
-		stripRowEdge(last, closeTag, false)
+	stripped = stripped && ends.hasClose && en.stripRowEdge(last, ends.close, false)
+	if !stripped {
+		// The tag was found in the row's edge text but is not whole in one
+		// w:t. Expanding the rows would find the same range again, without
+		// end (v0.5.0 review H1).
+		en.fail(rlocs[k], open, ErrSplitAcrossBoundary, rowEdgeSplitDetail)
+		return out
 	}
+	if !en.enter(rlocs[k], open) {
+		return out
+	}
+	defer en.leave()
 	thenEnd := j + 1
 	if sp.hasElse() {
 		thenEnd = sp.els
 	}
 	body, bodyLocs := rows[k:thenEnd], rlocs[k:thenEnd]
-	elseBranch := func() []wml.TableRowElement {
+	elseBranch := func(out []wml.TableRowElement) []wml.TableRowElement {
 		if !sp.hasElse() {
-			return nil
+			return out
 		}
-		return en.expandRows(rows[sp.els:j+1], rlocs[sp.els:j+1], sc)
+		return en.expandRows(rows[sp.els:j+1], rlocs[sp.els:j+1], sc, out)
 	}
 	if en.check {
 		var elseRows []wml.TableRowElement
@@ -508,27 +722,26 @@ func (en *engine) expandRowRange(rows []wml.TableRowElement, rlocs []Location, k
 		if open.block == "each" {
 			inner = sc.push(nil, open.path+"[]")
 		}
-		en.expandRows(body, bodyLocs, inner)
-		elseBranch()
-		return nil
+		en.expandRows(body, bodyLocs, inner, nil)
+		elseBranch(nil)
+		return out
 	}
 	if open.block != "each" {
 		if !en.condition(open, sc) {
-			return elseBranch()
+			return elseBranch(out)
 		}
-		return en.expandRows(body, bodyLocs, sc)
+		return en.expandRows(body, bodyLocs, sc, out)
 	}
 	list, ok := en.list(open, sc, rlocs[k], sp.hasElse())
 	if !ok {
-		return nil
+		return out
 	}
 	if len(list) == 0 {
-		return elseBranch()
+		return elseBranch(out)
 	}
 	copies := copiesOf(en, body, len(list), open, rlocs[k])
-	var out []wml.TableRowElement
 	for n, cp := range copies { // shorter than list after a failure, as for blocks
-		out = append(out, en.expandRows(cp, bodyLocs, sc.push(list[n], itemName(sc, open.path, n)))...)
+		out = en.expandRows(cp, bodyLocs, sc.push(list[n], itemName(sc, open.path, n)), out)
 	}
 	return out
 }
@@ -642,7 +855,7 @@ func (en *engine) pairedInCell(cell *wml.CT_Tc, idx int) bool {
 			}
 		}
 	}
-	ranges, _ := en.pair(marks, false)
+	ranges, _ := en.pair(marks, false, false)
 	for open, sp := range ranges {
 		if open == idx || sp.close == idx || sp.els == idx {
 			return true
@@ -718,11 +931,14 @@ func edgeCell(row *wml.CT_Tr, first bool) *wml.CT_Tc {
 
 // stripRowEdge removes a row-range tag from the start of the row's first
 // cell (open) or the end of its last cell (close). A paragraph left blank
-// is removed when the cell has other content.
-func stripRowEdge(row *wml.CT_Tr, t tag, open bool) {
+// is removed when the cell has other content. The tag must lie whole in the
+// first (or last) w:t that holds more than spaces and tabs, which is where
+// edgeText found it unless it is split by an element the run merge does not
+// cross; stripRowEdge reports false, and changes nothing, otherwise.
+func (en *engine) stripRowEdge(row *wml.CT_Tr, t tag, open bool) bool {
 	cell := edgeCell(row, open)
 	if cell == nil || len(cell.Children) == 0 {
-		return
+		return false
 	}
 	idx := 0
 	if !open {
@@ -730,27 +946,41 @@ func stripRowEdge(row *wml.CT_Tr, t tag, open bool) {
 	}
 	p, ok := cell.Children[idx].(*wml.CT_P)
 	if !ok {
-		return
+		return false
 	}
 	texts := paragraphTexts(p.Children)
-	if open {
-		for _, tx := range texts {
-			if i := strings.Index(tx.Content, t.text); i >= 0 {
-				tx.Content = tx.Content[:i] + tx.Content[i+len(t.text):]
-				break
-			}
-		}
-	} else {
-		for n := len(texts) - 1; n >= 0; n-- {
-			if i := strings.LastIndex(texts[n].Content, t.text); i >= 0 {
-				texts[n].Content = texts[n].Content[:i] + texts[n].Content[i+len(t.text):]
-				break
-			}
+	if !open {
+		slices.Reverse(texts)
+	}
+	var tx *wml.CT_Text
+	for _, x := range texts {
+		if strings.Trim(x.Content, " \t") != "" {
+			tx = x
+			break
 		}
 	}
+	if tx == nil {
+		return false
+	}
+	if open {
+		rest := strings.TrimLeft(tx.Content, " \t")
+		if !strings.HasPrefix(rest, t.text) {
+			return false
+		}
+		i := len(tx.Content) - len(rest)
+		tx.Content = tx.Content[:i] + tx.Content[i+len(t.text):]
+	} else {
+		rest := strings.TrimRight(tx.Content, " \t")
+		if !strings.HasSuffix(rest, t.text) {
+			return false
+		}
+		tx.Content = tx.Content[:len(rest)-len(t.text)] + tx.Content[len(rest):]
+	}
+	delete(en.rowEdgeMemo, row)
 	if len(cell.Children) > 1 && blankParagraph(p) {
 		cell.Children = append(cell.Children[:idx:idx], cell.Children[idx+1:]...)
 	}
+	return true
 }
 
 // blankParagraph reports whether p holds nothing but empty text: no other

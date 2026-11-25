@@ -46,7 +46,8 @@ var (
 	// Lenient mode.
 	ErrFormat = itemplate.ErrFormat
 	// ErrOutputLimit: {{#each}} loops would copy more paragraphs, tables
-	// and rows than Options.MaxCopies allows. It fails in both modes.
+	// and rows than Options.MaxCopies allows, or block tags nest more than
+	// 100 deep. It fails in both modes.
 	ErrOutputLimit = itemplate.ErrOutputLimit
 )
 

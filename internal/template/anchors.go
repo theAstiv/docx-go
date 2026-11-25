@@ -100,17 +100,12 @@ func (en *engine) cleanStoryAnchors(blocks *[]wml.BlockElement, before storyAnch
 // checkBlockDrop reports, in the structure check, a block range whose
 // dropped content would leave something broken: a branch or marker
 // paragraph holding part of a field, or a marker paragraph holding a
-// drawing or object.
-func (en *engine) checkBlockDrop(segments [][]wml.BlockElement, markers []*wml.CT_P, loc Location, open tag) {
-	for _, seg := range segments {
-		var marks []wml.Mark
-		for _, b := range seg {
-			marks = append(marks, wml.MarksIn(b)...)
-		}
-		if !wml.FieldsBalanced(marks) {
-			en.fail(loc, open, ErrSplitAcrossBoundary, blockFieldDetail)
-			return
-		}
+// drawing or object. branchesOK says whether the branches hold whole fields
+// (blockPlan.fieldsOK).
+func (en *engine) checkBlockDrop(branchesOK bool, markers []*wml.CT_P, loc Location, open tag) {
+	if !branchesOK {
+		en.fail(loc, open, ErrSplitAcrossBoundary, blockFieldDetail)
+		return
 	}
 	for _, p := range markers {
 		if p == nil {
