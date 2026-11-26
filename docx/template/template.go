@@ -327,6 +327,7 @@ func Execute(doc *docx.Document, data map[string]any, opts Options) ([]Issue, er
 			Adapt:     adapt,
 			Hooks:     itemplate.Hooks{AddImage: addImage, AddLink: addLink},
 			MaxCopies: opts.MaxCopies,
+			UsedDocPr: bridge.NoteDocPr(doc),
 		})
 	if err != nil && restore != nil {
 		restore()

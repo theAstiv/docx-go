@@ -22,12 +22,27 @@ const (
 	MarkCommentStart
 	MarkCommentEnd
 	MarkFldChar
+	MarkMoveFromStart
+	MarkMoveFromEnd
+	MarkMoveToStart
+	MarkMoveToEnd
+	MarkPermStart
+	MarkPermEnd
+	// MarkFootnoteRef, MarkEndnoteRef and MarkCommentRef are references to
+	// a note or comment held in another part; they have no partner in the
+	// story.
+	MarkFootnoteRef
+	MarkEndnoteRef
+	MarkCommentRef
 )
 
-// Mark is a range anchor or field character found in content.
+// Mark is a range anchor, note reference or field character found in
+// content.
 type Mark struct {
 	Kind MarkKind
-	// ID is the w:id of an anchor; 0 for field characters.
+	// ID is the w:id of an anchor or reference; 0 for field characters. A
+	// w:permStart/w:permEnd id is a string in the schema; one that is not a
+	// number is not reported.
 	ID int64
 	// FldCharType is "begin", "separate" or "end" for MarkFldChar.
 	FldCharType string
@@ -35,10 +50,47 @@ type Mark struct {
 
 // anchorNames maps the anchor element names to their kinds.
 var anchorNames = map[xml.Name]MarkKind{
-	ns.Qn("w:bookmarkStart"):     MarkBookmarkStart,
-	ns.Qn("w:bookmarkEnd"):       MarkBookmarkEnd,
-	ns.Qn("w:commentRangeStart"): MarkCommentStart,
-	ns.Qn("w:commentRangeEnd"):   MarkCommentEnd,
+	ns.Qn("w:bookmarkStart"):      MarkBookmarkStart,
+	ns.Qn("w:bookmarkEnd"):        MarkBookmarkEnd,
+	ns.Qn("w:commentRangeStart"):  MarkCommentStart,
+	ns.Qn("w:commentRangeEnd"):    MarkCommentEnd,
+	ns.Qn("w:moveFromRangeStart"): MarkMoveFromStart,
+	ns.Qn("w:moveFromRangeEnd"):   MarkMoveFromEnd,
+	ns.Qn("w:moveToRangeStart"):   MarkMoveToStart,
+	ns.Qn("w:moveToRangeEnd"):     MarkMoveToEnd,
+	ns.Qn("w:permStart"):          MarkPermStart,
+	ns.Qn("w:permEnd"):            MarkPermEnd,
+}
+
+// refNames maps the note and comment reference element names to their
+// kinds.
+var refNames = map[xml.Name]MarkKind{
+	ns.Qn("w:footnoteReference"): MarkFootnoteRef,
+	ns.Qn("w:endnoteReference"):  MarkEndnoteRef,
+	ns.Qn("w:commentReference"):  MarkCommentRef,
+}
+
+// anchorPairs lists each range kind's start and end.
+var anchorPairs = [][2]MarkKind{
+	{MarkBookmarkStart, MarkBookmarkEnd},
+	{MarkCommentStart, MarkCommentEnd},
+	{MarkMoveFromStart, MarkMoveFromEnd},
+	{MarkMoveToStart, MarkMoveToEnd},
+	{MarkPermStart, MarkPermEnd},
+}
+
+// PartnerKind returns the kind of an anchor's other end: the end for a
+// start and the start for an end. Other kinds are returned unchanged.
+func PartnerKind(k MarkKind) MarkKind {
+	for _, p := range anchorPairs {
+		switch k {
+		case p[0]:
+			return p[1]
+		case p[1]:
+			return p[0]
+		}
+	}
+	return k
 }
 
 // MarksIn returns the marks inside node, in document order. node is a
@@ -98,6 +150,11 @@ func (m *markCollector) run(r *CT_R) {
 		switch el := c.(type) {
 		case *CT_FldChar:
 			m.out = append(m.out, Mark{Kind: MarkFldChar, ID: 0, FldCharType: el.FldCharType})
+		case *CT_Drawing:
+			// A text box in a drawing holds paragraphs of its own.
+			for _, re := range drawingRaws(el) {
+				m.raw(re)
+			}
 		case *RawRunContent:
 			m.raw(el.E)
 		}
@@ -108,7 +165,11 @@ func (m *markCollector) raw(re *raw.RawElement) {
 	if re == nil {
 		return
 	}
-	if k, ok := anchorNames[re.QName]; ok {
+	k, anchor := anchorNames[re.QName]
+	if !anchor {
+		k, anchor = refNames[re.QName]
+	}
+	if anchor {
 		if id := parseInt64Ptr(attrNS(re.Attrs, ns.W, "id")); id != nil {
 			m.out = append(m.out, Mark{Kind: k, ID: *id, FldCharType: ""})
 		}
@@ -151,12 +212,10 @@ func FieldsBalanced(marks []Mark) bool {
 // from leaves the partners dangling elsewhere. The result is keyed by the
 // kind of the partner to delete.
 func OrphanedPartners(marks []Mark) map[MarkKind]map[int64]bool {
-	type pair struct{ start, end MarkKind }
-	pairs := []pair{{MarkBookmarkStart, MarkBookmarkEnd}, {MarkCommentStart, MarkCommentEnd}}
 	seen := map[MarkKind]map[int64]bool{}
 	for _, mk := range marks {
-		if mk.Kind == MarkFldChar {
-			continue
+		if PartnerKind(mk.Kind) == mk.Kind {
+			continue // a field character or a reference
 		}
 		if seen[mk.Kind] == nil {
 			seen[mk.Kind] = map[int64]bool{}
@@ -170,16 +229,33 @@ func OrphanedPartners(marks []Mark) map[MarkKind]map[int64]bool {
 		}
 		out[kind][id] = true
 	}
-	for _, p := range pairs {
-		for id := range seen[p.start] {
-			if !seen[p.end][id] {
-				add(p.end, id)
+	for _, p := range anchorPairs {
+		start, end := p[0], p[1]
+		for id := range seen[start] {
+			if !seen[end][id] {
+				add(end, id)
 			}
 		}
-		for id := range seen[p.end] {
-			if !seen[p.start][id] {
-				add(p.start, id)
+		for id := range seen[end] {
+			if !seen[start][id] {
+				add(start, id)
 			}
+		}
+	}
+	return out
+}
+
+// Refs returns, by kind (MarkFootnoteRef, MarkEndnoteRef, MarkCommentRef),
+// the ids of the note and comment references in marks.
+func Refs(marks []Mark) map[MarkKind]map[int64]bool {
+	out := map[MarkKind]map[int64]bool{}
+	for _, mk := range marks {
+		switch mk.Kind {
+		case MarkFootnoteRef, MarkEndnoteRef, MarkCommentRef:
+			if out[mk.Kind] == nil {
+				out[mk.Kind] = map[int64]bool{}
+			}
+			out[mk.Kind][mk.ID] = true
 		}
 	}
 	return out
@@ -270,9 +346,26 @@ func (r anchorRemover) inlines(children *[]InlineElement) {
 	})
 	for _, c := range *children {
 		switch el := c.(type) {
+		case *CT_R:
+			r.run(el)
 		case *CT_Hyperlink:
 			r.inlines(&el.Children)
 		case *RawInline:
+			r.raw(el.E)
+		}
+	}
+}
+
+// run removes matching anchors nested in a run: in text boxes of its
+// drawings and in raw run content (mc:AlternateContent, w:pict, w:object).
+func (r anchorRemover) run(run *CT_R) {
+	for _, c := range run.Children {
+		switch el := c.(type) {
+		case *CT_Drawing:
+			for _, re := range drawingRaws(el) {
+				r.raw(re)
+			}
+		case *RawRunContent:
 			r.raw(el.E)
 		}
 	}

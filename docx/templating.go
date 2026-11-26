@@ -18,6 +18,15 @@ func init() {
 		}
 		return doc.pkg.UnparsedStoryParts()
 	}
+	bridge.NoteDocPr = func(d any) []int64 {
+		doc, ok := d.(*Document)
+		if !ok || doc == nil || doc.pkg == nil {
+			return nil
+		}
+		scan := new(wml.IDScan)
+		doc.pkg.ScanNotes(scan)
+		return scan.DocPr
+	}
 	bridge.BoundParts = func(d any) map[string][]byte {
 		doc, ok := d.(*Document)
 		if !ok || doc == nil || doc.pkg == nil {

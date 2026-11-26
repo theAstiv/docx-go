@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
+	"github.com/theAstiv/docx-go/internal/parts"
 )
 
 // Errors returned by the Remove methods. Test with errors.Is.
@@ -32,10 +33,12 @@ var (
 //
 // It returns ErrNotInDocument when the paragraph was already removed,
 // ErrSectionBreak when it carries a section break, and ErrUnbalancedField
-// when it holds only part of a complex field. A bookmark or comment range
-// that started or ended in the paragraph loses its other end too, and a
-// cell, header or footer left without a final paragraph gets an empty one,
-// as Word requires.
+// when it holds only part of a complex field. A bookmark, comment,
+// move or permission range that started or ended in the paragraph loses
+// its other end too. A footnote, endnote or comment whose only reference
+// was in the paragraph is deleted, and a deleted comment takes its range.
+// A cell, header or footer left without a final paragraph gets an empty
+// one, as Word requires.
 func (p *Paragraph) Remove() error {
 	if p.p.PPr != nil && p.p.PPr.SectPr != nil {
 		if _, _, ok := p.st.locateBlock(p.p, p.hint()); ok {
@@ -71,8 +74,8 @@ func (s *story) removeBlock(el wml.BlockElement, hint *[]wml.BlockElement) error
 }
 
 // afterRemoval deletes the anchors the removed content leaves without a
-// partner, and drops the id cache: Document.Bookmarks must not list a
-// removed bookmark.
+// partner and the notes and comments it leaves without a reference, and
+// drops the id cache: Document.Bookmarks must not list a removed bookmark.
 func (s *story) afterRemoval(marks []wml.Mark) {
 	if orphans := wml.OrphanedPartners(marks); len(orphans) > 0 {
 		for _, root := range s.roots() {
@@ -81,7 +84,46 @@ func (s *story) afterRemoval(marks []wml.Mark) {
 	}
 	if s != nil && s.pkg != nil {
 		s.invalidateIDs()
+		s.removeNotes(wml.Refs(marks))
 	}
+}
+
+// noteKinds maps a reference kind to the part its note is in.
+var noteKinds = map[wml.MarkKind]parts.NoteKind{
+	wml.MarkFootnoteRef: parts.Footnotes,
+	wml.MarkEndnoteRef:  parts.Endnotes,
+	wml.MarkCommentRef:  parts.Comments,
+}
+
+// removeNotes deletes the footnotes, endnotes and comments whose references
+// were removed (refs, by reference kind) and that nothing else in the
+// document still references. A removed comment also takes its range
+// anchors, which would otherwise mark a range for a comment that is gone.
+func (s *story) removeNotes(refs map[wml.MarkKind]map[int64]bool) {
+	if len(refs) == 0 {
+		return
+	}
+	sc := s.freshScan()
+	for kind, ids := range refs {
+		gone := map[int64]bool{}
+		for id := range ids {
+			if !sc.Referenced(kind, id) {
+				gone[id] = true
+			}
+		}
+		if len(gone) == 0 {
+			continue
+		}
+		s.pkg.RemoveNotes(noteKinds[kind], gone)
+		if kind == wml.MarkCommentRef {
+			anchors := map[wml.MarkKind]map[int64]bool{wml.MarkCommentStart: gone, wml.MarkCommentEnd: gone}
+			for _, root := range s.roots() {
+				wml.RemoveAnchors(root, anchors)
+			}
+		}
+	}
+	// The removed notes may have held bookmarks and drawings.
+	s.invalidateIDs()
 }
 
 // ensureTrailingParagraph appends an empty paragraph when list is empty or

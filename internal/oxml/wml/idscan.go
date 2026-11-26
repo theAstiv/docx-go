@@ -1,7 +1,10 @@
 package wml
 
 import (
+	"bytes"
 	"encoding/xml"
+	"errors"
+	"io"
 	"math"
 
 	"github.com/theAstiv/docx-go/internal/oxml/ns"
@@ -27,6 +30,67 @@ type IDScan struct {
 	// StoreItemIDs holds the w:storeItemID of every w:dataBinding: the
 	// custom XML parts (and document properties) content controls show.
 	StoreItemIDs []string
+	// Refs holds every footnote, endnote and comment reference (Kind
+	// MarkFootnoteRef, MarkEndnoteRef or MarkCommentRef).
+	Refs []Mark
+}
+
+// Referenced reports whether the scan holds a reference of kind with id.
+func (s *IDScan) Referenced(kind MarkKind, id int64) bool {
+	for _, r := range s.Refs {
+		if r.Kind == kind && r.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// ScanPart adds the ids found in a part kept as bytes (footnotes, endnotes,
+// comments) to s, reading it as a token stream: wp:docPr ids, bookmarks,
+// data bindings and note references, wherever they are nested. The bytes
+// are not modelled, so bookmarks found here carry no typed element.
+func ScanPart(data []byte, s *IDScan) error {
+	d := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		tok, err := d.Token()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		se, ok := tok.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		scanStart(se.Name, se.Attr, s)
+	}
+}
+
+// scanStart records the ids one element holds, for scanRaw and ScanPart.
+func scanStart(name xml.Name, attrs []xml.Attr, s *IDScan) {
+	switch name {
+	case ns.Qn("wp:docPr"):
+		if n := parseInt64Ptr(attrLocal(attrs, "id")); n != nil {
+			s.DocPr = append(s.DocPr, *n)
+		}
+	case ns.Qn("w:bookmarkStart"):
+		ref := BookmarkRef{ID: 0, Name: attrNS(attrs, ns.W, "name"), Start: nil}
+		if n := parseInt64Ptr(attrNS(attrs, ns.W, "id")); n != nil {
+			ref.ID = *n
+		}
+		s.Bookmarks = append(s.Bookmarks, ref)
+	case ns.Qn("w:dataBinding"), ns.Qn("w15:dataBinding"):
+		if id := attrAnyNS(attrs, "storeItemID"); id != "" {
+			s.StoreItemIDs = append(s.StoreItemIDs, id)
+		}
+	default:
+		if k, ok := refNames[name]; ok {
+			if n := parseInt64Ptr(attrNS(attrs, ns.W, "id")); n != nil {
+				s.Refs = append(s.Refs, Mark{Kind: k, ID: *n, FldCharType: ""})
+			}
+		}
+	}
 }
 
 // DocPrAllocator returns a function that hands out wp:docPr ids, one per
@@ -156,71 +220,78 @@ func scanRun(r *CT_R, s *IDScan) {
 // further pictures and bookmarks, in an inline drawing's graphic data just as
 // in an anchored drawing, so every raw bucket is walked, not only docPr.
 func scanDrawing(d *CT_Drawing, s *IDScan) {
+	if in := d.Inline; in != nil && in.DocPr != nil {
+		s.DocPr = append(s.DocPr, in.DocPr.ID)
+	}
+	for _, re := range drawingRaws(d) {
+		scanRaw(re, s)
+	}
+}
+
+// drawingRaws returns every raw part of a drawing, in document order: an
+// anchored drawing (wp:anchor) as a whole, and the raw pieces of a typed
+// inline picture. Text boxes, with their paragraphs, pictures and anchors,
+// live in these.
+func drawingRaws(d *CT_Drawing) []*raw.RawElement {
+	var out []*raw.RawElement
+	one := func(re *raw.RawElement) {
+		if re != nil {
+			out = append(out, re)
+		}
+	}
+	all := func(res []*raw.RawElement) {
+		for _, re := range res {
+			one(re)
+		}
+	}
 	if in := d.Inline; in != nil {
 		if in.DocPr != nil {
-			s.DocPr = append(s.DocPr, in.DocPr.ID)
-			scanRawAll(in.DocPr.Children, s)
+			all(in.DocPr.Children)
 		}
-		scanRawOne(in.EffectExtent, s)
-		scanRawOne(in.CNvGraphicFramePr, s)
-		scanRawAll(in.Extras, s)
+		one(in.EffectExtent)
+		one(in.CNvGraphicFramePr)
+		all(in.Extras)
 		if g := in.Graphic; g != nil {
-			scanRawAll(g.Rest, s)
+			all(g.Rest)
 			if gd := g.GraphicData; gd != nil {
-				scanRawAll(gd.Rest, s)
+				all(gd.Rest)
 				if pic := gd.Pic; pic != nil {
-					scanRawOne(pic.NvPicPr, s)
-					scanRawAll(pic.Extras, s)
+					one(pic.NvPicPr)
+					all(pic.Extras)
 					if pic.SpPr != nil {
-						scanRawAll(pic.SpPr.Children, s)
+						all(pic.SpPr.Children)
 					}
 					if pic.BlipFill != nil {
-						scanRawAll(pic.BlipFill.Rest, s)
+						all(pic.BlipFill.Rest)
 						if pic.BlipFill.Blip != nil {
-							scanRawAll(pic.BlipFill.Blip.Children, s)
+							all(pic.BlipFill.Blip.Children)
 						}
 					}
 				}
 			}
 		}
 	}
-	scanRawAll(d.Rest, s)
+	all(d.Rest)
+	return out
 }
 
-func scanRawOne(re *raw.RawElement, s *IDScan) {
-	if re != nil {
-		scanRaw(re, s)
-	}
-}
-
-func scanRawAll(res []*raw.RawElement, s *IDScan) {
-	for _, re := range res {
-		scanRaw(re, s)
-	}
-}
-
-// scanRaw walks a raw subtree for wp:docPr and w:bookmarkStart.
+// scanRaw walks a raw subtree for the ids scanStart records.
 func scanRaw(re *raw.RawElement, s *IDScan) {
-	switch re.QName {
-	case ns.Qn("wp:docPr"):
-		if n := parseInt64Ptr(attrLocal(re.Attrs, "id")); n != nil {
-			s.DocPr = append(s.DocPr, *n)
-		}
-	case ns.Qn("w:bookmarkStart"):
-		ref := new(BookmarkRef)
-		ref.Name = attrNS(re.Attrs, ns.W, "name")
-		if n := parseInt64Ptr(attrNS(re.Attrs, ns.W, "id")); n != nil {
-			ref.ID = *n
-		}
-		s.Bookmarks = append(s.Bookmarks, *ref)
-	case ns.Qn("w:dataBinding"), ns.Qn("w15:dataBinding"):
-		if id := rawAttr(re, "storeItemID"); id != "" {
-			s.StoreItemIDs = append(s.StoreItemIDs, id)
-		}
-	}
+	scanStart(re.QName, re.Attrs, s)
 	for _, k := range rawKids(re) {
 		scanRaw(k, s)
 	}
+}
+
+// attrAnyNS returns the value of the first attribute with the given local
+// name, in any namespace.
+func attrAnyNS(attrs []xml.Attr, local string) string {
+	for _, a := range attrs {
+		if a.Name.Local == local {
+			return a.Value
+		}
+	}
+	return ""
 }
 
 // attrNS returns the value of the attribute with the given namespace and local
