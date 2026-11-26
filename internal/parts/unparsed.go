@@ -7,13 +7,9 @@ import (
 	"github.com/theAstiv/docx-go/internal/oxml/wml"
 )
 
-// unparsedStory matches the story parts this package keeps as opaque bytes:
-// footnotes, endnotes and comments.
-// Part names compare ignoring case (OPC), so the patterns do too.
-var unparsedStory = regexp.MustCompile(`(?i)^word/(footnotes|endnotes|comments)\.xml$`)
-
 // customXMLItem matches the custom XML data items content controls bind to
-// (not their itemProps).
+// (not their itemProps). Part names compare ignoring case (OPC), so the
+// pattern does too.
 var customXMLItem = regexp.MustCompile(`(?i)^customXml/item\d+\.xml$`)
 
 // BoundDataParts returns, by path, the parts data-bound content controls
@@ -54,14 +50,11 @@ func (p *Package) BoundDataParts() map[string][]byte {
 // holds the item id (ds:datastoreItem/@ds:itemID).
 const relCustomXMLProps = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps"
 
-var (
-	storeItemIDAttr = regexp.MustCompile(`storeItemID\s*=\s*["']([^"']*)["']`)
-	itemIDAttr      = regexp.MustCompile(`itemID\s*=\s*["']([^"']*)["']`)
-)
+var itemIDAttr = regexp.MustCompile(`itemID\s*=\s*["']([^"']*)["']`)
 
 // boundStoreItems returns the store item ids the document's content
 // controls bind to, normalised by normItemID: the body, headers and
-// footers, and the unparsed note and comment parts.
+// footers, and the note and comment parts.
 func (p *Package) boundStoreItems() map[string]bool {
 	scan := new(wml.IDScan)
 	if p.DocPart != nil {
@@ -75,14 +68,10 @@ func (p *Package) boundStoreItems() map[string]bool {
 	for _, f := range p.UniqueFooters() {
 		wml.ScanBlocks(f.Part.CT().Children, scan)
 	}
+	p.ScanNotes(scan)
 	ids := map[string]bool{}
 	for _, id := range scan.StoreItemIDs {
 		ids[normItemID(id)] = true
-	}
-	for _, data := range p.UnparsedStoryParts() {
-		for _, m := range storeItemIDAttr.FindAllSubmatch(data, -1) {
-			ids[normItemID(string(m[1]))] = true
-		}
 	}
 	return ids
 }
@@ -119,14 +108,15 @@ func (p *Package) SetPartData(path string, data []byte) {
 	}
 }
 
-// UnparsedStoryParts returns the footnotes, endnotes and comments parts by
-// path. They hold user-visible text but are not parsed, so callers that act
-// on text (templating) can at least see what they cannot reach.
+// UnparsedStoryParts returns the footnotes, endnotes and comments parts the
+// main document's relationships name, by path. They hold user-visible text
+// but are not parsed, so callers that act on text (templating) can at least
+// see what they cannot reach.
 func (p *Package) UnparsedStoryParts() map[string][]byte {
 	out := map[string][]byte{}
-	for _, name := range p.pkg.PartPaths() {
-		if unparsedStory.MatchString(name) {
-			out[name] = p.pkg.Part(name)
+	for _, kind := range noteKinds {
+		if path := p.NotePath(kind); path != "" {
+			out[path] = p.pkg.Part(path)
 		}
 	}
 	return out

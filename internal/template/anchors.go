@@ -42,23 +42,9 @@ func loneAnchors(blocks []wml.BlockElement) map[wml.MarkKind]map[int64]bool {
 	// that is present has the other kind.
 	out := map[wml.MarkKind]map[int64]bool{}
 	for kind, ids := range wml.OrphanedPartners(marks) {
-		out[partnerKind(kind)] = ids
+		out[wml.PartnerKind(kind)] = ids
 	}
 	return out
-}
-
-func partnerKind(k wml.MarkKind) wml.MarkKind {
-	switch k {
-	case wml.MarkBookmarkStart:
-		return wml.MarkBookmarkEnd
-	case wml.MarkBookmarkEnd:
-		return wml.MarkBookmarkStart
-	case wml.MarkCommentStart:
-		return wml.MarkCommentEnd
-	case wml.MarkCommentEnd:
-		return wml.MarkCommentStart
-	}
-	return k
 }
 
 func bookmarkNames(blocks []wml.BlockElement) map[string]bool {

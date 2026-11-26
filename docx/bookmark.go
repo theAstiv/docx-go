@@ -147,8 +147,9 @@ func (d *Document) Bookmark(name string) *Bookmark {
 	return nil
 }
 
-// Bookmarks iterates over every bookmark in the document (body, headers and
-// footers), including Word-generated ones such as _Toc… and _GoBack.
+// Bookmarks iterates over every bookmark in the document (body, headers,
+// footers, footnotes, endnotes and comments), including Word-generated ones
+// such as _Toc… and _GoBack.
 func (d *Document) Bookmarks() iter.Seq[*Bookmark] {
 	return func(yield func(*Bookmark) bool) {
 		for _, b := range docStory(d.pkg).bookmarkStarts() {

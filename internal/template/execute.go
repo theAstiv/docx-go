@@ -32,6 +32,10 @@ type Options struct {
 	// moderate data can otherwise produce millions. 0 means
 	// DefaultMaxCopies; a negative value means no limit.
 	MaxCopies int
+	// UsedDocPr lists the wp:docPr ids held outside the stories (in
+	// footnotes, endnotes and comments), which drawings copied by
+	// {{#each}} must not reuse.
+	UsedDocPr []int64
 }
 
 // DefaultMaxCopies is the copy limit when Options.MaxCopies is 0.
@@ -87,13 +91,12 @@ func ExecuteAll(stories []Story, boundParts map[string][]byte, data map[string]a
 		work[i] = blocks
 	}
 	// Drawings copied by {{#each}} need wp:docPr ids unique across every
-	// story; scan once, allocate many. Known gap: footnotes and endnotes are
-	// unparsed, so a drawing there is not seen and a copy's new id could, in
-	// principle, equal its id.
+	// story, notes and comments included; scan once, allocate many.
 	scan := new(wml.IDScan)
 	for _, blocks := range work {
 		wml.ScanBlocks(blocks, scan)
 	}
+	scan.DocPr = append(scan.DocPr, opts.UsedDocPr...)
 	en.nextDocPr = scan.DocPrAllocator()
 
 	structural, err := checkStructure(stories, work, opts)

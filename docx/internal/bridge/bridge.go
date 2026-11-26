@@ -14,6 +14,10 @@ var Stories func(doc any) []itemplate.Story
 // parts, which docx keeps opaque. Set by package docx in init.
 var UnparsedParts func(doc any) map[string][]byte
 
+// NoteDocPr returns the wp:docPr ids held in doc's footnotes, endnotes and
+// comments parts. Set by package docx in init.
+var NoteDocPr func(doc any) []int64
+
 // BoundParts returns the bytes of the parts data-bound content controls read
 // from (docProps/core.xml, customXml/item*.xml). Set by package docx in init.
 var BoundParts func(doc any) map[string][]byte

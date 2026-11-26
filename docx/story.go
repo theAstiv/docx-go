@@ -20,11 +20,13 @@ func docStory(pkg *parts.Package) *story {
 	return &story{pkg: pkg, src: pkg.DocPath()}
 }
 
-// scan collects the document-wide identifiers (drawing ids, bookmarks) from
-// every story: body, headers and footers. It reaches into tables, hyperlinks
-// and all raw content such as content controls (w:sdt), tracked changes,
-// smart tags and mc:AlternateContent, so allocation never collides with
-// content this package does not model.
+// scan collects the document-wide identifiers (drawing ids, bookmarks, note
+// references) from every story: body, headers, footers, footnotes, endnotes
+// and comments. It reaches into tables, hyperlinks and all raw content such
+// as content controls (w:sdt), tracked changes, smart tags and
+// mc:AlternateContent, so allocation never collides with content this
+// package does not model. Notes and comments are kept as bytes, so their
+// bookmarks have no typed element.
 //
 // The result is cached on the package, so a loop of AddImage or AddBookmark
 // calls scans once. The cache is only ever extended by the allocators below
@@ -69,6 +71,7 @@ func (s *story) freshScan() *wml.IDScan {
 	for _, f := range s.pkg.UniqueFooters() {
 		wml.ScanBlocks(f.Part.CT().Children, scan)
 	}
+	s.pkg.ScanNotes(scan)
 	return scan
 }
 
